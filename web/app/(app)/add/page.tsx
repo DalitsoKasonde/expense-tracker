@@ -32,22 +32,11 @@ export default function AddPage() {
 
     const fetchAccounts = async () => {
       try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/accounts`,
-          {
-            headers: {
-              Authorization: `Bearer ${session.accessToken}`,
-            },
-          }
-        );
-
-        if (response.ok) {
-          const json = await response.json();
-          const accts = json || [];
-          setAccounts(accts);
-          if (accts.length > 0) {
-            setFormData((prev) => ({ ...prev, accountId: accts[0].id }));
-          }
+        const { apiCall } = await import("@/lib/client-api");
+        const response = await apiCall<Account[]>("/v1/accounts");
+        setAccounts(response || []);
+        if (response && response.length > 0) {
+          setFormData((prev) => ({ ...prev, accountId: response[0].id }));
         }
       } catch (err) {
         console.error("Failed to fetch accounts", err);
@@ -77,32 +66,20 @@ export default function AddPage() {
     setError("");
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/transactions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.accessToken}`,
-          },
-          body: JSON.stringify({
-            transactionDate: formData.transactionDate,
-            entryKind: formData.entryKind,
-            amount: Math.round(parseFloat(formData.amount) * 100),
-            currency: formData.currency,
-            accountId: formData.accountId,
-            categoryId: formData.categoryId || undefined,
-            note: formData.note || undefined,
-            source: "manual",
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const text = await response.text();
-        setError(text || "Failed to create transaction");
-        return;
-      }
+      const { apiCall } = await import("@/lib/client-api");
+      await apiCall("/v1/transactions", {
+        method: "POST",
+        body: {
+          transactionDate: formData.transactionDate,
+          entryKind: formData.entryKind,
+          amount: Math.round(parseFloat(formData.amount) * 100),
+          currency: formData.currency,
+          accountId: formData.accountId,
+          categoryId: formData.categoryId || undefined,
+          note: formData.note || undefined,
+          source: "manual",
+        },
+      });
 
       setFormData({
         transactionDate: new Date().toISOString().split("T")[0],
