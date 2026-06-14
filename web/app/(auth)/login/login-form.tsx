@@ -26,7 +26,7 @@ export function LoginForm() {
       return;
     }
 
-    router.push("/today");
+    router.push("/onboarding");
     router.refresh();
   }
 

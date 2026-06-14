@@ -1,25 +1,61 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+interface Account {
+  id: string;
+  name: string;
+}
 
 export default function AddPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [accounts, setAccounts] = useState<Account[]>([]);
 
   const [formData, setFormData] = useState({
     transactionDate: new Date().toISOString().split("T")[0],
     entryKind: "expense",
     amount: "",
     currency: "ZMW",
-    accountId: "default",
+    accountId: "",
     categoryId: "uncategorized",
     note: "",
   });
+
+  useEffect(() => {
+    if (!session?.accessToken) return;
+
+    const fetchAccounts = async () => {
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/accounts`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.accessToken}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const json = await response.json();
+          const accts = json || [];
+          setAccounts(accts);
+          if (accts.length > 0) {
+            setFormData((prev) => ({ ...prev, accountId: accts[0].id }));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch accounts", err);
+      }
+    };
+
+    fetchAccounts();
+  }, [session?.accessToken]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -29,6 +65,11 @@ export default function AddPage() {
     e.preventDefault();
     if (!session?.accessToken) {
       setError("Not authenticated");
+      return;
+    }
+
+    if (!formData.accountId) {
+      setError("Please select an account");
       return;
     }
 
@@ -68,7 +109,7 @@ export default function AddPage() {
         entryKind: "expense",
         amount: "",
         currency: "ZMW",
-        accountId: "default",
+        accountId: accounts.length > 0 ? accounts[0].id : "",
         categoryId: "uncategorized",
         note: "",
       });
@@ -83,6 +124,20 @@ export default function AddPage() {
 
   if (!session) {
     return <div className="shell">Loading...</div>;
+  }
+
+  if (accounts.length === 0) {
+    return (
+      <main className="shell">
+        <section className="appChrome">
+          <h1 className="pageTitle">Quick Add</h1>
+          <p className="muted">No accounts configured. Please set up an account in settings first.</p>
+          <Link href="/settings" className="primaryButton" style={{ display: "block", textAlign: "center" }}>
+            Go to Settings
+          </Link>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -117,6 +172,24 @@ export default function AddPage() {
               <option value="income">Income</option>
               <option value="saving_transfer">Saving</option>
               <option value="investment_buy">Investment</option>
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="accountId">Account</label>
+            <select
+              id="accountId"
+              name="accountId"
+              value={formData.accountId}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select account</option>
+              {accounts.map((acc) => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.name}
+                </option>
+              ))}
             </select>
           </div>
 
