@@ -5,19 +5,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-export default function AddPage() {
+export default function AddInvestmentPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
-    transactionDate: new Date().toISOString().split("T")[0],
-    entryKind: "expense",
-    amount: "",
-    currency: "ZMW",
-    accountId: "default",
-    categoryId: "uncategorized",
+    assetId: "",
+    quantity: "",
+    unitPrice: "",
+    fees: "0",
     note: "",
   });
 
@@ -45,12 +43,15 @@ export default function AddPage() {
             Authorization: `Bearer ${session.accessToken}`,
           },
           body: JSON.stringify({
-            transactionDate: formData.transactionDate,
-            entryKind: formData.entryKind,
-            amount: Math.round(parseFloat(formData.amount) * 100),
-            currency: formData.currency,
-            accountId: formData.accountId,
-            categoryId: formData.categoryId || undefined,
+            transactionDate: new Date().toISOString().split("T")[0],
+            entryKind: "investment_buy",
+            amount: Math.round(parseFloat(formData.unitPrice) * parseFloat(formData.quantity) * 100),
+            currency: "ZMW",
+            accountId: "default",
+            assetId: formData.assetId,
+            quantity: parseFloat(formData.quantity),
+            unitPrice: Math.round(parseFloat(formData.unitPrice) * 100),
+            fees: Math.round(parseFloat(formData.fees) * 100) || undefined,
             note: formData.note || undefined,
             source: "manual",
           }),
@@ -59,23 +60,13 @@ export default function AddPage() {
 
       if (!response.ok) {
         const text = await response.text();
-        setError(text || "Failed to create transaction");
+        setError(text || "Failed to create investment");
         return;
       }
 
-      setFormData({
-        transactionDate: new Date().toISOString().split("T")[0],
-        entryKind: "expense",
-        amount: "",
-        currency: "ZMW",
-        accountId: "default",
-        categoryId: "uncategorized",
-        note: "",
-      });
-
-      router.push("/today");
+      router.push("/investments");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error creating transaction");
+      setError(err instanceof Error ? err.message : "Error creating investment");
     } finally {
       setLoading(false);
     }
@@ -88,17 +79,30 @@ export default function AddPage() {
   return (
     <main className="shell">
       <section className="appChrome">
-        <h1 className="pageTitle">Quick Add</h1>
+        <h1 className="pageTitle">Buy Investment</h1>
 
         <form className="loginForm" onSubmit={handleSubmit}>
           <div className="field">
-            <label htmlFor="amount">Amount (ZMW)</label>
+            <label htmlFor="assetId">Asset</label>
             <input
-              id="amount"
-              name="amount"
+              id="assetId"
+              name="assetId"
+              type="text"
+              placeholder="e.g., LuSE Stock, Treasury Bond"
+              value={formData.assetId}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="quantity">Quantity</label>
+            <input
+              id="quantity"
+              name="quantity"
               type="number"
               placeholder="0"
-              value={formData.amount}
+              value={formData.quantity}
               onChange={handleChange}
               required
               step="0.01"
@@ -106,18 +110,30 @@ export default function AddPage() {
           </div>
 
           <div className="field">
-            <label htmlFor="entryKind">Type</label>
-            <select
-              id="entryKind"
-              name="entryKind"
-              value={formData.entryKind}
+            <label htmlFor="unitPrice">Unit Price (ZMW)</label>
+            <input
+              id="unitPrice"
+              name="unitPrice"
+              type="number"
+              placeholder="0"
+              value={formData.unitPrice}
               onChange={handleChange}
-            >
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-              <option value="saving_transfer">Saving</option>
-              <option value="investment_buy">Investment</option>
-            </select>
+              required
+              step="0.01"
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="fees">Fees (ZMW, optional)</label>
+            <input
+              id="fees"
+              name="fees"
+              type="number"
+              placeholder="0"
+              value={formData.fees}
+              onChange={handleChange}
+              step="0.01"
+            />
           </div>
 
           <div className="field">
@@ -135,12 +151,12 @@ export default function AddPage() {
           {error && <p style={{ color: "red" }}>{error}</p>}
 
           <button type="submit" className="primaryButton" disabled={loading}>
-            {loading ? "Saving..." : "Save Transaction"}
+            {loading ? "Saving..." : "Buy"}
           </button>
         </form>
 
         <div style={{ marginTop: "1rem", textAlign: "center" }}>
-          <Link href="/today" className="ghostButton">
+          <Link href="/investments" className="ghostButton">
             Back
           </Link>
         </div>
