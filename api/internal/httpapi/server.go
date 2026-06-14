@@ -17,24 +17,34 @@ import (
 )
 
 type Server struct {
-	config          config.Config
-	users           *store.UserStore
-	accounts        *store.AccountStore
-	categories      *store.CategoryStore
-	incomeSources   *store.IncomeSourceStore
-	businesses      *store.BusinessStore
-	transactions    *store.TransactionStore
+	config               config.Config
+	users                *store.UserStore
+	accounts             *store.AccountStore
+	categories           *store.CategoryStore
+	incomeSources        *store.IncomeSourceStore
+	businesses           *store.BusinessStore
+	transactions         *store.TransactionStore
+	imports              *store.ImportStore
+	investmentTypes      *store.InvestmentTypeStore
+	assets               *store.AssetStore
+	assetLots            *store.AssetLotStore
+	idempotencyKeys      *store.IdempotencyKeyStore
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	s := &Server{
-		config:        cfg,
-		users:         store.NewUserStore(db),
-		accounts:      store.NewAccountStore(db),
-		categories:    store.NewCategoryStore(db),
-		incomeSources: store.NewIncomeSourceStore(db),
-		businesses:    store.NewBusinessStore(db),
-		transactions:  store.NewTransactionStore(db),
+		config:          cfg,
+		users:           store.NewUserStore(db),
+		accounts:        store.NewAccountStore(db),
+		categories:      store.NewCategoryStore(db),
+		incomeSources:   store.NewIncomeSourceStore(db),
+		businesses:      store.NewBusinessStore(db),
+		transactions:    store.NewTransactionStore(db),
+		imports:         store.NewImportStore(db),
+		investmentTypes: store.NewInvestmentTypeStore(db),
+		assets:          store.NewAssetStore(db),
+		assetLots:       store.NewAssetLotStore(db),
+		idempotencyKeys: store.NewIdempotencyKeyStore(db),
 	}
 
 	router := chi.NewRouter()
@@ -84,6 +94,34 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 
 		// Dashboard
 		protected.Get("/v1/dashboard/summary", s.dashboardSummary)
+
+		// Imports
+		protected.Post("/v1/imports/excel", s.uploadExcel)
+		protected.Get("/v1/imports", s.listImports)
+		protected.Get("/v1/imports/{id}", s.getImport)
+		protected.Get("/v1/imports/{id}/preview", s.previewImport)
+		protected.Post("/v1/imports/{id}/mappings", s.updateMappings)
+		protected.Post("/v1/imports/{id}/confirm", s.confirmImport)
+		protected.Post("/v1/imports/{id}/undo", s.undoImport)
+
+		// Investment Types
+		protected.Get("/v1/investment-types", s.listInvestmentTypes)
+		protected.Post("/v1/investment-types", s.createInvestmentType)
+		protected.Patch("/v1/investment-types/{id}", s.updateInvestmentType)
+		protected.Delete("/v1/investment-types/{id}", s.deleteInvestmentType)
+
+		// Assets
+		protected.Get("/v1/assets", s.listAssets)
+		protected.Post("/v1/assets", s.createAsset)
+		protected.Patch("/v1/assets/{id}", s.updateAsset)
+		protected.Delete("/v1/assets/{id}", s.deleteAsset)
+
+		// Investments
+		protected.Get("/v1/investments/holdings", s.getHoldings)
+		protected.Get("/v1/investments/summary", s.getInvestmentSummary)
+
+		// Sync
+		protected.Get("/v1/sync/status", s.syncStatus)
 	})
 
 	return router
