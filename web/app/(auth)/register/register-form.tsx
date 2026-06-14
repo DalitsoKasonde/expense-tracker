@@ -61,7 +61,7 @@ export function RegisterForm() {
 
   return (
     <form
-      className="loginForm"
+      className="grid gap-4 mt-6"
       action={(formData) => {
         void handleSubmit(formData);
       }}
@@ -86,7 +86,7 @@ export function RegisterForm() {
         <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required />
       </div>
 
-      {error ? <p className="muted" style={{ color: "red" }}>{error}</p> : null}
+      {error ? <p className="muted">{error}</p> : null}
 
       <button type="submit" className="primaryButton" disabled={isPending}>
         {isPending ? "Creating account..." : "Create account"}

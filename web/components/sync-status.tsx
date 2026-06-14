@@ -41,17 +41,9 @@ export function SyncStatus() {
 
   return (
     <div
+      className="syncStatus"
       style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        padding: "0.5rem 1rem",
         backgroundColor: synced ? "#fbbf24" : "#ef4444",
-        color: "white",
-        textAlign: "center",
-        fontSize: "0.9rem",
-        zIndex: 100,
       }}
     >
       {synced ? `${pending} pending...` : "Offline - will sync when connected"}

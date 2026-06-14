@@ -57,32 +57,26 @@ export default function TransactionsPage() {
         <h1 className="pageTitle">All Transactions</h1>
 
         {transactions.length === 0 ? (
-          <p className="muted">No transactions yet. <Link href="/add">Add one now.</Link></p>
+          <p className="muted">No transactions yet. <Link href="/add" style={{ color: "var(--primary)" }}>Add one now.</Link></p>
         ) : (
-          <div style={{ marginTop: "1rem" }}>
+          <div className="transactionList">
             {transactions.map((tx) => (
               <div
                 key={tx.id}
-                style={{
-                  padding: "1rem",
-                  borderBottom: "1px solid var(--border)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
+                className="transactionItem"
               >
                 <div>
-                  <p style={{ margin: 0, fontWeight: 600 }}>
+                  <p className="font-semibold">
                     {tx.entryKind.replace("_", " ").toUpperCase()}
                   </p>
-                  <p className="muted" style={{ margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
+                  <p className="muted text-sm mt-1">
                     {new Date(tx.transactionDate).toLocaleDateString()}
                   </p>
                   {tx.note && (
-                    <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem" }}>{tx.note}</p>
+                    <p className="text-sm mt-1">{tx.note}</p>
                   )}
                 </div>
-                <p style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>
+                <p className="font-semibold text-lg">
                   {tx.entryKind === "income" || tx.entryKind === "investment_income" ? "+" : "-"}
                   {tx.currency} {(tx.amount / 100).toFixed(2)}
                 </p>
@@ -91,7 +85,7 @@ export default function TransactionsPage() {
           </div>
         )}
 
-        <div style={{ marginTop: "2rem" }}>
+        <div className="mt-8">
           <Link href="/today" className="ghostButton">
             Back to Dashboard
           </Link>

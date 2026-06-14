@@ -14,9 +14,9 @@ interface Import {
 
 export default function ImportDetailPage() {
   const { data: session } = useSession();
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const router = useRouter();
-  const importId = params.id as string;
+  const importId = params?.id ?? "";
 
   const [imp, setImp] = useState<Import | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,7 +24,7 @@ export default function ImportDetailPage() {
   const [undoing, setUndoing] = useState(false);
 
   useEffect(() => {
-    if (!session?.accessToken) {
+    if (!session?.accessToken || !importId) {
       setLoading(false);
       return;
     }
@@ -55,7 +55,7 @@ export default function ImportDetailPage() {
   }, [importId, session?.accessToken]);
 
   const handleUndo = async () => {
-    if (!imp || !session?.accessToken) return;
+    if (!imp || !session?.accessToken || !importId) return;
 
     setUndoing(true);
     try {
@@ -89,9 +89,9 @@ export default function ImportDetailPage() {
       <section className="appChrome">
         <h1 className="pageTitle">Import Details</h1>
 
-        <div className="heroCard">
+        <div className="card">
           <p className="muted">Status</p>
-          <h2 style={{ fontSize: "1.5rem", margin: "0.5rem 0" }}>
+          <h2 className="text-2xl font-bold my-2">
             {imp.status.toUpperCase()}
           </h2>
           <p className="muted">
@@ -100,14 +100,14 @@ export default function ImportDetailPage() {
         </div>
 
         {imp.error && (
-          <p style={{ color: "red", marginTop: "1rem" }}>
+          <p className="muted mt-4">
             Error: {imp.error}
           </p>
         )}
 
-        {error && <p style={{ color: "red", marginTop: "1rem" }}>{error}</p>}
+        {error && <p className="muted mt-4">{error}</p>}
 
-        <div style={{ marginTop: "2rem", display: "flex", gap: "1rem" }}>
+        <div className="mt-8 flex gap-4">
           {imp.status === "uploaded" && (
             <Link href={`/import/${importId}/preview`} className="primaryButton">
               View Preview
@@ -115,10 +115,9 @@ export default function ImportDetailPage() {
           )}
           {imp.status === "confirmed" && (
             <button
-              className="primaryButton"
+              className="primaryButton dangerButton"
               onClick={handleUndo}
               disabled={undoing}
-              style={{ backgroundColor: "#dc2626" }}
             >
               {undoing ? "Undoing..." : "Undo Import"}
             </button>

@@ -20,9 +20,9 @@ interface Import {
 
 export default function PreviewPage() {
   const { data: session } = useSession();
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const router = useRouter();
-  const importId = params.id as string;
+  const importId = params?.id ?? "";
 
   const [imp, setImp] = useState<Import | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,7 +30,7 @@ export default function PreviewPage() {
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
-    if (!session?.accessToken) {
+    if (!session?.accessToken || !importId) {
       setLoading(false);
       return;
     }
@@ -61,7 +61,7 @@ export default function PreviewPage() {
   }, [importId, session?.accessToken]);
 
   const handleConfirm = async () => {
-    if (!imp || !session?.accessToken) return;
+    if (!imp || !session?.accessToken || !importId) return;
 
     setConfirming(true);
     try {
@@ -98,22 +98,18 @@ export default function PreviewPage() {
         <p className="muted">Status: {imp.status}</p>
 
         {imp.rows && imp.rows.length > 0 && (
-          <div style={{ marginTop: "1rem" }}>
-            <p style={{ fontWeight: 600 }}>First 10 rows:</p>
+          <div className="transactionList mt-4">
+            <p className="font-semibold">First 10 rows:</p>
             {imp.rows.map((row) => (
               <div
                 key={row.id}
-                style={{
-                  padding: "0.75rem",
-                  borderBottom: "1px solid var(--border)",
-                  fontSize: "0.9rem",
-                }}
+                className="transactionItem text-sm"
               >
-                <p style={{ margin: 0 }}>
-                  {JSON.stringify(row.rawData).substring(0, 100)}...
+                <p className="truncate">
+                  {JSON.stringify(row.rawData)}
                 </p>
                 {row.error && (
-                  <p style={{ margin: "0.25rem 0 0 0", color: "red" }}>
+                  <p className="muted mt-1">
                     Error: {row.error}
                   </p>
                 )}
@@ -122,9 +118,9 @@ export default function PreviewPage() {
           </div>
         )}
 
-        {error && <p style={{ color: "red", marginTop: "1rem" }}>{error}</p>}
+        {error && <p className="muted mt-4">{error}</p>}
 
-        <div style={{ marginTop: "2rem", display: "flex", gap: "1rem" }}>
+        <div className="mt-8 flex gap-4">
           {imp.status === "ready_to_confirm" && (
             <button
               className="primaryButton"

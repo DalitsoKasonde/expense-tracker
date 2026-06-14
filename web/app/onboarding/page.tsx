@@ -50,9 +50,9 @@ export default function OnboardingPage() {
 
     try {
       const defaults = [
-        { name: "Cash", currency: "ZMW" },
-        { name: "Mobile Money", currency: "ZMW" },
-        { name: "Bank", currency: "ZMW" },
+        { name: "Cash", accountType: "cash", currency: "ZMW" },
+        { name: "Mobile Money", accountType: "mobile_money", currency: "ZMW" },
+        { name: "Bank", accountType: "bank", currency: "ZMW" },
       ];
 
       for (const account of defaults) {
@@ -87,17 +87,16 @@ export default function OnboardingPage() {
         <h1 className="pageTitle">Welcome!</h1>
         <p className="lede">Let's set up your expense tracker. We'll create three default accounts:</p>
         
-        <div className="pillList" style={{ marginTop: "1rem" }}>
+        <div className="pillList">
           <span className="pill">Cash</span>
           <span className="pill">Mobile Money</span>
           <span className="pill">Bank</span>
         </div>
 
-        {error && <p style={{ color: "red", marginTop: "1rem" }}>{error}</p>}
+        {error && <p className="muted mt-4">{error}</p>}
 
         <button
-          className="primaryButton"
-          style={{ width: "100%", marginTop: "2rem" }}
+          className="primaryButton w-full mt-8"
           onClick={handleCreateDefaults}
           disabled={loading}
         >

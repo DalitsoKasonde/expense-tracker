@@ -54,37 +54,33 @@ export default function ImportPage() {
       <section className="appChrome">
         <h1 className="pageTitle">Import History</h1>
 
-        <Link href="/import/upload" className="primaryButton" style={{ display: "block", marginBottom: "2rem", textAlign: "center" }}>
+        <Link href="/import/new" className="primaryButton block mb-8 text-center">
           + Upload Excel
         </Link>
 
         {imports.length === 0 ? (
           <p className="muted">No imports yet.</p>
         ) : (
-          <div style={{ marginTop: "1rem" }}>
+          <div className="transactionList">
             {imports.map((imp) => (
               <Link
                 key={imp.id}
                 href={`/import/${imp.id}`}
-                style={{
-                  display: "block",
-                  padding: "1rem",
-                  borderBottom: "1px solid var(--border)",
-                  textDecoration: "none",
-                  color: "inherit",
-                }}
+                className="transactionItem"
               >
-                <p style={{ margin: 0, fontWeight: 600 }}>
-                  {imp.status.toUpperCase()}
-                </p>
-                <p className="muted" style={{ margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
-                  {new Date(imp.createdAt).toLocaleDateString()}
-                </p>
-                {imp.error && (
-                  <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "red" }}>
-                    {imp.error}
+                <div>
+                  <p className="font-semibold">
+                    {imp.status.toUpperCase()}
                   </p>
-                )}
+                  <p className="muted text-sm mt-1">
+                    {new Date(imp.createdAt).toLocaleDateString()}
+                  </p>
+                  {imp.error && (
+                    <p className="text-sm mt-1 text-red-600">
+                      {imp.error}
+                    </p>
+                  )}
+                </div>
               </Link>
             ))}
           </div>

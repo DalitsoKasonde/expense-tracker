@@ -7,10 +7,11 @@ import (
 )
 
 type IncomeSource struct {
-	ID        string `json:"id"`
-	UserID    string `json:"userId"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"createdAt"`
+	ID         string `json:"id"`
+	UserID     string `json:"userId"`
+	Name       string `json:"name"`
+	SourceType string `json:"sourceType"`
+	CreatedAt  string `json:"createdAt"`
 }
 
 type IncomeSourceStore struct {
@@ -23,7 +24,7 @@ func NewIncomeSourceStore(db *pgxpool.Pool) *IncomeSourceStore {
 
 func (s *IncomeSourceStore) ListByUser(ctx context.Context, userID string) ([]IncomeSource, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, user_id, name, created_at
+		select id, user_id, name, source_type, created_at
 		from income_sources
 		where user_id = $1
 		order by name asc
@@ -36,7 +37,7 @@ func (s *IncomeSourceStore) ListByUser(ctx context.Context, userID string) ([]In
 	var sources []IncomeSource
 	for rows.Next() {
 		var s IncomeSource
-		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.SourceType, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		sources = append(sources, s)
@@ -45,32 +46,40 @@ func (s *IncomeSourceStore) ListByUser(ctx context.Context, userID string) ([]In
 	return sources, rows.Err()
 }
 
-func (s *IncomeSourceStore) Create(ctx context.Context, userID, name string) (IncomeSource, error) {
+func (s *IncomeSourceStore) Create(ctx context.Context, userID, name, sourceType string) (IncomeSource, error) {
 	var source IncomeSource
+	if sourceType == "" {
+		sourceType = "other"
+	}
 	err := s.db.QueryRow(ctx, `
-		insert into income_sources (user_id, name)
-		values ($1, $2)
-		returning id, user_id, name, created_at
-	`, userID, name).Scan(
+		insert into income_sources (user_id, name, source_type)
+		values ($1, $2, $3)
+		returning id, user_id, name, source_type, created_at
+	`, userID, name, sourceType).Scan(
 		&source.ID,
 		&source.UserID,
 		&source.Name,
+		&source.SourceType,
 		&source.CreatedAt,
 	)
 	return source, err
 }
 
-func (s *IncomeSourceStore) Update(ctx context.Context, id, userID, name string) (IncomeSource, error) {
+func (s *IncomeSourceStore) Update(ctx context.Context, id, userID, name, sourceType string) (IncomeSource, error) {
 	var source IncomeSource
+	if sourceType == "" {
+		sourceType = "other"
+	}
 	err := s.db.QueryRow(ctx, `
 		update income_sources
-		set name = $1
-		where id = $2 and user_id = $3
-		returning id, user_id, name, created_at
-	`, name, id, userID).Scan(
+		set name = $1, source_type = $2, updated_at = now()
+		where id = $3 and user_id = $4
+		returning id, user_id, name, source_type, created_at
+	`, name, sourceType, id, userID).Scan(
 		&source.ID,
 		&source.UserID,
 		&source.Name,
+		&source.SourceType,
 		&source.CreatedAt,
 	)
 	return source, err

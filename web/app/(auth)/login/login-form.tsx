@@ -32,7 +32,7 @@ export function LoginForm() {
 
   return (
     <form
-      className="loginForm"
+      className="grid gap-4 mt-6"
       action={(formData) => {
         void handleSubmit(formData);
       }}

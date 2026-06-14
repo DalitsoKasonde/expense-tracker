@@ -14,11 +14,13 @@ const items: Array<{ href: Route; label: string }> = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const currentPath = pathname ?? "";
 
   return (
     <nav className="bottomNav" aria-label="Primary">
       {items.map((item) => {
-        const isActive = pathname === item.href;
+        const isActive =
+          currentPath === item.href || (item.href !== "/today" && currentPath.startsWith(`${item.href}/`));
         return (
           <Link
             key={item.href}

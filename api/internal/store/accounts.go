@@ -7,11 +7,13 @@ import (
 )
 
 type Account struct {
-	ID        string `json:"id"`
-	UserID    string `json:"userId"`
-	Name      string `json:"name"`
-	Currency  string `json:"currency"`
-	CreatedAt string `json:"createdAt"`
+	ID          string  `json:"id"`
+	UserID      string  `json:"userId"`
+	Name        string  `json:"name"`
+	AccountType string  `json:"accountType"`
+	Currency    string  `json:"currency"`
+	ArchivedAt  *string `json:"archivedAt"`
+	CreatedAt   string  `json:"createdAt"`
 }
 
 type AccountStore struct {
@@ -24,9 +26,9 @@ func NewAccountStore(db *pgxpool.Pool) *AccountStore {
 
 func (s *AccountStore) ListByUser(ctx context.Context, userID string) ([]Account, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, user_id, name, currency, created_at
+		select id, user_id, name, account_type, currency, archived_at, created_at
 		from accounts
-		where user_id = $1
+		where user_id = $1 and archived_at is null
 		order by created_at desc
 	`, userID)
 	if err != nil {
@@ -37,7 +39,7 @@ func (s *AccountStore) ListByUser(ctx context.Context, userID string) ([]Account
 	var accounts []Account
 	for rows.Next() {
 		var a Account
-		if err := rows.Scan(&a.ID, &a.UserID, &a.Name, &a.Currency, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.UserID, &a.Name, &a.AccountType, &a.Currency, &a.ArchivedAt, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, a)
@@ -46,40 +48,76 @@ func (s *AccountStore) ListByUser(ctx context.Context, userID string) ([]Account
 	return accounts, rows.Err()
 }
 
-func (s *AccountStore) Create(ctx context.Context, userID, name, currency string) (Account, error) {
+func (s *AccountStore) Create(ctx context.Context, userID, name, accountType, currency string) (Account, error) {
 	var account Account
+	if accountType == "" {
+		accountType = "cash"
+	}
+	if currency == "" {
+		currency = "ZMW"
+	}
 	err := s.db.QueryRow(ctx, `
-		insert into accounts (user_id, name, currency)
-		values ($1, $2, $3)
-		returning id, user_id, name, currency, created_at
-	`, userID, name, currency).Scan(
+		insert into accounts (user_id, name, account_type, currency)
+		values ($1, $2, $3, $4)
+		returning id, user_id, name, account_type, currency, archived_at, created_at
+	`, userID, name, accountType, currency).Scan(
 		&account.ID,
 		&account.UserID,
 		&account.Name,
+		&account.AccountType,
 		&account.Currency,
+		&account.ArchivedAt,
 		&account.CreatedAt,
 	)
 	return account, err
 }
 
-func (s *AccountStore) Update(ctx context.Context, id, userID, name, currency string) (Account, error) {
+func (s *AccountStore) Update(ctx context.Context, id, userID, name, accountType, currency string) (Account, error) {
 	var account Account
+	if accountType == "" {
+		accountType = "cash"
+	}
+	if currency == "" {
+		currency = "ZMW"
+	}
 	err := s.db.QueryRow(ctx, `
 		update accounts
-		set name = $1, currency = $2
-		where id = $3 and user_id = $4
-		returning id, user_id, name, currency, created_at
-	`, name, currency, id, userID).Scan(
+		set name = $1, account_type = $2, currency = $3
+		where id = $4 and user_id = $5 and archived_at is null
+		returning id, user_id, name, account_type, currency, archived_at, created_at
+	`, name, accountType, currency, id, userID).Scan(
 		&account.ID,
 		&account.UserID,
 		&account.Name,
+		&account.AccountType,
 		&account.Currency,
+		&account.ArchivedAt,
 		&account.CreatedAt,
 	)
 	return account, err
 }
 
 func (s *AccountStore) Delete(ctx context.Context, id, userID string) error {
+	var transactionCount int
+	if err := s.db.QueryRow(ctx, `
+		select count(*)
+		from transactions
+		where user_id = $1
+		  and deleted_at is null
+		  and (account_id = $2 or destination_account_id = $2)
+	`, userID, id).Scan(&transactionCount); err != nil {
+		return err
+	}
+
+	if transactionCount > 0 {
+		_, err := s.db.Exec(ctx, `
+			update accounts
+			set archived_at = now()
+			where id = $1 and user_id = $2 and archived_at is null
+		`, id, userID)
+		return err
+	}
+
 	_, err := s.db.Exec(ctx, `
 		delete from accounts
 		where id = $1 and user_id = $2

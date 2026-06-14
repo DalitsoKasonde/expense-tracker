@@ -16,15 +16,15 @@ interface AssetLot {
 
 export default function AssetDetailPage() {
   const { data: session } = useSession();
-  const params = useParams();
-  const assetId = params.assetId as string;
+  const params = useParams<{ assetId: string }>();
+  const assetId = params?.assetId ?? "";
 
   const [lots, setLots] = useState<AssetLot[]>([]);
   const [holding, setHolding] = useState<{ quantity: number; totalCost: number; avgCostBasis: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!session?.accessToken) {
+    if (!session?.accessToken || !assetId) {
       setLoading(false);
       return;
     }
@@ -56,9 +56,9 @@ export default function AssetDetailPage() {
         <h1 className="pageTitle">Asset Details</h1>
 
         {holding && (
-          <div className="heroCard">
+          <div className="card">
             <p className="muted">Holdings</p>
-            <h2 style={{ fontSize: "1.5rem", margin: "0.5rem 0" }}>
+            <h2 className="text-2xl font-bold my-2">
               {holding.quantity.toFixed(2)} units
             </h2>
             <p className="muted">
@@ -67,34 +67,35 @@ export default function AssetDetailPage() {
           </div>
         )}
 
-        <div style={{ marginTop: "2rem" }}>
-          <p style={{ fontWeight: 600, marginBottom: "1rem" }}>Purchase History</p>
+        <div className="mt-8">
+          <p className="font-semibold mb-4">Purchase History</p>
           {lots.length === 0 ? (
             <p className="muted">No lots recorded yet.</p>
           ) : (
-            lots.map((lot) => (
-              <div
-                key={lot.id}
-                style={{
-                  padding: "1rem",
-                  borderBottom: "1px solid var(--border)",
-                }}
-              >
-                <p style={{ margin: 0, fontWeight: 600 }}>
-                  {lot.quantity.toFixed(2)} @ ZMW {(lot.unitPrice / 100).toFixed(2)}
-                </p>
-                <p className="muted" style={{ margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
-                  {new Date(lot.acquisitionDate).toLocaleDateString()}
-                </p>
-                <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
-                  Total: ZMW {(lot.totalCost / 100).toFixed(2)}
-                </p>
-              </div>
-            ))
+            <div className="transactionList">
+              {lots.map((lot) => (
+                <div
+                  key={lot.id}
+                  className="transactionItem"
+                >
+                  <div>
+                    <p className="font-semibold">
+                      {lot.quantity.toFixed(2)} @ ZMW {(lot.unitPrice / 100).toFixed(2)}
+                    </p>
+                    <p className="muted text-sm mt-1">
+                      {new Date(lot.acquisitionDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <p className="text-sm">
+                    Total: ZMW {(lot.totalCost / 100).toFixed(2)}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
-        <div style={{ marginTop: "2rem" }}>
+        <div className="mt-8">
           <Link href="/investments" className="ghostButton">
             Back
           </Link>

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { getAuthSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
+import { PreferenceThemeSync } from "@/components/preference-theme-sync";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await getAuthSession();
@@ -34,6 +35,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <>
+      <PreferenceThemeSync />
       {children}
       <BottomNav />
     </>

@@ -12,13 +12,13 @@ export default async function RegisterPage() {
 
   return (
     <main className="loginShell">
-      <section className="loginCard">
+      <section className="card loginCard">
         <h1 className="pageTitle">Create your account</h1>
         <p className="lede">You have been invited to join Expense Tracker. Sign up to get started.</p>
         <RegisterForm />
         <p className="muted" style={{ textAlign: "center", marginTop: "1rem" }}>
           Already have an account?{" "}
-          <Link href="/login" style={{ textDecoration: "underline" }}>
+          <Link href="/login" style={{ textDecoration: "underline", color: "var(--primary)" }}>
             Sign in
           </Link>
         </p>

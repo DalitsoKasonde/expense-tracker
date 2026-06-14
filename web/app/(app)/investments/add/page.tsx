@@ -81,7 +81,7 @@ export default function AddInvestmentPage() {
       <section className="appChrome">
         <h1 className="pageTitle">Buy Investment</h1>
 
-        <form className="loginForm" onSubmit={handleSubmit}>
+        <form className="grid gap-4 mt-6" onSubmit={handleSubmit}>
           <div className="field">
             <label htmlFor="assetId">Asset</label>
             <input
@@ -148,14 +148,14 @@ export default function AddInvestmentPage() {
             />
           </div>
 
-          {error && <p style={{ color: "red" }}>{error}</p>}
+          {error && <p className="muted">{error}</p>}
 
           <button type="submit" className="primaryButton" disabled={loading}>
             {loading ? "Saving..." : "Buy"}
           </button>
         </form>
 
-        <div style={{ marginTop: "1rem", textAlign: "center" }}>
+        <div className="mt-4 text-center">
           <Link href="/investments" className="ghostButton">
             Back
           </Link>

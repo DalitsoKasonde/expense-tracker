@@ -54,39 +54,31 @@ export default function InvestmentsPage() {
       <section className="appChrome">
         <h1 className="pageTitle">Investments</h1>
 
-        <Link href="/investments/add" className="primaryButton" style={{ display: "block", marginBottom: "2rem", textAlign: "center" }}>
+        <Link href="/investments/add" className="primaryButton block mb-8 text-center">
           + Add Investment
         </Link>
 
         {holdings.length === 0 ? (
           <p className="muted">No holdings yet.</p>
         ) : (
-          <div style={{ marginTop: "1rem" }}>
+          <div className="transactionList">
             {holdings.map((h) => (
               <Link
                 key={h.assetId}
                 href={`/investments/${h.assetId}`}
-                style={{
-                  display: "block",
-                  padding: "1rem",
-                  borderBottom: "1px solid var(--border)",
-                  textDecoration: "none",
-                  color: "inherit",
-                }}
+                className="transactionItem"
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <p style={{ margin: 0, fontWeight: 600 }}>
-                      {h.quantity.toFixed(2)} units
-                    </p>
-                    <p className="muted" style={{ margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
-                      Avg cost: ZMW {(h.avgCostBasis / 100).toFixed(2)}
-                    </p>
-                  </div>
-                  <p style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>
-                    ZMW {(h.totalCost / 100).toFixed(2)}
+                <div>
+                  <p className="font-semibold">
+                    {h.quantity.toFixed(2)} units
+                  </p>
+                  <p className="muted text-sm mt-1">
+                    Avg cost: ZMW {(h.avgCostBasis / 100).toFixed(2)}
                   </p>
                 </div>
+                <p className="font-semibold text-lg">
+                  ZMW {(h.totalCost / 100).toFixed(2)}
+                </p>
               </Link>
             ))}
           </div>

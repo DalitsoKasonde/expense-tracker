@@ -2,12 +2,13 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/auth"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 // Accounts
@@ -36,15 +37,16 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name     string `json:"name"`
-		Currency string `json:"currency"`
+		Name        string `json:"name"`
+		AccountType string `json:"accountType"`
+		Currency    string `json:"currency"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	account, err := s.accounts.Create(r.Context(), claims.UserID, req.Name, req.Currency)
+	account, err := s.accounts.Create(r.Context(), claims.UserID, req.Name, req.AccountType, req.Currency)
 	if err != nil {
 		http.Error(w, "failed to create account", http.StatusInternalServerError)
 		return
@@ -63,15 +65,16 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		Name     string `json:"name"`
-		Currency string `json:"currency"`
+		Name        string `json:"name"`
+		AccountType string `json:"accountType"`
+		Currency    string `json:"currency"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	account, err := s.accounts.Update(r.Context(), id, claims.UserID, req.Name, req.Currency)
+	account, err := s.accounts.Update(r.Context(), id, claims.UserID, req.Name, req.AccountType, req.Currency)
 	if err != nil {
 		http.Error(w, "failed to update account", http.StatusInternalServerError)
 		return
@@ -122,15 +125,21 @@ func (s *Server) createCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name string `json:"name"`
+		Name          string  `json:"name"`
+		CategoryGroup string  `json:"categoryGroup"`
+		ParentID      *string `json:"parentId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	category, err := s.categories.Create(r.Context(), claims.UserID, req.Name)
+	category, err := s.categories.Create(r.Context(), claims.UserID, req.Name, req.CategoryGroup, req.ParentID)
 	if err != nil {
+		if errors.Is(err, store.ErrInvalidCategoryParent) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "failed to create category", http.StatusInternalServerError)
 		return
 	}
@@ -148,15 +157,21 @@ func (s *Server) updateCategory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		Name string `json:"name"`
+		Name          string  `json:"name"`
+		CategoryGroup string  `json:"categoryGroup"`
+		ParentID      *string `json:"parentId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	category, err := s.categories.Update(r.Context(), id, claims.UserID, req.Name)
+	category, err := s.categories.Update(r.Context(), id, claims.UserID, req.Name, req.CategoryGroup, req.ParentID)
 	if err != nil {
+		if errors.Is(err, store.ErrInvalidCategoryParent) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "failed to update category", http.StatusInternalServerError)
 		return
 	}
@@ -206,14 +221,15 @@ func (s *Server) createIncomeSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name string `json:"name"`
+		Name       string `json:"name"`
+		SourceType string `json:"sourceType"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	source, err := s.incomeSources.Create(r.Context(), claims.UserID, req.Name)
+	source, err := s.incomeSources.Create(r.Context(), claims.UserID, req.Name, req.SourceType)
 	if err != nil {
 		http.Error(w, "failed to create income source", http.StatusInternalServerError)
 		return
@@ -232,14 +248,15 @@ func (s *Server) updateIncomeSource(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		Name string `json:"name"`
+		Name       string `json:"name"`
+		SourceType string `json:"sourceType"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	source, err := s.incomeSources.Update(r.Context(), id, claims.UserID, req.Name)
+	source, err := s.incomeSources.Update(r.Context(), id, claims.UserID, req.Name, req.SourceType)
 	if err != nil {
 		http.Error(w, "failed to update income source", http.StatusInternalServerError)
 		return
@@ -347,7 +364,6 @@ func (s *Server) deleteBusiness(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
-
 
 // Transactions
 
@@ -557,7 +573,6 @@ func (s *Server) dashboardSummary(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, summary)
 }
-
 
 // Imports
 
@@ -788,7 +803,6 @@ func (s *Server) undoImport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, imp)
 }
 
-
 // Investment Types
 
 func (s *Server) listInvestmentTypes(w http.ResponseWriter, r *http.Request) {
@@ -899,8 +913,8 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		InvestmentTypeID string `json:"investmentTypeId"`
-		Name             string `json:"name"`
+		InvestmentTypeID string  `json:"investmentTypeId"`
+		Name             string  `json:"name"`
 		Symbol           *string `json:"symbol"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -927,7 +941,7 @@ func (s *Server) updateAsset(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		Name   string `json:"name"`
+		Name   string  `json:"name"`
 		Symbol *string `json:"symbol"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -996,7 +1010,7 @@ func (s *Server) getInvestmentSummary(w http.ResponseWriter, r *http.Request) {
 	summary := make([]map[string]interface{}, 0)
 	for _, invType := range types {
 		assets, _ := s.assets.ListByInvestmentType(r.Context(), claims.UserID, invType.ID)
-		
+
 		// Calculate total invested and total value for this type
 		totalInvested := int64(0)
 		totalAssets := 0
@@ -1011,16 +1025,15 @@ func (s *Server) getInvestmentSummary(w http.ResponseWriter, r *http.Request) {
 		}
 
 		summary = append(summary, map[string]interface{}{
-			"type":           invType.Name,
-			"typeId":         invType.ID,
-			"assetCount":     len(assets),
-			"totalInvested":  totalInvested,
+			"type":          invType.Name,
+			"typeId":        invType.ID,
+			"assetCount":    len(assets),
+			"totalInvested": totalInvested,
 		})
 	}
 
 	writeJSON(w, http.StatusOK, summary)
 }
-
 
 // Sync
 

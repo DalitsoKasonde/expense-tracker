@@ -17,24 +17,26 @@ import (
 )
 
 type Server struct {
-	config               config.Config
-	users                *store.UserStore
-	accounts             *store.AccountStore
-	categories           *store.CategoryStore
-	incomeSources        *store.IncomeSourceStore
-	businesses           *store.BusinessStore
-	transactions         *store.TransactionStore
-	imports              *store.ImportStore
-	investmentTypes      *store.InvestmentTypeStore
-	assets               *store.AssetStore
-	assetLots            *store.AssetLotStore
-	idempotencyKeys      *store.IdempotencyKeyStore
+	config          config.Config
+	users           *store.UserStore
+	userPreferences *store.UserPreferenceStore
+	accounts        *store.AccountStore
+	categories      *store.CategoryStore
+	incomeSources   *store.IncomeSourceStore
+	businesses      *store.BusinessStore
+	transactions    *store.TransactionStore
+	imports         *store.ImportStore
+	investmentTypes *store.InvestmentTypeStore
+	assets          *store.AssetStore
+	assetLots       *store.AssetLotStore
+	idempotencyKeys *store.IdempotencyKeyStore
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	s := &Server{
 		config:          cfg,
 		users:           store.NewUserStore(db),
+		userPreferences: store.NewUserPreferenceStore(db),
 		accounts:        store.NewAccountStore(db),
 		categories:      store.NewCategoryStore(db),
 		incomeSources:   store.NewIncomeSourceStore(db),
@@ -61,6 +63,8 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	router.Group(func(protected chi.Router) {
 		protected.Use(auth.Middleware(cfg.JWTSecret))
 		protected.Get("/v1/auth/me", s.me)
+		protected.Get("/v1/user/preferences", s.getUserPreferences)
+		protected.Patch("/v1/user/preferences", s.updateUserPreferences)
 
 		// Accounts
 		protected.Get("/v1/accounts", s.listAccounts)
@@ -319,4 +323,3 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
-

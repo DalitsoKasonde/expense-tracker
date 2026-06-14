@@ -64,7 +64,7 @@ export default function UploadPage() {
       <section className="appChrome">
         <h1 className="pageTitle">Upload Excel</h1>
 
-        <form className="loginForm" onSubmit={handleSubmit}>
+        <form className="grid gap-4 mt-6" onSubmit={handleSubmit}>
           <div className="field">
             <label htmlFor="file">Choose Excel file (.xlsx)</label>
             <input
@@ -80,14 +80,14 @@ export default function UploadPage() {
             <p className="muted">Selected: {file.name}</p>
           )}
 
-          {error && <p style={{ color: "red" }}>{error}</p>}
+          {error && <p className="muted">{error}</p>}
 
           <button type="submit" className="primaryButton" disabled={loading}>
             {loading ? "Uploading..." : "Upload"}
           </button>
         </form>
 
-        <div style={{ marginTop: "1rem" }}>
+        <div className="mt-4">
           <Link href="/import" className="ghostButton">
             Back
           </Link>

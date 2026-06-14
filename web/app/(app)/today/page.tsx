@@ -57,9 +57,9 @@ export default function TodayPage() {
 
         {data && (
           <>
-            <div className="heroCard">
+            <div className="card">
               <p className="muted">This Month</p>
-              <h2 style={{ fontSize: "2rem", margin: "0.5rem 0" }}>
+              <h2 className="text-3xl font-bold my-2">
                 ZMW {(data.netCashFlow / 100).toFixed(2)}
               </h2>
               <p className="muted">Net Cash Flow</p>
@@ -86,7 +86,7 @@ export default function TodayPage() {
           </>
         )}
 
-        <div style={{ marginTop: "2rem", display: "flex", gap: "1rem" }}>
+        <div className="flex gap-4 mt-8">
           <Link href="/add" className="primaryButton">
             + Add Entry
           </Link>
