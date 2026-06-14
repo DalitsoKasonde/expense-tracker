@@ -1,0 +1,23 @@
+export async function apiFetch<T>(path: string, token?: string): Promise<T> {
+  const apiBaseUrl = process.env.API_BASE_URL;
+
+  if (!apiBaseUrl) {
+    throw new Error("API_BASE_URL is not configured.");
+  }
+
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
+

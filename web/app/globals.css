@@ -1,0 +1,245 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: #f4efe6;
+  --surface: #fffaf2;
+  --surface-strong: #f3e3c5;
+  --ink: #1c1917;
+  --muted: #5f5648;
+  --accent: #0f766e;
+  --accent-strong: #115e59;
+  --accent-soft: rgba(15, 118, 110, 0.12);
+  --border: rgba(28, 25, 23, 0.12);
+  --shadow: 0 20px 40px rgba(28, 25, 23, 0.08);
+  --radius: 22px;
+  --font-sans: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 30%),
+    linear-gradient(180deg, #f7f2ea 0%, var(--bg) 100%);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.shell {
+  min-height: 100vh;
+  padding: 24px 18px 96px;
+}
+
+.appChrome {
+  margin: 0 auto;
+  max-width: 520px;
+}
+
+.heroCard,
+.surfaceCard,
+.loginCard {
+  background: rgba(255, 250, 242, 0.86);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.heroCard,
+.surfaceCard {
+  padding: 24px;
+}
+
+.heroCard {
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.pageTitle {
+  margin: 16px 0 8px;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  line-height: 0.95;
+}
+
+.lede,
+.muted {
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.statsGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 20px;
+}
+
+.statCard {
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.statCard strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.4rem;
+}
+
+.bottomNav {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  width: min(92vw, 520px);
+  transform: translateX(-50%);
+  padding: 10px;
+  border-radius: 24px;
+  background: rgba(28, 25, 23, 0.88);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 20px 40px rgba(28, 25, 23, 0.18);
+}
+
+.bottomNavLink {
+  border-radius: 18px;
+  padding: 12px 8px;
+  color: rgba(255, 250, 242, 0.78);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.bottomNavLink.active {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.loginShell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.loginCard {
+  width: min(100%, 440px);
+  padding: 28px;
+}
+
+.loginForm {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.primaryButton,
+.ghostButton {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border-radius: 16px;
+  padding: 14px 18px;
+  border: 0;
+  cursor: pointer;
+}
+
+.primaryButton {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+  color: #fff;
+  font-weight: 700;
+}
+
+.ghostButton {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
+.inlineRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.pillList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.pill {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
