@@ -90,10 +90,17 @@ export default function IncomeSourcesSettingsPage() {
 
   return (
     <section className="settingsSection">
-      <form className="card settingsGrid" onSubmit={handleSubmit}>
+      <div className="card settingsLeadCard">
+        <p className="sectionKicker">Income Sources</p>
+        <h2 className="sectionHeading">Where revenue begins</h2>
+        <p className="muted">Track salary, business revenue, freelance work, and investment income from one clean source library.</p>
+      </div>
+
+      <div className="settingsDetailGrid">
+      <form className="card settingsFormPanel" onSubmit={handleSubmit}>
         <div className="resourceBody">
           <strong>{editingId ? "Edit income source" : "Create income source"}</strong>
-          <span className="muted">Income sources explain where money came from, especially for reporting.</span>
+          <span className="muted">Income sources explain where money came from, especially in filtered reports and history views.</span>
         </div>
 
         <div className="field">
@@ -136,38 +143,46 @@ export default function IncomeSourcesSettingsPage() {
         {status ? <p className="statusText">{status}</p> : null}
       </form>
 
-      <div className="resourceList">
-        {loading ? <div className="card muted">Loading income sources...</div> : null}
-        {!loading && sources.length === 0 ? (
-          <div className="card muted">No income sources yet. Add one for cleaner income reporting.</div>
-        ) : null}
-        {sources.map((source) => (
-          <div key={source.id} className="card resourceRow">
-            <div className="resourceBody">
-              <strong>{source.name}</strong>
-              <div className="resourceMeta">
-                <span className="metaBadge">{source.sourceType.replaceAll("_", " ")}</span>
+      <div className="card settingsListPanel">
+        <div className="settingsHeaderRow">
+          <div className="resourceBody">
+            <strong>Existing income sources</strong>
+            <span className="muted">Review naming and source types before changing how income is classified.</span>
+          </div>
+        </div>
+        <div className="resourceList">
+          {loading ? <div className="muted">Loading income sources...</div> : null}
+          {!loading && sources.length === 0 ? (
+            <div className="muted">No income sources yet. Add one for cleaner income reporting.</div>
+          ) : null}
+          {sources.map((source) => (
+            <div key={source.id} className="resourceRow">
+              <div className="resourceBody">
+                <strong>{source.name}</strong>
+                <div className="resourceMeta">
+                  <span className="metaBadge">{source.sourceType.replaceAll("_", " ")}</span>
+                </div>
+              </div>
+              <div className="formActions">
+                <button
+                  className="ghostButton"
+                  type="button"
+                  onClick={() => {
+                    setEditingId(source.id);
+                    setForm({ name: source.name, sourceType: source.sourceType });
+                  }}
+                >
+                  Edit
+                </button>
+                <button className="ghostButton" type="button" onClick={() => void handleDelete(source.id)}>
+                  Remove
+                </button>
               </div>
             </div>
-            <div className="formActions">
-              <button
-                className="ghostButton"
-                type="button"
-                onClick={() => {
-                  setEditingId(source.id);
-                  setForm({ name: source.name, sourceType: source.sourceType });
-                }}
-              >
-                Edit
-              </button>
-              <button className="ghostButton" type="button" onClick={() => void handleDelete(source.id)}>
-                Remove
-              </button>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
+      </div>
       </div>
     </section>
   );
 }
-

@@ -3,6 +3,13 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { apiCallWithToken } from "@/lib/client-api";
+import { AppPageHeader } from "@/components/app-page-header";
+import { AddIcon } from "@/components/nav-icons";
+
+interface Account {
+  id: string;
+}
 
 export default function OnboardingPage() {
   const { data: session } = useSession();
@@ -16,20 +23,9 @@ export default function OnboardingPage() {
 
     const checkAccounts = async () => {
       try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/accounts`,
-          {
-            headers: {
-              Authorization: `Bearer ${session.accessToken}`,
-            },
-          }
-        );
-
-        if (response.ok) {
-          const accounts = await response.json();
-          if (accounts && accounts.length > 0) {
-            router.push("/today");
-          }
+        const accounts = await apiCallWithToken<Account[]>(session.accessToken, "/v1/accounts");
+        if (accounts && accounts.length > 0) {
+          router.push("/today");
         }
       } catch (err) {
         console.error("Failed to check accounts", err);
@@ -56,17 +52,10 @@ export default function OnboardingPage() {
       ];
 
       for (const account of defaults) {
-        await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/accounts`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session.accessToken}`,
-            },
-            body: JSON.stringify(account),
-          }
-        );
+        await apiCallWithToken(session.accessToken, "/v1/accounts", {
+          method: "POST",
+          body: account,
+        });
       }
 
       setDone(true);
@@ -83,9 +72,15 @@ export default function OnboardingPage() {
 
   return (
     <main className="shell">
-      <section className="appChrome">
-        <h1 className="pageTitle">Welcome!</h1>
-        <p className="lede">Let's set up your expense tracker. We'll create three default accounts:</p>
+      <section className="appChrome workspaceStack">
+        <AppPageHeader
+          eyebrow="Inscribed setup"
+          title="Welcome"
+          accent="Begin with a few calm defaults"
+          lead="We will create three starter accounts so the ledger can begin receiving entries immediately."
+          icon={AddIcon}
+        />
+        <p className="lede">We&apos;ll create these default accounts for the first session:</p>
         
         <div className="pillList">
           <span className="pill">Cash</span>

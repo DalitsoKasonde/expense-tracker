@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Inscribed - New Entry</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300..700&amp;family=Great+Vibes&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary": "#ffffff",
+                      "outline-variant": "#c3c6d1",
+                      "surface-variant": "#e2e2e7",
+                      "primary-container": "#264e86",
+                      "on-tertiary-fixed": "#001b3c",
+                      "secondary-fixed-dim": "#aac7ff",
+                      "surface-container-lowest": "#ffffff",
+                      "primary-fixed": "#d6e3ff",
+                      "on-surface-variant": "#434750",
+                      "on-error": "#ffffff",
+                      "surface-container-low": "#f4f3f8",
+                      "surface-dim": "#dad9df",
+                      "on-surface": "#1a1c1f",
+                      "tertiary-container": "#344e76",
+                      "outline": "#737781",
+                      "tertiary-fixed": "#d5e3ff",
+                      "primary-fixed-dim": "#a9c7ff",
+                      "on-tertiary-fixed-variant": "#2d476f",
+                      "background": "#f9f9fe",
+                      "surface-container": "#eeedf3",
+                      "secondary": "#005ab4",
+                      "surface-container-highest": "#e2e2e7",
+                      "on-tertiary-container": "#a6c0ef",
+                      "on-secondary": "#ffffff",
+                      "on-primary-fixed-variant": "#1d477e",
+                      "error-container": "#ffdad6",
+                      "surface-container-high": "#e8e8ed",
+                      "secondary-container": "#0072e1",
+                      "error": "#ba1a1a",
+                      "inverse-primary": "#a9c7ff",
+                      "on-primary-fixed": "#001b3d",
+                      "on-background": "#1a1c1f",
+                      "primary": "#03376e",
+                      "tertiary": "#1b375e",
+                      "inverse-on-surface": "#f1f0f6",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#00458d",
+                      "on-secondary-fixed": "#001b3e",
+                      "surface": "#f9f9fe",
+                      "on-secondary-container": "#fefcff",
+                      "on-primary-container": "#9dc1ff",
+                      "on-primary": "#ffffff",
+                      "surface-bright": "#f9f9fe",
+                      "tertiary-fixed-dim": "#adc7f7",
+                      "secondary-fixed": "#d6e3ff",
+                      "surface-tint": "#395f98",
+                      "inverse-surface": "#2f3034"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xl": "32px",
+                      "margin-mobile": "16px",
+                      "xxl": "48px",
+                      "xs": "4px",
+                      "margin-desktop": "64px",
+                      "gutter": "24px",
+                      "lg": "24px",
+                      "unit": "4px",
+                      "md": "16px",
+                      "sm": "8px"
+              },
+              "fontFamily": {
+                      "body-md": ["Quicksand"],
+                      "display-lg": ["Quicksand"],
+                      "headline-lg": ["Quicksand"],
+                      "label-md": ["Quicksand"],
+                      "headline-md": ["Quicksand"],
+                      "headline-lg-mobile": ["Quicksand"],
+                      "accent-flourish": ["Great Vibes"],
+                      "body-lg": ["Quicksand"],
+                      "label-sm": ["Quicksand"]
+              },
+              "fontSize": {
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                      "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "500"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "accent-flourish": ["24px", {"lineHeight": "32px", "fontWeight": "400"}],
+                      "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                      "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.03em", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #F4F8FC; /* Ice Blue Canvas from Style Guidance */
+            font-family: 'Quicksand', sans-serif;
+        }
+        .card-shadow {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+        }
+        /* Custom scrollbar for subtle aesthetic */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-surface font-body-md min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-50 bg-surface dark:bg-surface-dim border-b border-outline-variant dark:border-outline flat no shadows">
+<div class="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-sm max-w-[1280px] mx-auto">
+<div class="flex items-center gap-md">
+<button class="hover:bg-surface-container dark:hover:bg-surface-container-high p-2 rounded-full transition-colors active:opacity-80">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed">close</span>
+</button>
+<h1 class="font-headline-md text-headline-md font-semibold text-primary dark:text-primary-fixed tracking-tight">Ledger</h1>
+</div>
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a mature woman in business attire, looking directly at the camera with a confident smile. The background is a clean, minimalist office setting with soft indigo and white tones, matching a high-end digital stationery aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3k6AmJhQFff7FWw0y3AKhOMxgcEF5J8D0VCp8qS0jIodaeOfvU7jXBwz_swZvq5PIxwp8rn-_E-2BV_vQc4X8ztG9WCfeTsCdrfJiTrq9CVEH5YbgtdTJipLo4EGuggOm5Q5g3ykpkhTbKnHQ_loOhdROGEyALbvhx4gTu93MVSawql7XJUT-Pwg-sbFJV1-qR4lqCoGj4b6yuWQD1RTaqQy_sSVfXnqlkBLZW6XFEcuXRc5X1onW2Y85iO52DpLZQKiWFokKyy0"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="max-w-[800px] mx-auto px-margin-mobile md:px-margin-desktop pt-xl">
+<div class="flex flex-col gap-lg">
+<!-- Amount Input Section -->
+<section class="bg-white card-shadow rounded-xl p-xl border border-[#E2E8F0]">
+<div class="flex justify-between items-center mb-md pb-sm border-b border-outline-variant">
+<h2 class="font-label-md text-label-md text-outline uppercase tracking-widest">Entry Amount</h2>
+<span class="text-primary font-bold">USD</span>
+</div>
+<div class="flex items-baseline gap-xs">
+<span class="font-display-lg text-display-lg text-outline">$</span>
+<input autofocus="" class="w-full font-display-lg text-display-lg border-none focus:ring-0 bg-transparent p-0 placeholder:text-surface-variant text-primary" placeholder="0.00" type="number"/>
+</div>
+</section>
+<!-- Type Segmented Control -->
+<section class="flex bg-surface-container rounded-lg p-1 border border-outline-variant">
+<button class="flex-1 py-md rounded-md font-label-md text-label-md transition-all duration-200 bg-white text-primary shadow-sm" id="btn-expense" onclick="setActiveType('expense')">
+                    Expense
+                </button>
+<button class="flex-1 py-md rounded-md font-label-md text-label-md transition-all duration-200 text-on-surface-variant hover:bg-surface-container-high" id="btn-income" onclick="setActiveType('income')">
+                    Income
+                </button>
+</section>
+<!-- Category Grid -->
+<section class="bg-white card-shadow rounded-xl p-xl border border-[#E2E8F0]">
+<div class="flex justify-between items-center mb-md pb-sm border-b border-outline-variant">
+<h2 class="font-label-md text-label-md text-outline uppercase tracking-widest">Category</h2>
+</div>
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-sm">
+<!-- Category Chip -->
+<button class="flex items-center gap-sm p-sm rounded-lg border border-outline-variant hover:border-secondary-container hover:bg-surface-container-low transition-all group">
+<div class="w-8 h-8 rounded bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">shopping_bag</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant group-hover:text-primary">Shopping</span>
+</button>
+<button class="flex items-center gap-sm p-sm rounded-lg border border-secondary text-primary bg-secondary/10 transition-all">
+<div class="w-8 h-8 rounded bg-secondary flex items-center justify-center text-on-secondary">
+<span class="material-symbols-outlined text-[18px]">restaurant</span>
+</div>
+<span class="font-label-md text-label-md font-bold">Food</span>
+</button>
+<button class="flex items-center gap-sm p-sm rounded-lg border border-outline-variant hover:border-secondary-container hover:bg-surface-container-low transition-all group">
+<div class="w-8 h-8 rounded bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant group-hover:text-primary">Bills</span>
+</button>
+<button class="flex items-center gap-sm p-sm rounded-lg border border-outline-variant hover:border-secondary-container hover:bg-surface-container-low transition-all group">
+<div class="w-8 h-8 rounded bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">commute</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant group-hover:text-primary">Transport</span>
+</button>
+<button class="flex items-center gap-sm p-sm rounded-lg border border-outline-variant hover:border-secondary-container hover:bg-surface-container-low transition-all group">
+<div class="w-8 h-8 rounded bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">movie</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant group-hover:text-primary">Leisure</span>
+</button>
+<button class="flex items-center gap-sm p-sm rounded-lg border border-outline-variant hover:border-secondary-container hover:bg-surface-container-low transition-all group">
+<div class="w-8 h-8 rounded bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant group-hover:text-primary">Other</span>
+</button>
+</div>
+</section>
+<!-- Details: Account & Date -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div class="bg-white card-shadow rounded-xl p-xl border border-[#E2E8F0]">
+<h2 class="font-label-md text-label-md text-outline uppercase tracking-widest mb-md">Account</h2>
+<select class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-md font-body-md focus:border-secondary-container focus:ring-1 focus:ring-secondary-container outline-none appearance-none cursor-pointer">
+<option>Main Checking (***4920)</option>
+<option>Savings Vault</option>
+<option>Credit Card (Silver)</option>
+</select>
+</div>
+<div class="bg-white card-shadow rounded-xl p-xl border border-[#E2E8F0]">
+<h2 class="font-label-md text-label-md text-outline uppercase tracking-widest mb-md">Date</h2>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-md font-body-md focus:border-secondary-container focus:ring-1 focus:ring-secondary-container outline-none" type="date" value="2023-11-24"/>
+</div>
+</section>
+<!-- Notes Section -->
+<section class="bg-white card-shadow rounded-xl p-xl border border-[#E2E8F0]">
+<h2 class="font-label-md text-label-md text-outline uppercase tracking-widest mb-md">Notes</h2>
+<textarea class="w-full bg-surface-container-low border border-outline-variant rounded-lg p-md font-body-md focus:border-secondary-container focus:ring-1 focus:ring-secondary-container outline-none resize-none placeholder:text-outline/50" placeholder="Add a description or tag..." rows="3"></textarea>
+</section>
+<!-- Confirm Button -->
+<div class="pt-md pb-xxl">
+<button class="w-full py-xl bg-secondary-container text-on-secondary font-headline-md text-headline-md rounded-lg shadow-lg hover:bg-secondary transition-all active:scale-[0.98] flex items-center justify-center gap-sm">
+                    Confirm Entry
+                    <span class="material-symbols-outlined">check_circle</span>
+</button>
+<p class="text-center font-label-sm text-label-sm text-outline mt-md">Your entry will be inscribed instantly to your ledger.</p>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-margin-mobile pb-safe bg-surface dark:bg-surface-dim border-t border-outline-variant dark:border-outline h-16">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:text-primary transition-colors scale-95 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-sm text-label-sm">Overview</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:text-primary transition-colors scale-95 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label-sm text-label-sm">Portfolio</span>
+</a>
+<!-- ACTIVE STATE: History/Add context -->
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim font-semibold scale-95 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add_circle</span>
+<span class="font-label-sm text-label-sm">Add</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline hover:text-primary transition-colors scale-95 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-sm text-label-sm">Settings</span>
+</a>
+</nav>
+<script>
+        function setActiveType(type) {
+            const btnExpense = document.getElementById('btn-expense');
+            const btnIncome = document.getElementById('btn-income');
+            
+            if (type === 'expense') {
+                btnExpense.classList.add('bg-white', 'text-primary', 'shadow-sm');
+                btnExpense.classList.remove('text-on-surface-variant', 'hover:bg-surface-container-high');
+                btnIncome.classList.add('text-on-surface-variant', 'hover:bg-surface-container-high');
+                btnIncome.classList.remove('bg-white', 'text-primary', 'shadow-sm');
+            } else {
+                btnIncome.classList.add('bg-white', 'text-primary', 'shadow-sm');
+                btnIncome.classList.remove('text-on-surface-variant', 'hover:bg-surface-container-high');
+                btnExpense.classList.add('text-on-surface-variant', 'hover:bg-surface-container-high');
+                btnExpense.classList.remove('bg-white', 'text-primary', 'shadow-sm');
+            }
+        }
+
+        // Simple animation on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const sections = document.querySelectorAll('section, .pt-md');
+            sections.forEach((section, index) => {
+                section.style.opacity = '0';
+                section.style.transform = 'translateY(10px)';
+                setTimeout(() => {
+                    section.style.transition = 'all 0.4s ease-out';
+                    section.style.opacity = '1';
+                    section.style.transform = 'translateY(0)';
+                }, index * 80);
+            });
+        });
+    </script>
+</body></html>

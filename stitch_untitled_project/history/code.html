@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Inscribed - Transaction History</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&amp;family=Quicksand:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container": "#eaeef2",
+                    "secondary-fixed-dim": "#a9c7ff",
+                    "inverse-surface": "#2c3134",
+                    "tertiary-container": "#5d77a2",
+                    "inverse-primary": "#aac7ff",
+                    "outline": "#717785",
+                    "surface-tint": "#005db8",
+                    "surface-container-low": "#f0f4f8",
+                    "surface-container-lowest": "#ffffff",
+                    "tertiary": "#445e87",
+                    "on-tertiary-container": "#ffffff",
+                    "surface-container-highest": "#dfe3e7",
+                    "surface-bright": "#f6fafe",
+                    "primary-container": "#0074e4",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#d6dade",
+                    "on-secondary-fixed-variant": "#1d477e",
+                    "inverse-on-surface": "#edf1f5",
+                    "secondary-container": "#9bbfff",
+                    "surface-container-high": "#e4e9ed",
+                    "on-background": "#171c1f",
+                    "on-tertiary": "#ffffff",
+                    "surface": "#f6fafe",
+                    "on-primary-fixed-variant": "#00458d",
+                    "secondary": "#395f98",
+                    "tertiary-fixed": "#d5e3ff",
+                    "on-tertiary-fixed-variant": "#2d476f",
+                    "outline-variant": "#c1c6d6",
+                    "primary-fixed": "#d6e3ff",
+                    "error": "#ba1a1a",
+                    "on-primary-container": "#ffffff",
+                    "on-primary-fixed": "#001b3e",
+                    "tertiary-fixed-dim": "#adc7f7",
+                    "surface-variant": "#dfe3e7",
+                    "on-surface": "#171c1f",
+                    "secondary-fixed": "#d6e3ff",
+                    "on-tertiary-fixed": "#001b3c",
+                    "on-error": "#ffffff",
+                    "background": "#f6fafe",
+                    "on-secondary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "on-surface-variant": "#414753",
+                    "on-secondary-container": "#254d85",
+                    "on-secondary-fixed": "#001b3d",
+                    "on-error-container": "#93000a",
+                    "primary-fixed-dim": "#aac7ff",
+                    "primary": "#005cb7",
+                    "divider-beige": "#f5f1e9"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "container-margin-mobile": "20px",
+                    "stack-lg": "32px",
+                    "gutter": "16px",
+                    "base": "4px",
+                    "stack-sm": "8px",
+                    "container-margin-desktop": "40px",
+                    "stack-md": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Quicksand"],
+                    "headline-md": ["Quicksand"],
+                    "headline-lg": ["Quicksand"],
+                    "label-sm": ["Quicksand"],
+                    "body-lg": ["Quicksand"],
+                    "headline-lg-mobile": ["Quicksand"],
+                    "display-accent": ["Great Vibes"]
+            },
+            "fontSize": {
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "display-accent": ["36px", {"lineHeight": "44px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #f6fafe;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .transaction-list-scroll {
+            height: calc(100vh - 280px);
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+        .transaction-list-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .bento-card {
+            background-color: #ffffff;
+            border: 1px solid #c1c6d6;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .bento-card:active {
+            transform: scale(0.98);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-on-background bg-background min-h-screen flex flex-col items-center">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background flex justify-between items-center px-container-margin-mobile py-stack-sm w-full top-0 sticky z-40">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a smiling young woman with a warm, approachable look. The lighting is soft and natural, creating a professional yet friendly vibe. The background is a clean, minimalist office with subtle blue and white tones to match the 'Inscribed' app's aesthetic. High-quality digital photography with a sharp focus on her face." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIIamUS_sVho_UzGBPz3vm0wHjKOIWHWi5qHbywQOQDPdZm2b3JxWCGOUUQqctYZN9o2_NMJluPVp5RfOT6hJSJ3uliI3vF0NAmVFlC7nC6KRr2mVwjjOht6ZPKt25BT7C42dwnhbk0iUTKYxH_J7j8igqiLiCqJ0Q0jpMaakUVgn4x6CSrTtm2cRdzEePKh_h1aS1lfAG8jUFQwa_-y_Er4Lyq5MF9ABQjYxJViQTG_E9oGI2nP-H-YVk2rsntQkcndmaX1yl_bE"/>
+</div>
+<span class="font-display-accent text-display-accent text-primary dark:text-primary-fixed">Inscribed</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors active:scale-95">
+<span class="material-symbols-outlined text-primary">notifications</span>
+</button>
+</header>
+<main class="w-full max-w-[1200px] flex-1 px-container-margin-mobile md:px-container-margin-desktop space-y-stack-md pb-32">
+<!-- Search & Filters -->
+<section class="space-y-stack-sm mt-stack-md">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full pl-12 pr-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all font-body-md text-on-surface" placeholder="Search transactions..." type="text"/>
+</div>
+<div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+<button class="bg-primary text-on-primary px-4 py-1.5 rounded-lg font-label-sm whitespace-nowrap">All</button>
+<button class="bg-surface-container-low text-on-surface-variant border border-outline-variant px-4 py-1.5 rounded-lg font-label-sm whitespace-nowrap hover:bg-surface-container-high transition-colors">Expenses</button>
+<button class="bg-surface-container-low text-on-surface-variant border border-outline-variant px-4 py-1.5 rounded-lg font-label-sm whitespace-nowrap hover:bg-surface-container-high transition-colors">Income</button>
+<button class="bg-surface-container-low text-on-surface-variant border border-outline-variant px-4 py-1.5 rounded-lg font-label-sm whitespace-nowrap hover:bg-surface-container-high transition-colors">Subscriptions</button>
+</div>
+</section>
+<!-- Transaction Ledger -->
+<section class="transaction-list-scroll space-y-stack-lg pr-1">
+<!-- Date Group: Today -->
+<div>
+<h3 class="font-label-sm text-on-surface-variant opacity-60 mb-stack-sm tracking-widest uppercase">Today</h3>
+<div class="space-y-stack-sm">
+<!-- Transaction Row -->
+<div class="bento-card p-4 rounded-xl flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-container" data-weight="fill">shopping_bag</span>
+</div>
+<div>
+<p class="font-headline-md text-on-surface">Premium Stationery Co.</p>
+<p class="font-label-sm text-on-surface-variant">Office Supplies</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-headline-md text-error">- $42.50</p>
+<p class="font-label-sm text-on-surface-variant">10:45 AM</p>
+</div>
+</div>
+<!-- Divider -->
+<div class="h-[1px] w-full bg-divider-beige mx-auto"></div>
+<!-- Transaction Row -->
+<div class="bento-card p-4 rounded-xl flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-tertiary-fixed-dim flex items-center justify-center">
+<span class="material-symbols-outlined text-on-tertiary-fixed-variant" data-weight="fill">coffee</span>
+</div>
+<div>
+<p class="font-headline-md text-on-surface">The Daily Ink Café</p>
+<p class="font-label-sm text-on-surface-variant">Food &amp; Drinks</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-headline-md text-error">- $6.80</p>
+<p class="font-label-sm text-on-surface-variant">08:15 AM</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Date Group: Yesterday -->
+<div>
+<h3 class="font-label-sm text-on-surface-variant opacity-60 mb-stack-sm tracking-widest uppercase">Yesterday</h3>
+<div class="space-y-stack-sm">
+<div class="bento-card p-4 rounded-xl flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-primary-fixed-dim flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-fixed-variant" data-weight="fill">payments</span>
+</div>
+<div>
+<p class="font-headline-md text-on-surface">Project Payout</p>
+<p class="font-label-sm text-on-surface-variant">Income</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-headline-md text-primary">+ $1,250.00</p>
+<p class="font-label-sm text-on-surface-variant">04:20 PM</p>
+</div>
+</div>
+<div class="h-[1px] w-full bg-divider-beige mx-auto"></div>
+<div class="bento-card p-4 rounded-xl flex items-center justify-between group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-secondary-fixed-dim flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-fixed-variant" data-weight="fill">subscriptions</span>
+</div>
+<div>
+<p class="font-headline-md text-on-surface">Design Software Monthly</p>
+<p class="font-label-sm text-on-surface-variant">Subscriptions</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-headline-md text-error">- $29.99</p>
+<p class="font-label-sm text-on-surface-variant">09:00 AM</p>
+</div>
+</div>
+</div>
+</div>
+<!-- More History -->
+<div class="text-center py-4">
+<button class="text-primary font-label-sm hover:underline">View older transactions</button>
+</div>
+</section>
+</main>
+<!-- Monthly Spending Summary (Soft Card at Bottom) -->
+<div class="fixed bottom-20 w-full max-w-[1200px] px-container-margin-mobile z-30">
+<div class="bg-surface-accent bg-[#CEDDEF] p-4 rounded-2xl shadow-sm border border-outline-variant flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center">
+<span class="material-symbols-outlined">analytics</span>
+</div>
+<div>
+<p class="font-label-sm text-on-surface-variant leading-none">Monthly Spending</p>
+<p class="font-headline-md text-on-surface">$2,450.80</p>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<div class="flex items-center text-error gap-1">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span>
+<span class="font-label-sm">12% vs last mo.</span>
+</div>
+<button class="font-label-sm text-primary mt-1 flex items-center gap-1">Details <span class="material-symbols-outlined text-[14px]">chevron_right</span></button>
+</div>
+</div>
+</div>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 py-2 pb-safe bg-surface-container-lowest dark:bg-inverse-surface shadow-[0_-4px_20px_0_rgba(0,0,0,0.04)] rounded-t-xl">
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all py-1 px-3">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-body-md text-body-md">Today</span>
+</button>
+<button class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-xl px-3 py-1 scale-90 duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history</span>
+<span class="font-body-md text-body-md">History</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all py-1 px-3">
+<span class="material-symbols-outlined text-primary text-[32px]">add_circle</span>
+<span class="font-body-md text-body-md">Add</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all py-1 px-3">
+<span class="material-symbols-outlined">folder_special</span>
+<span class="font-body-md text-body-md">Portfolio</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all py-1 px-3">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</button>
+</nav>
+<script>
+        // Simple Interaction logic
+        document.querySelectorAll('.bento-card').forEach(card => {
+            card.addEventListener('click', () => {
+                // Future Detail View trigger
+                console.log('Transaction details requested');
+            });
+        });
+
+        // Filter chip selection logic
+        const filterButtons = document.querySelectorAll('button.font-label-sm.whitespace-nowrap');
+        filterButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterButtons.forEach(b => {
+                    b.classList.remove('bg-primary', 'text-on-primary');
+                    b.classList.add('bg-surface-container-low', 'text-on-surface-variant', 'border-outline-variant');
+                });
+                btn.classList.add('bg-primary', 'text-on-primary');
+                btn.classList.remove('bg-surface-container-low', 'text-on-surface-variant', 'border-outline-variant');
+            });
+        });
+    </script>
+</body></html>

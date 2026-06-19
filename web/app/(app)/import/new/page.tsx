@@ -4,6 +4,8 @@ import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { AppPageHeader } from "@/components/app-page-header";
+import { AddIcon } from "@/components/nav-icons";
 
 export default function UploadPage() {
   const { data: session } = useSession();
@@ -61,10 +63,16 @@ export default function UploadPage() {
 
   return (
     <main className="shell">
-      <section className="appChrome">
-        <h1 className="pageTitle">Upload Excel</h1>
+      <section className="appChrome workspaceStack">
+        <AppPageHeader
+          eyebrow="Inscribed imports"
+          title="Upload Excel"
+          accent="Import with review first"
+          lead="Add a workbook, preview how rows were parsed, then confirm before the ledger is updated."
+          icon={AddIcon}
+        />
 
-        <form className="grid gap-4 mt-6" onSubmit={handleSubmit}>
+        <form className="card settingsGrid" onSubmit={handleSubmit}>
           <div className="field">
             <label htmlFor="file">Choose Excel file (.xlsx)</label>
             <input
@@ -80,7 +88,7 @@ export default function UploadPage() {
             <p className="muted">Selected: {file.name}</p>
           )}
 
-          {error && <p className="muted">{error}</p>}
+          {error && <p className="statusText">{error}</p>}
 
           <button type="submit" className="primaryButton" disabled={loading}>
             {loading ? "Uploading..." : "Upload"}

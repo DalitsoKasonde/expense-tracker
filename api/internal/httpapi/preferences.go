@@ -41,8 +41,10 @@ func (s *Server) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.DefaultCurrency == "" {
-		req.DefaultCurrency = "ZMW"
+	currency, err := normalizeCurrency(req.DefaultCurrency)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	req.Theme = strings.ToLower(strings.TrimSpace(req.Theme))
@@ -54,7 +56,7 @@ func (s *Server) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prefs, err := s.userPreferences.Update(r.Context(), claims.UserID, strings.ToUpper(req.DefaultCurrency), req.Theme, req.NotificationsEnabled)
+	prefs, err := s.userPreferences.Update(r.Context(), claims.UserID, currency, req.Theme, req.NotificationsEnabled)
 	if err != nil {
 		http.Error(w, "failed to update preferences", http.StatusInternalServerError)
 		return

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Ledger - Portfolio</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&amp;family=Great+Vibes&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary": "#ffffff",
+                    "outline-variant": "#c3c6d1",
+                    "surface-variant": "#e2e2e7",
+                    "primary-container": "#264e86",
+                    "on-tertiary-fixed": "#001b3c",
+                    "secondary-fixed-dim": "#aac7ff",
+                    "surface-container-lowest": "#ffffff",
+                    "primary-fixed": "#d6e3ff",
+                    "on-surface-variant": "#434750",
+                    "on-error": "#ffffff",
+                    "surface-container-low": "#f4f3f8",
+                    "surface-dim": "#dad9df",
+                    "on-surface": "#1a1c1f",
+                    "tertiary-container": "#344e76",
+                    "outline": "#737781",
+                    "tertiary-fixed": "#d5e3ff",
+                    "primary-fixed-dim": "#a9c7ff",
+                    "on-tertiary-fixed-variant": "#2d476f",
+                    "background": "#f9f9fe",
+                    "surface-container": "#eeedf3",
+                    "secondary": "#005ab4",
+                    "surface-container-highest": "#e2e2e7",
+                    "on-tertiary-container": "#a6c0ef",
+                    "on-secondary": "#ffffff",
+                    "on-primary-fixed-variant": "#1d477e",
+                    "error-container": "#ffdad6",
+                    "surface-container-high": "#e8e8ed",
+                    "secondary-container": "#0072e1",
+                    "error": "#ba1a1a",
+                    "inverse-primary": "#a9c7ff",
+                    "on-primary-fixed": "#001b3d",
+                    "on-background": "#1a1c1f",
+                    "primary": "#03376e",
+                    "tertiary": "#1b375e",
+                    "inverse-on-surface": "#f1f0f6",
+                    "on-error-container": "#93000a",
+                    "on-secondary-fixed-variant": "#00458d",
+                    "on-secondary-fixed": "#001b3e",
+                    "surface": "#f9f9fe",
+                    "on-secondary-container": "#fefcff",
+                    "on-primary-container": "#9dc1ff",
+                    "on-primary": "#ffffff",
+                    "surface-bright": "#f9f9fe",
+                    "tertiary-fixed-dim": "#adc7f7",
+                    "secondary-fixed": "#d6e3ff",
+                    "surface-tint": "#395f98",
+                    "inverse-surface": "#2f3034"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "margin-mobile": "16px",
+                    "xxl": "48px",
+                    "xs": "4px",
+                    "margin-desktop": "64px",
+                    "gutter": "24px",
+                    "lg": "24px",
+                    "unit": "4px",
+                    "md": "16px",
+                    "sm": "8px"
+            },
+            "fontFamily": {
+                    "body-md": ["Quicksand"],
+                    "display-lg": ["Quicksand"],
+                    "headline-lg": ["Quicksand"],
+                    "label-md": ["Quicksand"],
+                    "headline-md": ["Quicksand"],
+                    "headline-lg-mobile": ["Quicksand"],
+                    "accent-flourish": ["Great Vibes"],
+                    "body-lg": ["Quicksand"],
+                    "label-sm": ["Quicksand"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "accent-flourish": ["24px", {"lineHeight": "32px", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.03em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #F4F8FC; /* Canvas color from guidelines */
+            font-family: 'Quicksand', sans-serif;
+        }
+        .card-shadow {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #E2E8F0;
+            border-radius: 10px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface custom-scrollbar">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-40 bg-surface border-b border-outline-variant">
+<div class="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-sm max-w-[1280px] mx-auto">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary" data-icon="account_balance">account_balance</span>
+<h1 class="font-headline-md text-headline-md font-semibold text-primary tracking-tight">Ledger</h1>
+</div>
+<div class="hidden md:flex items-center gap-xl">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="#">Overview</a>
+<a class="font-label-md text-label-md text-primary font-bold" href="#">Portfolio</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="#">History</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="#">Settings</a>
+</div>
+<div class="flex items-center">
+<div class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a mature, sophisticated business person with soft lighting, minimalist background, high-end photography style, using a palette of blues and neutrals to match the Ledger brand identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDeQDVD9EkkUxEbqgFXyElBq-2WZMe7wIAuf-kmEZZ3LA_qJz5ViKLoopSz2NB802SjG8vkTpvI1kV0bTBXEkzMgj0FHpaTiyza5UQimN0AHSu16fU9gNS6QoH7pH60_elN9IqKdpfxkfFlA4I7_Hmaor8Wbhxq8paXrEdqeLrnQlBLnVoBbrCQNubMriS9Iq9QhJBmQGx7-8Zo5OAUed-57Ea_nhzaW41h5NuqYbdPF-gfvhUokWA99PUL3iZDOImEBuuCyRLyeA"/>
+</div>
+</div>
+</div>
+</header>
+<main class="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop py-lg pb-xxl">
+<!-- Hero Section: Total Value & Performance -->
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-gutter mb-xl">
+<div class="lg:col-span-2 bg-surface-container-lowest border border-outline-variant rounded-xl p-lg card-shadow flex flex-col">
+<div class="flex justify-between items-start mb-md">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Total Portfolio Value</p>
+<h2 class="font-display-lg text-display-lg text-primary">$482,950.24</h2>
+<div class="flex items-center gap-xs mt-xs">
+<span class="material-symbols-outlined text-secondary text-[18px]" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+<span class="font-label-md text-label-md text-secondary font-bold">+12.4% <span class="text-on-surface-variant font-normal text-[12px] ml-1">last 30 days</span></span>
+</div>
+</div>
+<div class="flex gap-sm">
+<button class="px-sm py-xs font-label-sm text-label-sm rounded-lg bg-surface-container-high text-on-surface hover:bg-outline-variant transition-colors">1M</button>
+<button class="px-sm py-xs font-label-sm text-label-sm rounded-lg bg-primary text-on-primary">1Y</button>
+<button class="px-sm py-xs font-label-sm text-label-sm rounded-lg bg-surface-container-high text-on-surface hover:bg-outline-variant transition-colors">ALL</button>
+</div>
+</div>
+<!-- Performance Chart Placeholder -->
+<div class="flex-grow min-h-[240px] w-full relative mt-sm">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 800 240">
+<defs>
+<lineargradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#264E86" stop-opacity="0.1"></stop>
+<stop offset="100%" stop-color="#264E86" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0,200 Q100,180 200,190 T400,120 T600,100 T800,40" fill="none" stroke="#264E86" stroke-width="2.5"></path>
+<path d="M0,200 Q100,180 200,190 T400,120 T600,100 T800,40 V240 H0 Z" fill="url(#chartGradient)"></path>
+<!-- Interactive point -->
+<circle cx="800" cy="40" fill="#03376E" r="4"></circle>
+</svg>
+<!-- Grid lines -->
+<div class="absolute inset-0 flex flex-col justify-between pointer-events-none border-b border-outline-variant opacity-20">
+<div class="border-b border-outline"></div>
+<div class="border-b border-outline"></div>
+<div class="border-b border-outline"></div>
+</div>
+</div>
+</div>
+<!-- Market Summary Card (Editorial Style) -->
+<div class="bg-primary-container text-on-primary-container rounded-xl p-lg card-shadow flex flex-col justify-between overflow-hidden relative">
+<div class="relative z-10">
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-on-primary-container/70 mb-sm block">Market Summary</span>
+<h3 class="font-headline-md text-headline-md mb-md leading-tight">Equity markets show resilience amidst shifting yields.</h3>
+<p class="font-body-md text-body-md text-on-primary-container/80 mb-lg">
+                        Broad-based indices maintained upward momentum as tech earnings surprised to the upside. Analyst sentiment suggests a "soft landing" remains the primary consensus for Q4.
+                    </p>
+</div>
+<div class="relative z-10 flex items-center justify-between">
+<span class="font-accent-flourish text-accent-flourish text-on-primary-container">Inscribed Insight</span>
+<button class="flex items-center gap-xs font-label-md text-label-md hover:underline">
+                        Read Analysis <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+<!-- Abstract decorative shape -->
+<div class="absolute -right-16 -bottom-16 w-48 h-48 bg-secondary-container/20 rounded-full blur-3xl"></div>
+</div>
+</section>
+<!-- Allocation and Holdings Grid -->
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Asset Allocation -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg card-shadow">
+<div class="flex items-center justify-between mb-lg border-b border-outline-variant pb-md">
+<h3 class="font-headline-md text-headline-md text-primary">Asset Allocation</h3>
+<span class="material-symbols-outlined text-outline" data-icon="pie_chart">pie_chart</span>
+</div>
+<div class="space-y-md">
+<div>
+<div class="flex justify-between mb-xs">
+<span class="font-label-md text-label-md">Equities</span>
+<span class="font-label-md text-label-md font-bold text-primary">65%</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[65%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-xs">
+<span class="font-label-md text-label-md">Fixed Income</span>
+<span class="font-label-md text-label-md font-bold text-primary">20%</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-[20%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-xs">
+<span class="font-label-md text-label-md">Cash Equivalents</span>
+<span class="font-label-md text-label-md font-bold text-primary">10%</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-tertiary-container h-full w-[10%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-xs">
+<span class="font-label-md text-label-md">Alternative Assets</span>
+<span class="font-label-md text-label-md font-bold text-primary">5%</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-outline h-full w-[5%]"></div>
+</div>
+</div>
+</div>
+<div class="mt-xl pt-lg border-t border-outline-variant">
+<p class="font-body-md text-body-md text-on-surface-variant italic">
+                        "Diversification is the only free lunch in investing."
+                    </p>
+<p class="font-label-sm text-label-sm text-outline mt-xs">— Harry Markowitz</p>
+</div>
+</div>
+<!-- Top Holdings -->
+<div class="lg:col-span-2 bg-surface-container-lowest border border-outline-variant rounded-xl p-lg card-shadow">
+<div class="flex items-center justify-between mb-lg border-b border-outline-variant pb-md">
+<h3 class="font-headline-md text-headline-md text-primary">Top Holdings</h3>
+<button class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-xs">
+                        View All <span class="material-symbols-outlined text-[16px]">open_in_new</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full">
+<thead>
+<tr class="text-left border-b border-outline-variant">
+<th class="pb-md font-label-sm text-label-sm text-outline uppercase tracking-wider">Asset</th>
+<th class="pb-md font-label-sm text-label-sm text-outline uppercase tracking-wider text-right">Price</th>
+<th class="pb-md font-label-sm text-label-sm text-outline uppercase tracking-wider text-right">Balance</th>
+<th class="pb-md font-label-sm text-label-sm text-outline uppercase tracking-wider text-right">Change</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/50">
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="py-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center font-bold text-primary">A</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface font-bold">Apple Inc.</p>
+<p class="font-label-sm text-label-sm text-outline">AAPL • Equity</p>
+</div>
+</div>
+</td>
+<td class="py-md text-right font-label-md text-label-md">$189.43</td>
+<td class="py-md text-right">
+<p class="font-label-md text-label-md text-on-surface font-bold">$42,950.00</p>
+<p class="font-label-sm text-label-sm text-outline">226.73 Units</p>
+</td>
+<td class="py-md text-right font-label-md text-label-md text-secondary">+2.41%</td>
+</tr>
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="py-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center font-bold text-primary">V</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface font-bold">Vanguard S&amp;P 500 ETF</p>
+<p class="font-label-sm text-label-sm text-outline">VOO • ETF</p>
+</div>
+</div>
+</td>
+<td class="py-md text-right font-label-md text-label-md">$412.12</td>
+<td class="py-md text-right">
+<p class="font-label-md text-label-md text-on-surface font-bold">$115,200.00</p>
+<p class="font-label-sm text-label-sm text-outline">279.53 Units</p>
+</td>
+<td class="py-md text-right font-label-md text-label-md text-secondary">+1.18%</td>
+</tr>
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="py-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center font-bold text-primary">M</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface font-bold">Microsoft Corp</p>
+<p class="font-label-sm text-label-sm text-outline">MSFT • Equity</p>
+</div>
+</div>
+</td>
+<td class="py-md text-right font-label-md text-label-md">$378.85</td>
+<td class="py-md text-right">
+<p class="font-label-md text-label-md text-on-surface font-bold">$38,120.40</p>
+<p class="font-label-sm text-label-sm text-outline">100.62 Units</p>
+</td>
+<td class="py-md text-right font-label-md text-label-md text-secondary">+0.85%</td>
+</tr>
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="py-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center font-bold text-primary">B</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface font-bold">Bitcoin</p>
+<p class="font-label-sm text-label-sm text-outline">BTC • Crypto</p>
+</div>
+</div>
+</td>
+<td class="py-md text-right font-label-md text-label-md">$64,120.00</td>
+<td class="py-md text-right">
+<p class="font-label-md text-label-md text-on-surface font-bold">$24,300.00</p>
+<p class="font-label-sm text-label-sm text-outline">0.379 BTC</p>
+</td>
+<td class="py-md text-right font-label-md text-label-md text-error">-1.24%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- Investment Tip (Banner Style) -->
+<section class="mt-xl">
+<div class="bg-surface-container-high border border-outline-variant rounded-xl p-lg flex flex-col md:flex-row items-center gap-lg">
+<div class="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-primary text-[32px]">lightbulb</span>
+</div>
+<div class="flex-grow text-center md:text-left">
+<h4 class="font-headline-md text-headline-md text-primary mb-xs">Rebalancing Opportunity</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Your Equity allocation has drifted 5% above your target threshold. Consider harvesting gains and reallocating to Fixed Income to maintain your risk profile.</p>
+</div>
+<button class="px-xl py-md bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap">
+                    Rebalance Now
+                </button>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-margin-mobile pb-safe bg-surface border-t border-outline-variant md:hidden h-16">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-sm text-label-sm">Overview</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary font-semibold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+<span class="font-label-sm text-label-sm">Portfolio</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="font-label-sm text-label-sm">History</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-sm text-label-sm">Settings</span>
+</a>
+</nav>
+<script>
+        // Micro-interaction for hover effects on cards
+        document.querySelectorAll('.card-shadow').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-2px)';
+                card.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0)';
+            });
+        });
+    </script>
+</body></html>

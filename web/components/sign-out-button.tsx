@@ -2,15 +2,18 @@
 
 import { signOut } from "next-auth/react";
 
-export function SignOutButton() {
+type SignOutButtonProps = {
+  className?: string;
+};
+
+export function SignOutButton({ className = "ghostButton" }: SignOutButtonProps) {
   return (
     <button
       type="button"
-      className="ghostButton"
+      className={className}
       onClick={() => signOut({ callbackUrl: "/login" })}
     >
       Log out
     </button>
   );
 }
-

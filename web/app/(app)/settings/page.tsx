@@ -1,55 +1,70 @@
 import type { Route } from "next";
-import Link from "next/link";
+import { SettingsOverviewCard } from "@/components/settings-overview-card";
 
 const sections: Array<{
   href: Route;
   title: string;
   description: string;
+  footer: string;
 }> = [
   {
     href: "/settings/preferences",
     title: "Preferences",
-    description: "Default currency, theme, and notification preferences.",
+    description: "Set the default currency, theme, and alerts that shape the everyday Inscribed experience.",
+    footer: "Interface and reminders",
   },
   {
     href: "/settings/accounts",
     title: "Accounts",
-    description: "Manage wallets, bank accounts, and where money is stored.",
+    description: "Define the wallets, banks, savings spaces, and investment homes behind live balances.",
+    footer: "Balance structure",
   },
   {
     href: "/settings/categories",
     title: "Categories",
-    description: "Create grouped categories with optional parent-child structure.",
+    description: "Keep expense, income, saving, and investment language clear enough for daily review and reporting.",
+    footer: "Reporting taxonomy",
   },
   {
     href: "/settings/income-sources",
     title: "Income Sources",
-    description: "Track salary, business income, freelance work, and other inflows.",
+    description: "Track salary, business revenue, freelance work, and investment income from a single source library.",
+    footer: "Revenue origins",
   },
   {
     href: "/settings/businesses",
     title: "Businesses",
-    description: "Tag transactions to separate personal and business activity.",
+    description: "Separate personal and business-linked activity without turning the ledger into a full accounting suite.",
+    footer: "Business context",
   },
 ];
 
 export default function SettingsOverviewPage() {
   return (
-    <section className="settingsSection">
-      <div className="card">
-        <p className="muted">First milestone</p>
-        <p>
-          Settings is now organized around the configuration you use every day, starting with preferences,
-          accounts, categories, income sources, and businesses.
-        </p>
+    <section className="settingsSection settingsOverviewSection">
+      <div className="settingsOverviewIntro">
+        <article className="card settingsLeadCard">
+          <p className="settingsLeadHeading">
+            Keep the structure practical, the defaults quiet, and the ledger language unmistakably yours.
+          </p>
+          <p className="muted">
+            The workspace below covers the five live systems that shape account behavior, reporting clarity, and
+            everyday entry speed.
+          </p>
+        </article>
+
+        <aside className="card settingsReferenceCard">
+          <strong>Five sections. One composed control surface.</strong>
+          <span className="muted">
+            Start with preferences and accounts, then refine the language that powers history, imports, and portfolio
+            review.
+          </span>
+        </aside>
       </div>
 
-      <div className="resourceList">
+      <div className="settingsEditorialGrid">
         {sections.map((section) => (
-          <Link key={section.href} href={section.href} className="card resourceBody">
-            <strong>{section.title}</strong>
-            <span className="muted">{section.description}</span>
-          </Link>
+          <SettingsOverviewCard key={section.href} {...section} />
         ))}
       </div>
     </section>

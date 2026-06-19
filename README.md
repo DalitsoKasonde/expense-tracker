@@ -15,8 +15,11 @@ Phase 0 foundation for a local-first expense tracker monorepo:
 ```bash
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=change-me
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 API_BASE_URL=http://localhost:8080
 ```
+
+`NEXT_PUBLIC_API_BASE_URL` is required for browser-side requests. `API_BASE_URL` is used by server-side auth handlers.
 
 4. In `api/`, create `.env` with:
 
@@ -27,6 +30,8 @@ APP_ORIGIN=http://localhost:3000
 ADMIN_BOOTSTRAP_EMAIL=admin@example.com
 ADMIN_BOOTSTRAP_PASSWORD=change-me
 ```
+
+`APP_ORIGIN` accepts a comma-separated list. For local development, include every frontend origin you actually use, for example `http://localhost:3000,http://127.0.0.1:3000`. If you open the PWA from another device on your LAN, use your computer's LAN IP in both `APP_ORIGIN` and `NEXT_PUBLIC_API_BASE_URL`.
 
 5. Run migrations:
 
@@ -60,4 +65,3 @@ Invite-only auth means users cannot self-register. The first successful login wi
 creates the first admin user automatically in PostgreSQL if no users exist yet.
 
 After that, only existing users in the `users` table can sign in.
-

@@ -28,7 +28,7 @@ var ErrInvalidCategoryParent = errors.New("invalid category parent")
 
 func (s *CategoryStore) ListByUser(ctx context.Context, userID string) ([]Category, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, user_id, name, category_group, parent_id, created_at
+		select id, user_id, name, category_group, parent_id, created_at::text
 		from categories
 		where user_id = $1
 		order by name asc
@@ -55,13 +55,13 @@ func (s *CategoryStore) Create(ctx context.Context, userID, name, categoryGroup 
 	if categoryGroup == "" {
 		categoryGroup = "expense"
 	}
-	if err := s.validateParent(ctx, userID, "", parentID); err != nil {
+	if err := s.validateParent(ctx, userID, "", categoryGroup, parentID); err != nil {
 		return Category{}, err
 	}
 	err := s.db.QueryRow(ctx, `
 		insert into categories (user_id, name, category_group, parent_id)
 		values ($1, $2, $3, $4)
-		returning id, user_id, name, category_group, parent_id, created_at
+		returning id, user_id, name, category_group, parent_id, created_at::text
 	`, userID, name, categoryGroup, parentID).Scan(
 		&category.ID,
 		&category.UserID,
@@ -70,7 +70,7 @@ func (s *CategoryStore) Create(ctx context.Context, userID, name, categoryGroup 
 		&category.ParentID,
 		&category.CreatedAt,
 	)
-	return category, err
+	return category, normalizeWriteError(err)
 }
 
 func (s *CategoryStore) Update(ctx context.Context, id, userID, name, categoryGroup string, parentID *string) (Category, error) {
@@ -78,14 +78,14 @@ func (s *CategoryStore) Update(ctx context.Context, id, userID, name, categoryGr
 	if categoryGroup == "" {
 		categoryGroup = "expense"
 	}
-	if err := s.validateParent(ctx, userID, id, parentID); err != nil {
+	if err := s.validateParent(ctx, userID, id, categoryGroup, parentID); err != nil {
 		return Category{}, err
 	}
 	err := s.db.QueryRow(ctx, `
 		update categories
 		set name = $1, category_group = $2, parent_id = $3, updated_at = now()
 		where id = $4 and user_id = $5
-		returning id, user_id, name, category_group, parent_id, created_at
+		returning id, user_id, name, category_group, parent_id, created_at::text
 	`, name, categoryGroup, parentID, id, userID).Scan(
 		&category.ID,
 		&category.UserID,
@@ -94,18 +94,18 @@ func (s *CategoryStore) Update(ctx context.Context, id, userID, name, categoryGr
 		&category.ParentID,
 		&category.CreatedAt,
 	)
-	return category, err
+	return category, normalizeWriteError(err)
 }
 
 func (s *CategoryStore) Delete(ctx context.Context, id, userID string) error {
-	_, err := s.db.Exec(ctx, `
+	tag, err := s.db.Exec(ctx, `
 		delete from categories
 		where id = $1 and user_id = $2
 		`, id, userID)
-	return err
+	return normalizeExecResult(tag, err)
 }
 
-func (s *CategoryStore) validateParent(ctx context.Context, userID, categoryID string, parentID *string) error {
+func (s *CategoryStore) validateParent(ctx context.Context, userID, categoryID, categoryGroup string, parentID *string) error {
 	if parentID == nil || *parentID == "" {
 		return nil
 	}
@@ -115,12 +115,16 @@ func (s *CategoryStore) validateParent(ctx context.Context, userID, categoryID s
 	}
 
 	var nextParentID *string
+	var nextParentGroup string
 	err := s.db.QueryRow(ctx, `
-		select parent_id
+		select parent_id, category_group
 		from categories
 		where id = $1 and user_id = $2
-	`, *parentID, userID).Scan(&nextParentID)
+	`, *parentID, userID).Scan(&nextParentID, &nextParentGroup)
 	if err != nil {
+		return ErrInvalidCategoryParent
+	}
+	if nextParentGroup != categoryGroup {
 		return ErrInvalidCategoryParent
 	}
 
@@ -135,11 +139,15 @@ func (s *CategoryStore) validateParent(ctx context.Context, userID, categoryID s
 		seen[*nextParentID] = true
 
 		var parentOfParent *string
+		var parentGroup string
 		if err := s.db.QueryRow(ctx, `
-			select parent_id
+			select parent_id, category_group
 			from categories
 			where id = $1 and user_id = $2
-		`, *nextParentID, userID).Scan(&parentOfParent); err != nil {
+		`, *nextParentID, userID).Scan(&parentOfParent, &parentGroup); err != nil {
+			return ErrInvalidCategoryParent
+		}
+		if parentGroup != categoryGroup {
 			return ErrInvalidCategoryParent
 		}
 		nextParentID = parentOfParent

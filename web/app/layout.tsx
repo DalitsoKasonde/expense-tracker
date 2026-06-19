@@ -6,14 +6,14 @@ import { SyncStatus } from "@/components/sync-status";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Expense Tracker",
-  description: "Mobile-first expense tracking with account balances, imports, and investment visibility.",
+  title: "Inscribed",
+  description: "Inscribed keeps daily money movement, imports, and portfolio structure inside a premium ledger workspace.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <Providers>
           <ServiceWorkerRegister />
           <SyncStatus />

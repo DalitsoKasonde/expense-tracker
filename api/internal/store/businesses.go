@@ -23,7 +23,7 @@ func NewBusinessStore(db *pgxpool.Pool) *BusinessStore {
 
 func (s *BusinessStore) ListByUser(ctx context.Context, userID string) ([]Business, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, user_id, name, created_at
+		select id, user_id, name, created_at::text
 		from businesses
 		where user_id = $1
 		order by name asc
@@ -50,36 +50,37 @@ func (s *BusinessStore) Create(ctx context.Context, userID, name string) (Busine
 	err := s.db.QueryRow(ctx, `
 		insert into businesses (user_id, name)
 		values ($1, $2)
-		returning id, user_id, name, created_at
+		returning id, user_id, name, created_at::text
 	`, userID, name).Scan(
 		&business.ID,
 		&business.UserID,
 		&business.Name,
 		&business.CreatedAt,
 	)
-	return business, err
+	return business, normalizeWriteError(err)
 }
 
 func (s *BusinessStore) Update(ctx context.Context, id, userID, name string) (Business, error) {
 	var business Business
 	err := s.db.QueryRow(ctx, `
 		update businesses
-		set name = $1
+		set name = $1,
+		    updated_at = now()
 		where id = $2 and user_id = $3
-		returning id, user_id, name, created_at
+		returning id, user_id, name, created_at::text
 	`, name, id, userID).Scan(
 		&business.ID,
 		&business.UserID,
 		&business.Name,
 		&business.CreatedAt,
 	)
-	return business, err
+	return business, normalizeWriteError(err)
 }
 
 func (s *BusinessStore) Delete(ctx context.Context, id, userID string) error {
-	_, err := s.db.Exec(ctx, `
+	tag, err := s.db.Exec(ctx, `
 		delete from businesses
 		where id = $1 and user_id = $2
 	`, id, userID)
-	return err
+	return normalizeExecResult(tag, err)
 }

@@ -24,7 +24,7 @@ func NewIncomeSourceStore(db *pgxpool.Pool) *IncomeSourceStore {
 
 func (s *IncomeSourceStore) ListByUser(ctx context.Context, userID string) ([]IncomeSource, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, user_id, name, source_type, created_at
+		select id, user_id, name, source_type, created_at::text
 		from income_sources
 		where user_id = $1
 		order by name asc
@@ -54,7 +54,7 @@ func (s *IncomeSourceStore) Create(ctx context.Context, userID, name, sourceType
 	err := s.db.QueryRow(ctx, `
 		insert into income_sources (user_id, name, source_type)
 		values ($1, $2, $3)
-		returning id, user_id, name, source_type, created_at
+		returning id, user_id, name, source_type, created_at::text
 	`, userID, name, sourceType).Scan(
 		&source.ID,
 		&source.UserID,
@@ -62,7 +62,7 @@ func (s *IncomeSourceStore) Create(ctx context.Context, userID, name, sourceType
 		&source.SourceType,
 		&source.CreatedAt,
 	)
-	return source, err
+	return source, normalizeWriteError(err)
 }
 
 func (s *IncomeSourceStore) Update(ctx context.Context, id, userID, name, sourceType string) (IncomeSource, error) {
@@ -74,7 +74,7 @@ func (s *IncomeSourceStore) Update(ctx context.Context, id, userID, name, source
 		update income_sources
 		set name = $1, source_type = $2, updated_at = now()
 		where id = $3 and user_id = $4
-		returning id, user_id, name, source_type, created_at
+		returning id, user_id, name, source_type, created_at::text
 	`, name, sourceType, id, userID).Scan(
 		&source.ID,
 		&source.UserID,
@@ -82,13 +82,13 @@ func (s *IncomeSourceStore) Update(ctx context.Context, id, userID, name, source
 		&source.SourceType,
 		&source.CreatedAt,
 	)
-	return source, err
+	return source, normalizeWriteError(err)
 }
 
 func (s *IncomeSourceStore) Delete(ctx context.Context, id, userID string) error {
-	_, err := s.db.Exec(ctx, `
+	tag, err := s.db.Exec(ctx, `
 		delete from income_sources
 		where id = $1 and user_id = $2
 	`, id, userID)
-	return err
+	return normalizeExecResult(tag, err)
 }

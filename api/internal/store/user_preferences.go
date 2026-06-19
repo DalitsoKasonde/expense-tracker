@@ -29,7 +29,7 @@ func (s *UserPreferenceStore) GetOrCreate(ctx context.Context, userID string) (U
 		insert into user_preferences (user_id)
 		values ($1)
 		on conflict (user_id) do update set user_id = excluded.user_id
-		returning user_id, default_currency, theme, notifications_enabled, created_at, updated_at
+		returning user_id, default_currency, theme, notifications_enabled, created_at::text, updated_at::text
 	`, userID).Scan(
 		&prefs.UserID,
 		&prefs.DefaultCurrency,
@@ -51,7 +51,7 @@ func (s *UserPreferenceStore) Update(ctx context.Context, userID, defaultCurrenc
 		    theme = excluded.theme,
 		    notifications_enabled = excluded.notifications_enabled,
 		    updated_at = now()
-		returning user_id, default_currency, theme, notifications_enabled, created_at, updated_at
+		returning user_id, default_currency, theme, notifications_enabled, created_at::text, updated_at::text
 	`, userID, defaultCurrency, theme, notificationsEnabled).Scan(
 		&prefs.UserID,
 		&prefs.DefaultCurrency,

@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Mobile-first expense tracking with imports, balances, and investment visibility.",
     start_url: "/today",
     display: "standalone",
-    background_color: "#f4efe6",
-    theme_color: "#0f766e",
+    background_color: "#FCFAF7",
+    theme_color: "#557A68",
     icons: [
       {
         src: "/icon.svg",

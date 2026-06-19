@@ -2,7 +2,10 @@ import type { ReactNode } from "react";
 import { getAuthSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
+import { SidebarNav } from "@/components/sidebar-nav";
 import { PreferenceThemeSync } from "@/components/preference-theme-sync";
+import Link from "next/link";
+import { AddIcon } from "@/components/nav-icons";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await getAuthSession();
@@ -36,7 +39,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <PreferenceThemeSync />
-      {children}
+      <div className="appLayoutContainer">
+        <SidebarNav />
+        <div className="mainContentContainer">{children}</div>
+      </div>
+      <Link href="/add" className="floatingAddButton" aria-label="Add entry">
+        <AddIcon />
+      </Link>
       <BottomNav />
     </>
   );

@@ -7,12 +7,14 @@ import (
 )
 
 type Asset struct {
-	ID               string `json:"id"`
-	UserID           string `json:"userId"`
-	InvestmentTypeID string `json:"investmentTypeId"`
-	Name             string `json:"name"` // e.g., "LuSE Stock", "Treasury Bond", "Chitenge Group"
+	ID               string  `json:"id"`
+	UserID           string  `json:"userId"`
+	InvestmentTypeID string  `json:"investmentTypeId"`
+	AssetClass       string  `json:"assetClass"`
+	Name             string  `json:"name"` // e.g., "LuSE Stock", "Treasury Bond", "Chitenge Group"
 	Symbol           *string `json:"symbol"`
-	CreatedAt        string `json:"createdAt"`
+	Currency         string  `json:"currency"`
+	CreatedAt        string  `json:"createdAt"`
 }
 
 type AssetStore struct {
@@ -25,7 +27,7 @@ func NewAssetStore(db *pgxpool.Pool) *AssetStore {
 
 func (s *AssetStore) ListByUser(ctx context.Context, userID string) ([]Asset, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, user_id, investment_type_id, name, symbol, created_at
+		select id, user_id, investment_type_id, asset_class, name, symbol, currency, created_at::text
 		from assets
 		where user_id = $1
 		order by name asc
@@ -38,7 +40,7 @@ func (s *AssetStore) ListByUser(ctx context.Context, userID string) ([]Asset, er
 	var assets []Asset
 	for rows.Next() {
 		var a Asset
-		if err := rows.Scan(&a.ID, &a.UserID, &a.InvestmentTypeID, &a.Name, &a.Symbol, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.UserID, &a.InvestmentTypeID, &a.AssetClass, &a.Name, &a.Symbol, &a.Currency, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		assets = append(assets, a)
@@ -49,7 +51,7 @@ func (s *AssetStore) ListByUser(ctx context.Context, userID string) ([]Asset, er
 
 func (s *AssetStore) ListByInvestmentType(ctx context.Context, userID, investmentTypeID string) ([]Asset, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, user_id, investment_type_id, name, symbol, created_at
+		select id, user_id, investment_type_id, asset_class, name, symbol, currency, created_at::text
 		from assets
 		where user_id = $1 and investment_type_id = $2
 		order by name asc
@@ -62,7 +64,7 @@ func (s *AssetStore) ListByInvestmentType(ctx context.Context, userID, investmen
 	var assets []Asset
 	for rows.Next() {
 		var a Asset
-		if err := rows.Scan(&a.ID, &a.UserID, &a.InvestmentTypeID, &a.Name, &a.Symbol, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.UserID, &a.InvestmentTypeID, &a.AssetClass, &a.Name, &a.Symbol, &a.Currency, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		assets = append(assets, a)
@@ -71,45 +73,61 @@ func (s *AssetStore) ListByInvestmentType(ctx context.Context, userID, investmen
 	return assets, rows.Err()
 }
 
-func (s *AssetStore) Create(ctx context.Context, userID, investmentTypeID, name string, symbol *string) (Asset, error) {
+func (s *AssetStore) Create(ctx context.Context, userID, investmentTypeID, assetClass, name, currency string, symbol *string) (Asset, error) {
 	var asset Asset
+	if assetClass == "" {
+		assetClass = "other"
+	}
+	if currency == "" {
+		currency = "ZMW"
+	}
 	err := s.db.QueryRow(ctx, `
-		insert into assets (user_id, investment_type_id, name, symbol)
-		values ($1, $2, $3, $4)
-		returning id, user_id, investment_type_id, name, symbol, created_at
-	`, userID, investmentTypeID, name, symbol).Scan(
+		insert into assets (user_id, investment_type_id, asset_class, name, symbol, currency)
+		values ($1, $2, $3, $4, $5, $6)
+		returning id, user_id, investment_type_id, asset_class, name, symbol, currency, created_at::text
+	`, userID, investmentTypeID, assetClass, name, symbol, currency).Scan(
 		&asset.ID,
 		&asset.UserID,
 		&asset.InvestmentTypeID,
+		&asset.AssetClass,
 		&asset.Name,
 		&asset.Symbol,
+		&asset.Currency,
 		&asset.CreatedAt,
 	)
-	return asset, err
+	return asset, normalizeWriteError(err)
 }
 
-func (s *AssetStore) Update(ctx context.Context, id, userID, name string, symbol *string) (Asset, error) {
+func (s *AssetStore) Update(ctx context.Context, id, userID, assetClass, name, currency string, symbol *string) (Asset, error) {
 	var asset Asset
+	if assetClass == "" {
+		assetClass = "other"
+	}
+	if currency == "" {
+		currency = "ZMW"
+	}
 	err := s.db.QueryRow(ctx, `
 		update assets
-		set name = $1, symbol = $2
-		where id = $3 and user_id = $4
-		returning id, user_id, investment_type_id, name, symbol, created_at
-	`, name, symbol, id, userID).Scan(
+		set asset_class = $1, name = $2, symbol = $3, currency = $4
+		where id = $5 and user_id = $6
+		returning id, user_id, investment_type_id, asset_class, name, symbol, currency, created_at::text
+	`, assetClass, name, symbol, currency, id, userID).Scan(
 		&asset.ID,
 		&asset.UserID,
 		&asset.InvestmentTypeID,
+		&asset.AssetClass,
 		&asset.Name,
 		&asset.Symbol,
+		&asset.Currency,
 		&asset.CreatedAt,
 	)
-	return asset, err
+	return asset, normalizeWriteError(err)
 }
 
 func (s *AssetStore) Delete(ctx context.Context, id, userID string) error {
-	_, err := s.db.Exec(ctx, `
+	tag, err := s.db.Exec(ctx, `
 		delete from assets
 		where id = $1 and user_id = $2
 	`, id, userID)
-	return err
+	return normalizeExecResult(tag, err)
 }

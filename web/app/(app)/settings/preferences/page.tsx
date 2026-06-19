@@ -53,12 +53,13 @@ export default function PreferencesSettingsPage() {
 
   return (
     <section className="settingsSection">
-      <div className="card resourceBody">
-        <strong>Preferences</strong>
-        <span className="muted">These preferences shape the app globally, not just this page.</span>
+      <div className="card settingsLeadCard">
+        <p className="sectionKicker">Preferences</p>
+        <h2 className="sectionHeading">Everyday defaults</h2>
+        <p className="muted">These settings shape the live experience across the app, not just this workspace.</p>
       </div>
 
-      <form className="card settingsGrid" onSubmit={handleSubmit}>
+      <form className="card settingsFormPanel" onSubmit={handleSubmit}>
         <div className="field">
           <label htmlFor="defaultCurrency">Default currency</label>
           <select
@@ -87,10 +88,10 @@ export default function PreferencesSettingsPage() {
           </select>
         </div>
 
-        <label className="resourceRow" htmlFor="notificationsEnabled">
+        <label className="resourceRow settingsToggleRow" htmlFor="notificationsEnabled">
           <span className="resourceBody">
             <strong>Notifications</strong>
-            <span className="muted">Save whether reminder-style notifications are enabled for your profile.</span>
+            <span className="muted">Control reminder-style notifications for your account.</span>
           </span>
           <input
             id="notificationsEnabled"
@@ -114,4 +115,3 @@ export default function PreferencesSettingsPage() {
     </section>
   );
 }
-

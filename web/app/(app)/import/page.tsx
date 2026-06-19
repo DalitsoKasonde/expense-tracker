@@ -3,6 +3,8 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AppPageHeader } from "@/components/app-page-header";
+import { HistoryIcon } from "@/components/nav-icons";
 
 interface Import {
   id: string;
@@ -51,11 +53,17 @@ export default function ImportPage() {
 
   return (
     <main className="shell">
-      <section className="appChrome">
-        <h1 className="pageTitle">Import History</h1>
+      <section className="appChrome workspaceStack">
+        <AppPageHeader
+          eyebrow="Inscribed imports"
+          title="Import History"
+          accent="Reviewed before it reaches the ledger"
+          lead="Track uploaded workbooks, preview state, confirmation status, and reversals in one quieter review surface."
+          icon={HistoryIcon}
+        />
 
-        <Link href="/import/new" className="primaryButton block mb-8 text-center">
-          + Upload Excel
+        <Link href="/import/new" className="primaryButton block text-center">
+          Upload Excel
         </Link>
 
         {imports.length === 0 ? (

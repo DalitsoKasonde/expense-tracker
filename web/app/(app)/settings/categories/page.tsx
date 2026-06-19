@@ -55,6 +55,13 @@ export default function CategoriesSettingsPage() {
   });
 
   const orderedCategories = useMemo(() => buildOrderedCategories(categories), [categories]);
+  const parentOptions = useMemo(
+    () =>
+      orderedCategories.filter(
+        (category) => category.id !== editingId && category.categoryGroup === form.categoryGroup
+      ),
+    [editingId, form.categoryGroup, orderedCategories]
+  );
 
   async function loadCategories() {
     const result = await apiCall<Category[]>("/v1/categories");
@@ -125,10 +132,17 @@ export default function CategoriesSettingsPage() {
 
   return (
     <section className="settingsSection">
-      <form className="card settingsGrid" onSubmit={handleSubmit}>
+      <div className="card settingsLeadCard">
+        <p className="sectionKicker">Categories</p>
+        <h2 className="sectionHeading">Ledger language</h2>
+        <p className="muted">Keep income, spending, saving, and investing clear enough for history and reports to stay readable.</p>
+      </div>
+
+      <div className="settingsDetailGrid">
+      <form className="card settingsFormPanel" onSubmit={handleSubmit}>
         <div className="resourceBody">
           <strong>{editingId ? "Edit category" : "Create category"}</strong>
-          <span className="muted">Categories stay grouped while supporting optional parent-child structure.</span>
+          <span className="muted">Categories can be grouped and nested without making the ledger feel noisy.</span>
         </div>
 
         <div className="field">
@@ -147,7 +161,9 @@ export default function CategoriesSettingsPage() {
           <select
             id="categoryGroup"
             value={form.categoryGroup}
-            onChange={(event) => setForm((current) => ({ ...current, categoryGroup: event.target.value }))}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, categoryGroup: event.target.value, parentId: "" }))
+            }
           >
             {categoryGroups.map((group) => (
               <option key={group.value} value={group.value}>
@@ -165,13 +181,11 @@ export default function CategoriesSettingsPage() {
             onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))}
           >
             <option value="">No parent</option>
-            {orderedCategories
-              .filter((category) => category.id !== editingId)
-              .map((category) => (
-                <option key={category.id} value={category.id}>
-                  {`${"  ".repeat(category.depth)}${category.name}`}
-                </option>
-              ))}
+            {parentOptions.map((category) => (
+              <option key={category.id} value={category.id}>
+                {`${"  ".repeat(category.depth)}${category.name}`}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -189,43 +203,51 @@ export default function CategoriesSettingsPage() {
         {status ? <p className="statusText">{status}</p> : null}
       </form>
 
-      <div className="resourceList">
-        {loading ? <div className="card muted">Loading categories...</div> : null}
-        {!loading && orderedCategories.length === 0 ? (
-          <div className="card muted">No categories yet. Create your first category above.</div>
-        ) : null}
-        {orderedCategories.map((category) => (
-          <div key={category.id} className="card resourceRow">
-            <div className="resourceBody">
-              <strong>{`${"— ".repeat(category.depth)}${category.name}`}</strong>
-              <div className="resourceMeta">
-                <span className="metaBadge">{category.categoryGroup}</span>
-                {category.parentId ? <span className="metaBadge">Subcategory</span> : null}
+      <div className="card settingsListPanel">
+        <div className="settingsHeaderRow">
+          <div className="resourceBody">
+            <strong>Existing categories</strong>
+            <span className="muted">Parent-child structure is shown directly in the list for easier editing.</span>
+          </div>
+        </div>
+        <div className="resourceList">
+          {loading ? <div className="muted">Loading categories...</div> : null}
+          {!loading && orderedCategories.length === 0 ? (
+            <div className="muted">No categories yet. Create your first category above.</div>
+          ) : null}
+          {orderedCategories.map((category) => (
+            <div key={category.id} className="resourceRow">
+              <div className="resourceBody">
+                <strong>{`${"— ".repeat(category.depth)}${category.name}`}</strong>
+                <div className="resourceMeta">
+                  <span className="metaBadge">{category.categoryGroup}</span>
+                  {category.parentId ? <span className="metaBadge">Subcategory</span> : null}
+                </div>
+              </div>
+              <div className="formActions">
+                <button
+                  className="ghostButton"
+                  type="button"
+                  onClick={() => {
+                    setEditingId(category.id);
+                    setForm({
+                      name: category.name,
+                      categoryGroup: category.categoryGroup,
+                      parentId: category.parentId ?? "",
+                    });
+                  }}
+                >
+                  Edit
+                </button>
+                <button className="ghostButton" type="button" onClick={() => void handleDelete(category.id)}>
+                  Remove
+                </button>
               </div>
             </div>
-            <div className="formActions">
-              <button
-                className="ghostButton"
-                type="button"
-                onClick={() => {
-                  setEditingId(category.id);
-                  setForm({
-                    name: category.name,
-                    categoryGroup: category.categoryGroup,
-                    parentId: category.parentId ?? "",
-                  });
-                }}
-              >
-                Edit
-              </button>
-              <button className="ghostButton" type="button" onClick={() => void handleDelete(category.id)}>
-                Remove
-              </button>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
+      </div>
       </div>
     </section>
   );
 }
-

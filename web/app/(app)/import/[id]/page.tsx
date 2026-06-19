@@ -4,6 +4,8 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AppPageHeader } from "@/components/app-page-header";
+import { HistoryIcon } from "@/components/nav-icons";
 
 interface Import {
   id: string;
@@ -86,11 +88,17 @@ export default function ImportDetailPage() {
 
   return (
     <main className="shell">
-      <section className="appChrome">
-        <h1 className="pageTitle">Import Details</h1>
+      <section className="appChrome workspaceStack">
+        <AppPageHeader
+          eyebrow="Inscribed imports"
+          title="Import Details"
+          accent="Traceable by design"
+          lead="Review the current import state, then preview or reverse it without leaving the import workspace."
+          icon={HistoryIcon}
+        />
 
-        <div className="card">
-          <p className="muted">Status</p>
+        <div className="card resourceBody">
+          <p className="sectionKicker">Status</p>
           <h2 className="text-2xl font-bold my-2">
             {imp.status.toUpperCase()}
           </h2>

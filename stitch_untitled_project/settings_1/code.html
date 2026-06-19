@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Inscribed - Profile &amp; Settings</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Quicksand (Body & Headlines) & Great Vibes (Accent) -->
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&amp;family=Great Vibes&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container": "#eaeef2",
+                    "secondary-fixed-dim": "#a9c7ff",
+                    "inverse-surface": "#2c3134",
+                    "tertiary-container": "#5d77a2",
+                    "inverse-primary": "#aac7ff",
+                    "outline": "#717785",
+                    "surface-tint": "#005db8",
+                    "surface-container-low": "#f0f4f8",
+                    "surface-container-lowest": "#ffffff",
+                    "tertiary": "#445e87",
+                    "on-tertiary-container": "#ffffff",
+                    "surface-container-highest": "#dfe3e7",
+                    "surface-bright": "#f6fafe",
+                    "primary-container": "#0074e4",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#d6dade",
+                    "on-secondary-fixed-variant": "#1d477e",
+                    "inverse-on-surface": "#edf1f5",
+                    "secondary-container": "#9bbfff",
+                    "surface-container-high": "#e4e9ed",
+                    "on-background": "#171c1f",
+                    "on-tertiary": "#ffffff",
+                    "surface": "#f6fafe",
+                    "on-primary-fixed-variant": "#00458d",
+                    "secondary": "#395f98",
+                    "tertiary-fixed": "#d5e3ff",
+                    "on-tertiary-fixed-variant": "#2d476f",
+                    "outline-variant": "#c1c6d6",
+                    "primary-fixed": "#d6e3ff",
+                    "error": "#ba1a1a",
+                    "on-primary-container": "#ffffff",
+                    "on-primary-fixed": "#001b3e",
+                    "tertiary-fixed-dim": "#adc7f7",
+                    "surface-variant": "#dfe3e7",
+                    "on-surface": "#171c1f",
+                    "secondary-fixed": "#d6e3ff",
+                    "on-tertiary-fixed": "#001b3c",
+                    "on-error": "#ffffff",
+                    "background": "#f6fafe",
+                    "on-secondary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "on-surface-variant": "#414753",
+                    "on-secondary-container": "#254d85",
+                    "on-secondary-fixed": "#001b3d",
+                    "on-error-container": "#93000a",
+                    "primary-fixed-dim": "#aac7ff",
+                    "primary": "#005cb7"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "container-margin-mobile": "20px",
+                    "stack-lg": "32px",
+                    "gutter": "16px",
+                    "base": "4px",
+                    "stack-sm": "8px",
+                    "container-margin-desktop": "40px",
+                    "stack-md": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Quicksand"],
+                    "headline-md": ["Quicksand"],
+                    "headline-lg": ["Quicksand"],
+                    "label-sm": ["Quicksand"],
+                    "body-lg": ["Quicksand"],
+                    "headline-lg-mobile": ["Quicksand"],
+                    "display-accent": ["Great Vibes"]
+            },
+            "fontSize": {
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "display-accent": ["36px", {"lineHeight": "44px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #f6fafe;
+            font-family: 'Quicksand', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="bg-background sticky top-0 z-40 flex justify-between items-center px-container-margin-mobile py-stack-sm w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-container">
+<img class="w-full h-full object-cover" data-alt="A professional studio portrait of a young woman with a friendly, warm smile. She is wearing a soft blue blazer that complements the light mode aesthetic. The background is a clean, minimalist office space with soft daylight and organized bookshelves, conveying a sense of airy order and executive polish." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYBXI9EKe_xZ6mbCYGjIkD6516h7df5aWHa6CQgF5BXH8gT5ShjM5Y4zljVyrpcHTMtSL3XaYQg2tOZLK1mw33ztL9DqtFLbcRCazmm8eaD5zUq3RdXDyTC0EJyi3jmW_enDyH6CWdvTpNMpSDUbX7Hr-8AW4rKANBuauOq2kR5PQ5Ndv8ONH80wPd3tkkcSnMMIkLWtebTJhQmF-Zx9eLkThzsE_hL8_DmjOR7BzIh04OQeRtVqxq0qWOxa8-A8RYhhI86t0LooU"/>
+</div>
+<h1 class="font-display-accent text-display-accent text-primary">Inscribed</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors active:scale-95">
+<span class="material-symbols-outlined text-primary">notifications</span>
+</button>
+</header>
+<main class="max-w-md mx-auto px-container-margin-mobile mt-6 space-y-stack-lg">
+<!-- Profile Header Section -->
+<section class="flex flex-col items-center text-center py-stack-md">
+<div class="relative mb-4">
+<div class="w-24 h-24 rounded-2xl overflow-hidden shadow-sm border-4 border-surface-container-lowest">
+<img class="w-full h-full object-cover" data-alt="Close up portrait of a professional woman in her early 30s. The lighting is soft and natural, emphasizing her warm and confident expression. The style is soft minimalism with a palette of whites, sky blues, and light grays. High resolution digital photography, clean and intentional composition." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbmALaBu_J-BX-Zyn8y7mDc_e_1QXdgaMoMNm7-HCZXVOmXhLF6vtK0-pN5fc2rYrsGzhN-Oukq5mFkM_osKkR92hsJ4aHSK3bfUMsSmfaS7fxfpS5abiugZ-ZThwGMhNVBRcnbapA7xtJfboGc-LXi0aRplxTkPvwVp5Iswe2LPJff14iJU13mgxWGivu87WNES1z6UU1sPiM7ajUXUvIKk8Uix2RGy24LQfUR7s1tickwvz_9oTU0vA7Wc-3oCG5NrEl22Kr8Ek"/>
+</div>
+<button class="absolute -bottom-2 -right-2 bg-primary text-on-primary w-8 h-8 rounded-full flex items-center justify-center shadow-md border-2 border-surface-container-lowest active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+</div>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Eleanor Vance</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Chief Organizing Officer</p>
+</section>
+<!-- PWA Install Prompt -->
+<section class="bg-primary-container text-on-primary-container rounded-2xl p-5 flex items-center justify-between shadow-sm border border-primary/10">
+<div class="flex items-center gap-4">
+<div class="bg-white/20 p-2 rounded-xl">
+<span class="material-symbols-outlined">install_mobile</span>
+</div>
+<div>
+<h3 class="font-headline-md text-[16px] leading-tight">Add to Home Screen</h3>
+<p class="font-label-sm text-label-sm opacity-90">Quick access to your workspace.</p>
+</div>
+</div>
+<button class="bg-surface-container-lowest text-primary px-4 py-2 rounded-xl font-label-sm hover:bg-opacity-90 active:scale-95 transition-all">
+                Install
+            </button>
+</section>
+<!-- Settings Groups -->
+<div class="space-y-stack-lg">
+<!-- Group: Account -->
+<div class="space-y-stack-sm">
+<h4 class="font-label-sm text-label-sm text-outline px-2">Account</h4>
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_4px_20px_0_rgba(0,0,0,0.04)]">
+<button class="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">person_outline</span>
+<span class="font-body-lg text-body-lg text-on-surface">Personal Information</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<div class="h-[1px] bg-surface-container-low mx-5"></div>
+<button class="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">mail_outline</span>
+<span class="font-body-lg text-body-lg text-on-surface">Email Notifications</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<div class="h-[1px] bg-surface-container-low mx-5"></div>
+<button class="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">workspace_premium</span>
+<span class="font-body-lg text-body-lg text-on-surface">Membership Plan</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Group: Preferences -->
+<div class="space-y-stack-sm">
+<h4 class="font-label-sm text-label-sm text-outline px-2">Preferences</h4>
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_4px_20px_0_rgba(0,0,0,0.04)]">
+<button class="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">palette</span>
+<span class="font-body-lg text-body-lg text-on-surface">Theme &amp; Appearance</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<div class="h-[1px] bg-surface-container-low mx-5"></div>
+<button class="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">language</span>
+<span class="font-body-lg text-body-lg text-on-surface">Language &amp; Region</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Group: Security -->
+<div class="space-y-stack-sm">
+<h4 class="font-label-sm text-label-sm text-outline px-2">Security</h4>
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_4px_20px_0_rgba(0,0,0,0.04)]">
+<button class="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">lock_outline</span>
+<span class="font-body-lg text-body-lg text-on-surface">Password &amp; Security</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<div class="h-[1px] bg-surface-container-low mx-5"></div>
+<button class="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">fingerprint</span>
+<span class="font-body-lg text-body-lg text-on-surface">Biometric Authentication</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-10 h-6 bg-secondary-container rounded-full relative transition-colors cursor-pointer">
+<div class="absolute top-1 right-1 w-4 h-4 bg-white rounded-full transition-all translate-x-0"></div>
+</div>
+</div>
+</button>
+</div>
+</div>
+<!-- Group: Help -->
+<div class="space-y-stack-sm">
+<h4 class="font-label-sm text-label-sm text-outline px-2">Support</h4>
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_4px_20px_0_rgba(0,0,0,0.04)]">
+<button class="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">help_outline</span>
+<span class="font-body-lg text-body-lg text-on-surface">Help Center</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<div class="h-[1px] bg-surface-container-low mx-5"></div>
+<button class="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary">description</span>
+<span class="font-body-lg text-body-lg text-on-surface">Privacy Policy</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Log Out Action -->
+<div class="pt-4 pb-12 flex flex-col items-center gap-4">
+<button class="flex items-center justify-center gap-2 px-8 py-3 rounded-2xl border-1.5 border-secondary text-secondary hover:bg-secondary/5 active:scale-95 transition-all w-full font-headline-md text-[16px]">
+<span class="material-symbols-outlined">logout</span>
+                    Log Out
+                </button>
+<span class="font-label-sm text-label-sm text-outline opacity-60">Version 2.4.0 (Inscribed Professional)</span>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface-container-lowest dark:bg-inverse-surface shadow-[0_-4px_20px_0_rgba(0,0,0,0.04)] rounded-t-xl flex justify-around items-center px-4 py-2 pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all px-3 py-1 rounded-xl group active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-body-md text-body-md mt-0.5">Today</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all px-3 py-1 rounded-xl group active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-body-md text-body-md mt-0.5">History</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all px-3 py-1 rounded-xl group active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">add_circle</span>
+<span class="font-body-md text-body-md mt-0.5">Add</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all px-3 py-1 rounded-xl group active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">folder_special</span>
+<span class="font-body-md text-body-md mt-0.5">Portfolio</span>
+</a>
+<!-- Active Tab: Settings -->
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-xl px-3 py-1 active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-body-md text-body-md mt-0.5 font-bold">Settings</span>
+</a>
+</nav>
+<script>
+        // Micro-interactions and effects
+        document.querySelectorAll('button, a').forEach(element => {
+            element.addEventListener('click', function(e) {
+                // Haptic feedback logic could go here
+            });
+        });
+
+        // Toggle simulation for Biometric Switch
+        const biometricToggle = document.querySelector('.bg-secondary-container.w-10');
+        if(biometricToggle) {
+            biometricToggle.addEventListener('click', function() {
+                const dot = this.querySelector('div');
+                if(dot.classList.contains('translate-x-0')) {
+                    dot.classList.remove('translate-x-0');
+                    dot.classList.add('translate-x-[-16px]');
+                    this.classList.remove('bg-secondary-container');
+                    this.classList.add('bg-outline-variant');
+                } else {
+                    dot.classList.add('translate-x-0');
+                    dot.classList.remove('translate-x-[-16px]');
+                    this.classList.add('bg-secondary-container');
+                    this.classList.remove('bg-outline-variant');
+                }
+            });
+        }
+    </script>
+</body></html>

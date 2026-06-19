@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Inscribed - Quick Add</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&amp;family=Quicksand:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container": "#eaeef2",
+                        "secondary-fixed-dim": "#a9c7ff",
+                        "inverse-surface": "#2c3134",
+                        "tertiary-container": "#5d77a2",
+                        "inverse-primary": "#aac7ff",
+                        "outline": "#717785",
+                        "surface-tint": "#005db8",
+                        "surface-container-low": "#f0f4f8",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary": "#445e87",
+                        "on-tertiary-container": "#ffffff",
+                        "surface-container-highest": "#dfe3e7",
+                        "surface-bright": "#f6fafe",
+                        "primary-container": "#0074e4",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#d6dade",
+                        "on-secondary-fixed-variant": "#1d477e",
+                        "inverse-on-surface": "#edf1f5",
+                        "secondary-container": "#9bbfff",
+                        "surface-bright": "#f6fafe",
+                        "on-background": "#171c1f",
+                        "on-tertiary": "#ffffff",
+                        "surface": "#f6fafe",
+                        "on-primary-fixed-variant": "#00458d",
+                        "secondary": "#395f98",
+                        "tertiary-fixed": "#d5e3ff",
+                        "on-tertiary-fixed-variant": "#2d476f",
+                        "outline-variant": "#c1c6d6",
+                        "primary-fixed": "#d6e3ff",
+                        "error": "#ba1a1a",
+                        "on-primary-container": "#ffffff",
+                        "on-primary-fixed": "#001b3e",
+                        "tertiary-fixed-dim": "#adc7f7",
+                        "surface-variant": "#dfe3e7",
+                        "on-surface": "#171c1f",
+                        "secondary-fixed": "#d6e3ff",
+                        "on-tertiary-fixed": "#001b3c",
+                        "on-error": "#ffffff",
+                        "background": "#f6fafe",
+                        "on-secondary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-surface-variant": "#414753",
+                        "on-secondary-container": "#254d85",
+                        "on-secondary-fixed": "#001b3d",
+                        "on-error-container": "#93000a",
+                        "primary-fixed-dim": "#aac7ff",
+                        "primary": "#005cb7"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-margin-mobile": "20px",
+                        "stack-lg": "32px",
+                        "gutter": "16px",
+                        "base": "4px",
+                        "stack-sm": "8px",
+                        "container-margin-desktop": "40px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Quicksand"],
+                        "headline-md": ["Quicksand"],
+                        "headline-lg": ["Quicksand"],
+                        "label-sm": ["Quicksand"],
+                        "body-lg": ["Quicksand"],
+                        "headline-lg-mobile": ["Quicksand"],
+                        "display-accent": ["Great Vibes"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "500"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "display-accent": ["36px", {"lineHeight": "44px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .writing-pad {
+            background-image: radial-gradient(#CEDDEF 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .soft-shadow {
+            box-shadow: 0 20px 40px -10px rgba(170, 199, 255, 0.2);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background font-body-md text-on-surface min-h-screen pb-24">
+<!-- Top AppBar (from JSON context) -->
+<header class="bg-surface-bright docked full-width top-0 z-40 flex justify-between items-center px-container-margin-mobile py-stack-sm w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
+<img class="w-full h-full object-cover" data-alt="A professional studio headshot of a friendly individual with soft natural lighting, set against a clean minimalist office background with pastel blue accents. The style is crisp and professional, reflecting an executive but approachable persona with a gentle smile." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsKbklP0EFPnrU7YVYtD1MxmSiCTMWtnFn5LVBGcj5CGodprJWP6N60MEVTq9jkf8PgCJ41JwJOg69PrDJ1fznmA1e_CTIBBmYOwnvHXBCMky4S-Nx-QiOoavWnpE5f0915zzGtiEXxMPv5I7Esox1M-UxdvKAVkuPNwgFf21eUPpzWWImynmgTZNG4fGLFeL1N-x0jDAf8SfHssT_0ycWtSGyKZ-loBzLjyMPxYGmHo-SB8L7RHMsixK_IOIM0YHYcgVNGDjgnco"/>
+</div>
+<h1 class="font-display-accent text-display-accent text-primary">Inscribed</h1>
+</div>
+<button class="material-symbols-outlined text-primary p-2 hover:bg-surface-container-high transition-colors rounded-full">
+            close
+        </button>
+</header>
+<main class="max-w-xl mx-auto px-container-margin-mobile mt-stack-md">
+<!-- The "Physical Planner" Canvas -->
+<div class="bg-surface-container-lowest rounded-[20px] p-6 border border-outline-variant soft-shadow relative overflow-hidden">
+<!-- Decorative Planner Elements -->
+<div class="absolute left-0 top-0 bottom-0 w-2 bg-primary/10"></div>
+<section class="space-y-stack-lg relative z-10">
+<!-- Amount Input -->
+<div class="text-center">
+<label class="font-label-sm text-label-sm text-on-surface-variant mb-2 block">Amount</label>
+<div class="flex items-center justify-center gap-1">
+<span class="font-headline-lg-mobile text-headline-lg-mobile text-primary-container">$</span>
+<input class="w-48 bg-transparent border-none text-center font-headline-lg-mobile text-headline-lg-mobile focus:ring-0 placeholder:text-surface-variant text-on-surface" placeholder="0.00" step="0.01" type="number"/>
+</div>
+<div class="h-[1px] w-32 mx-auto bg-outline-variant mt-1"></div>
+</div>
+<!-- Type Selector (Segmented Control) -->
+<div class="flex bg-surface-container-low p-1 rounded-xl">
+<button class="flex-1 py-2 rounded-lg font-label-sm text-label-sm transition-all bg-secondary-container text-on-secondary-container shadow-sm" id="type-expense" onclick="toggleType('expense')">Expense</button>
+<button class="flex-1 py-2 rounded-lg font-label-sm text-label-sm transition-all text-on-surface-variant hover:bg-surface-container-high" id="type-income" onclick="toggleType('income')">Income</button>
+</div>
+<!-- Form Fields Grid -->
+<div class="space-y-stack-md">
+<!-- Category Chips -->
+<div>
+<label class="font-label-sm text-label-sm text-on-surface-variant mb-3 block">Category</label>
+<div class="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+<button class="px-4 py-2 bg-secondary-container/30 border border-secondary-container text-on-secondary-container rounded-lg font-body-md text-body-md whitespace-nowrap active:scale-95 transition-transform">
+                                Shopping
+                            </button>
+<button class="px-4 py-2 bg-surface-container-low border border-outline-variant text-on-surface-variant rounded-lg font-body-md text-body-md whitespace-nowrap hover:bg-surface-container-high transition-colors">
+                                Food &amp; Drink
+                            </button>
+<button class="px-4 py-2 bg-surface-container-low border border-outline-variant text-on-surface-variant rounded-lg font-body-md text-body-md whitespace-nowrap hover:bg-surface-container-high transition-colors">
+                                Utilities
+                            </button>
+<button class="px-4 py-2 bg-surface-container-low border border-outline-variant text-on-surface-variant rounded-lg font-body-md text-body-md whitespace-nowrap hover:bg-surface-container-high transition-colors">
+                                Transport
+                            </button>
+<button class="px-4 py-3 bg-surface-container-low border border-dashed border-outline-variant text-on-surface-variant rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">add</span>
+</button>
+</div>
+</div>
+<!-- Account & Date Row -->
+<div class="grid grid-cols-2 gap-stack-md">
+<div class="space-y-2">
+<label class="font-label-sm text-label-sm text-on-surface-variant block">Account</label>
+<select class="w-full bg-surface-container-low border-none rounded-xl font-body-md text-body-md py-3 px-4 focus:ring-2 focus:ring-primary-container text-on-surface">
+<option>Main Checking</option>
+<option>Savings Account</option>
+<option>Cash Portfolio</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="font-label-sm text-label-sm text-on-surface-variant block">Date</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-xl font-body-md text-body-md py-3 px-4 focus:ring-2 focus:ring-primary-container text-on-surface" type="date" value="2023-10-27"/>
+</div>
+</div>
+</div>
+<!-- Note Field -->
+<div class="space-y-2">
+<label class="font-label-sm text-label-sm text-on-surface-variant block">Notes</label>
+<textarea class="w-full bg-surface-container-low border-none rounded-xl font-body-md text-body-md py-3 px-4 focus:ring-2 focus:ring-primary-container text-on-surface resize-none writing-pad" placeholder="What was this for?" rows="3"></textarea>
+</div>
+</div>
+<!-- Action Button -->
+<button class="w-full bg-primary-container text-on-primary-container py-4 rounded-xl font-headline-md text-headline-md shadow-lg shadow-primary-container/20 active:scale-95 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                    Confirm Entry
+                </button>
+</section>
+</div>
+<!-- Decorative "Sticker" for the planner look -->
+<div class="mt-8 flex justify-center">
+<div class="bg-tertiary-fixed text-on-tertiary-fixed-variant px-6 py-2 rounded-lg -rotate-2 font-display-accent text-[24px] shadow-sm border border-white">
+                Stay Organized
+            </div>
+</div>
+</main>
+<!-- Bottom Navigation (from JSON context) -->
+<!-- Suppressed due to task-focused screen rule: "Any sub-page featuring a 'Close' or 'Back' action" -->
+<script>
+        function toggleType(type) {
+            const expenseBtn = document.getElementById('type-expense');
+            const incomeBtn = document.getElementById('type-income');
+            
+            if (type === 'expense') {
+                expenseBtn.classList.add('bg-secondary-container', 'text-on-secondary-container', 'shadow-sm');
+                expenseBtn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container-high');
+                
+                incomeBtn.classList.remove('bg-secondary-container', 'text-on-secondary-container', 'shadow-sm');
+                incomeBtn.classList.add('text-on-surface-variant', 'hover:bg-surface-container-high');
+            } else {
+                incomeBtn.classList.add('bg-secondary-container', 'text-on-secondary-container', 'shadow-sm');
+                incomeBtn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container-high');
+                
+                expenseBtn.classList.remove('bg-secondary-container', 'text-on-secondary-container', 'shadow-sm');
+                expenseBtn.classList.add('text-on-surface-variant', 'hover:bg-surface-container-high');
+            }
+        }
+
+        // Simple haptic feedback simulation
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (window.navigator.vibrate) {
+                    window.navigator.vibrate(10);
+                }
+            });
+        });
+    </script>
+</body></html>

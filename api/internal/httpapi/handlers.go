@@ -2,9 +2,10 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/dalitsokasonde/expense-tracker/api/internal/auth"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/store"
@@ -37,18 +38,40 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name        string `json:"name"`
-		AccountType string `json:"accountType"`
-		Currency    string `json:"currency"`
+		Name         string `json:"name"`
+		AccountType  string `json:"accountType"`
+		AccountClass string `json:"accountClass"`
+		Currency     string `json:"currency"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	account, err := s.accounts.Create(r.Context(), claims.UserID, req.Name, req.AccountType, req.Currency)
+	name, err := normalizeRequiredName(req.Name)
 	if err != nil {
-		http.Error(w, "failed to create account", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	accountType, err := normalizeAllowedValue(req.AccountType, "cash", validAccountTypes, "accountType")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	accountClass, err := normalizeAllowedValue(req.AccountClass, "asset", validAccountClasses, "accountClass")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	currency, err := normalizeCurrency(req.Currency)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	account, err := s.accounts.Create(r.Context(), claims.UserID, name, accountType, accountClass, currency)
+	if err != nil {
+		writeSettingsError(w, err, "failed to create account")
 		return
 	}
 
@@ -65,18 +88,40 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		Name        string `json:"name"`
-		AccountType string `json:"accountType"`
-		Currency    string `json:"currency"`
+		Name         string `json:"name"`
+		AccountType  string `json:"accountType"`
+		AccountClass string `json:"accountClass"`
+		Currency     string `json:"currency"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	account, err := s.accounts.Update(r.Context(), id, claims.UserID, req.Name, req.AccountType, req.Currency)
+	name, err := normalizeRequiredName(req.Name)
 	if err != nil {
-		http.Error(w, "failed to update account", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	accountType, err := normalizeAllowedValue(req.AccountType, "cash", validAccountTypes, "accountType")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	accountClass, err := normalizeAllowedValue(req.AccountClass, "asset", validAccountClasses, "accountClass")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	currency, err := normalizeCurrency(req.Currency)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	account, err := s.accounts.Update(r.Context(), id, claims.UserID, name, accountType, accountClass, currency)
+	if err != nil {
+		writeSettingsError(w, err, "failed to update account")
 		return
 	}
 
@@ -92,7 +137,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	if err := s.accounts.Delete(r.Context(), id, claims.UserID); err != nil {
-		http.Error(w, "failed to delete account", http.StatusInternalServerError)
+		writeSettingsError(w, err, "failed to delete account")
 		return
 	}
 
@@ -134,13 +179,28 @@ func (s *Server) createCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := s.categories.Create(r.Context(), claims.UserID, req.Name, req.CategoryGroup, req.ParentID)
+	name, err := normalizeRequiredName(req.Name)
 	if err != nil {
-		if errors.Is(err, store.ErrInvalidCategoryParent) {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	categoryGroup, err := normalizeAllowedValue(req.CategoryGroup, "expense", validCategoryGroups, "categoryGroup")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.ParentID != nil {
+		trimmed := strings.TrimSpace(*req.ParentID)
+		if trimmed == "" {
+			req.ParentID = nil
+		} else {
+			req.ParentID = &trimmed
 		}
-		http.Error(w, "failed to create category", http.StatusInternalServerError)
+	}
+
+	category, err := s.categories.Create(r.Context(), claims.UserID, name, categoryGroup, req.ParentID)
+	if err != nil {
+		writeSettingsError(w, err, "failed to create category")
 		return
 	}
 
@@ -166,13 +226,28 @@ func (s *Server) updateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := s.categories.Update(r.Context(), id, claims.UserID, req.Name, req.CategoryGroup, req.ParentID)
+	name, err := normalizeRequiredName(req.Name)
 	if err != nil {
-		if errors.Is(err, store.ErrInvalidCategoryParent) {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	categoryGroup, err := normalizeAllowedValue(req.CategoryGroup, "expense", validCategoryGroups, "categoryGroup")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.ParentID != nil {
+		trimmed := strings.TrimSpace(*req.ParentID)
+		if trimmed == "" {
+			req.ParentID = nil
+		} else {
+			req.ParentID = &trimmed
 		}
-		http.Error(w, "failed to update category", http.StatusInternalServerError)
+	}
+
+	category, err := s.categories.Update(r.Context(), id, claims.UserID, name, categoryGroup, req.ParentID)
+	if err != nil {
+		writeSettingsError(w, err, "failed to update category")
 		return
 	}
 
@@ -188,7 +263,7 @@ func (s *Server) deleteCategory(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	if err := s.categories.Delete(r.Context(), id, claims.UserID); err != nil {
-		http.Error(w, "failed to delete category", http.StatusInternalServerError)
+		writeSettingsError(w, err, "failed to delete category")
 		return
 	}
 
@@ -229,9 +304,20 @@ func (s *Server) createIncomeSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	source, err := s.incomeSources.Create(r.Context(), claims.UserID, req.Name, req.SourceType)
+	name, err := normalizeRequiredName(req.Name)
 	if err != nil {
-		http.Error(w, "failed to create income source", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	sourceType, err := normalizeAllowedValue(req.SourceType, "other", validIncomeSourceTypes, "sourceType")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	source, err := s.incomeSources.Create(r.Context(), claims.UserID, name, sourceType)
+	if err != nil {
+		writeSettingsError(w, err, "failed to create income source")
 		return
 	}
 
@@ -256,9 +342,20 @@ func (s *Server) updateIncomeSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	source, err := s.incomeSources.Update(r.Context(), id, claims.UserID, req.Name, req.SourceType)
+	name, err := normalizeRequiredName(req.Name)
 	if err != nil {
-		http.Error(w, "failed to update income source", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	sourceType, err := normalizeAllowedValue(req.SourceType, "other", validIncomeSourceTypes, "sourceType")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	source, err := s.incomeSources.Update(r.Context(), id, claims.UserID, name, sourceType)
+	if err != nil {
+		writeSettingsError(w, err, "failed to update income source")
 		return
 	}
 
@@ -274,7 +371,7 @@ func (s *Server) deleteIncomeSource(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	if err := s.incomeSources.Delete(r.Context(), id, claims.UserID); err != nil {
-		http.Error(w, "failed to delete income source", http.StatusInternalServerError)
+		writeSettingsError(w, err, "failed to delete income source")
 		return
 	}
 
@@ -314,9 +411,15 @@ func (s *Server) createBusiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	business, err := s.businesses.Create(r.Context(), claims.UserID, req.Name)
+	name, err := normalizeRequiredName(req.Name)
 	if err != nil {
-		http.Error(w, "failed to create business", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	business, err := s.businesses.Create(r.Context(), claims.UserID, name)
+	if err != nil {
+		writeSettingsError(w, err, "failed to create business")
 		return
 	}
 
@@ -340,9 +443,15 @@ func (s *Server) updateBusiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	business, err := s.businesses.Update(r.Context(), id, claims.UserID, req.Name)
+	name, err := normalizeRequiredName(req.Name)
 	if err != nil {
-		http.Error(w, "failed to update business", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	business, err := s.businesses.Update(r.Context(), id, claims.UserID, name)
+	if err != nil {
+		writeSettingsError(w, err, "failed to update business")
 		return
 	}
 
@@ -358,7 +467,7 @@ func (s *Server) deleteBusiness(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	if err := s.businesses.Delete(r.Context(), id, claims.UserID); err != nil {
-		http.Error(w, "failed to delete business", http.StatusInternalServerError)
+		writeSettingsError(w, err, "failed to delete business")
 		return
 	}
 
@@ -400,25 +509,39 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		TransactionDate string   `json:"transactionDate"`
-		EntryKind       string   `json:"entryKind"`
-		Amount          int64    `json:"amount"`
-		Currency        string   `json:"currency"`
-		AccountID       string   `json:"accountId"`
-		CategoryID      *string  `json:"categoryId"`
-		IncomeSourceID  *string  `json:"incomeSourceId"`
-		BusinessID      *string  `json:"businessId"`
-		AssetID         *string  `json:"assetId"`
-		Quantity        *float64 `json:"quantity"`
-		UnitPrice       *int64   `json:"unitPrice"`
-		Fees            *int64   `json:"fees"`
-		Note            *string  `json:"note"`
-		Source          string   `json:"source"`
-		ImportID        *string  `json:"importId"`
-		ClientID        *string  `json:"clientId"` // For offline sync
+		TransactionDate      string   `json:"transactionDate"`
+		EntryKind            string   `json:"entryKind"`
+		Amount               int64    `json:"amount"`
+		Currency             string   `json:"currency"`
+		AccountID            string   `json:"accountId"`
+		DestinationAccountID *string  `json:"destinationAccountId"`
+		CategoryID           *string  `json:"categoryId"`
+		IncomeSourceID       *string  `json:"incomeSourceId"`
+		BusinessID           *string  `json:"businessId"`
+		AssetID              *string  `json:"assetId"`
+		LoanID               *string  `json:"loanId"`
+		Quantity             *float64 `json:"quantity"`
+		UnitPrice            *int64   `json:"unitPrice"`
+		Fees                 *int64   `json:"fees"`
+		Note                 *string  `json:"note"`
+		Source               string   `json:"source"`
+		ImportID             *string  `json:"importId"`
+		ClientID             *string  `json:"clientId"` // For offline sync
+		OriginEventID        *string  `json:"originEventId"`
+		OriginEventType      *string  `json:"originEventType"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	entryKind, err := normalizeAllowedValue(req.EntryKind, "", validTransactionEntryKinds, "entryKind")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	currency, err := normalizeCurrency(req.Currency)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -440,32 +563,36 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := store.Transaction{
-		UserID:          claims.UserID,
-		TransactionDate: req.TransactionDate,
-		EntryKind:       req.EntryKind,
-		Amount:          req.Amount,
-		Currency:        req.Currency,
-		AccountID:       req.AccountID,
-		CategoryID:      req.CategoryID,
-		IncomeSourceID:  req.IncomeSourceID,
-		BusinessID:      req.BusinessID,
-		AssetID:         req.AssetID,
-		Quantity:        req.Quantity,
-		UnitPrice:       req.UnitPrice,
-		Fees:            req.Fees,
-		Note:            req.Note,
-		Source:          req.Source,
-		ImportID:        req.ImportID,
+		UserID:               claims.UserID,
+		TransactionDate:      req.TransactionDate,
+		EntryKind:            entryKind,
+		Amount:               req.Amount,
+		Currency:             currency,
+		AccountID:            req.AccountID,
+		DestinationAccountID: req.DestinationAccountID,
+		CategoryID:           req.CategoryID,
+		IncomeSourceID:       req.IncomeSourceID,
+		BusinessID:           req.BusinessID,
+		AssetID:              req.AssetID,
+		LoanID:               req.LoanID,
+		Quantity:             req.Quantity,
+		UnitPrice:            req.UnitPrice,
+		Fees:                 req.Fees,
+		Note:                 req.Note,
+		Source:               req.Source,
+		ImportID:             req.ImportID,
+		OriginEventID:        req.OriginEventID,
+		OriginEventType:      req.OriginEventType,
 	}
 
 	result, err := s.transactions.Create(r.Context(), tx)
 	if err != nil {
-		http.Error(w, "failed to create transaction", http.StatusInternalServerError)
+		http.Error(w, "failed to create transaction: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// If investment_buy, create asset_lot
-	if req.EntryKind == "investment_buy" && req.AssetID != nil && req.Quantity != nil && req.UnitPrice != nil {
+	if entryKind == "investment_buy" && req.AssetID != nil && req.Quantity != nil && req.UnitPrice != nil {
 		fees := int64(0)
 		if req.Fees != nil {
 			fees = *req.Fees
@@ -475,7 +602,7 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		lot := store.AssetLot{
 			UserID:          claims.UserID,
 			AssetID:         *req.AssetID,
-			TransactionID:   result.ID,
+			TransactionID:   &result.ID,
 			Quantity:        *req.Quantity,
 			UnitPrice:       *req.UnitPrice,
 			Fees:            fees,
@@ -505,27 +632,34 @@ func (s *Server) updateTransaction(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		EntryKind      string  `json:"entryKind"`
-		Amount         int64   `json:"amount"`
-		AccountID      string  `json:"accountId"`
-		CategoryID     *string `json:"categoryId"`
-		IncomeSourceID *string `json:"incomeSourceId"`
-		BusinessID     *string `json:"businessId"`
-		Note           *string `json:"note"`
+		EntryKind            string  `json:"entryKind"`
+		Amount               int64   `json:"amount"`
+		AccountID            string  `json:"accountId"`
+		DestinationAccountID *string `json:"destinationAccountId"`
+		CategoryID           *string `json:"categoryId"`
+		IncomeSourceID       *string `json:"incomeSourceId"`
+		BusinessID           *string `json:"businessId"`
+		Note                 *string `json:"note"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
+	entryKind, err := normalizeAllowedValue(req.EntryKind, "", validTransactionEntryKinds, "entryKind")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	tx := store.Transaction{
-		EntryKind:      req.EntryKind,
-		Amount:         req.Amount,
-		AccountID:      req.AccountID,
-		CategoryID:     req.CategoryID,
-		IncomeSourceID: req.IncomeSourceID,
-		BusinessID:     req.BusinessID,
-		Note:           req.Note,
+		EntryKind:            entryKind,
+		Amount:               req.Amount,
+		AccountID:            req.AccountID,
+		DestinationAccountID: req.DestinationAccountID,
+		CategoryID:           req.CategoryID,
+		IncomeSourceID:       req.IncomeSourceID,
+		BusinessID:           req.BusinessID,
+		Note:                 req.Note,
 	}
 
 	result, err := s.transactions.Update(r.Context(), id, claims.UserID, tx)
@@ -565,13 +699,25 @@ func (s *Server) dashboardSummary(w http.ResponseWriter, r *http.Request) {
 		currency = "ZMW"
 	}
 
-	summary, err := s.transactions.DashboardSummary(r.Context(), claims.UserID, currency)
+	dashboard, err := s.unifiedDashboard.Get(r.Context(), claims.UserID, currency, time.Now())
 	if err != nil {
 		http.Error(w, "failed to get summary", http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, summary)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"income":           dashboard.Income,
+		"borrowed":         dashboard.Borrowed,
+		"expense":          dashboard.Expense,
+		"livingExpense":    dashboard.LivingExpense,
+		"debtInterestFees": dashboard.DebtInterestFees,
+		"debtPrincipal":    dashboard.DebtPrincipal,
+		"saving":           dashboard.Saving,
+		"investment":       dashboard.Investment,
+		"operatingBalance": dashboard.OperatingBalance,
+		"freeCashFlow":     dashboard.FreeCashFlow,
+		"netCashFlow":      dashboard.NetCashFlow,
+	})
 }
 
 // Imports
@@ -914,15 +1060,32 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		InvestmentTypeID string  `json:"investmentTypeId"`
+		AssetClass       string  `json:"assetClass"`
 		Name             string  `json:"name"`
 		Symbol           *string `json:"symbol"`
+		Currency         string  `json:"currency"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
+	name, err := normalizeRequiredName(req.Name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	assetClass, err := normalizeAllowedValue(req.AssetClass, "other", validAssetClasses, "assetClass")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	currency, err := normalizeCurrency(req.Currency)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	asset, err := s.assets.Create(r.Context(), claims.UserID, req.InvestmentTypeID, req.Name, req.Symbol)
+	asset, err := s.assets.Create(r.Context(), claims.UserID, req.InvestmentTypeID, assetClass, name, currency, req.Symbol)
 	if err != nil {
 		http.Error(w, "failed to create asset", http.StatusInternalServerError)
 		return
@@ -941,15 +1104,32 @@ func (s *Server) updateAsset(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		Name   string  `json:"name"`
-		Symbol *string `json:"symbol"`
+		AssetClass string  `json:"assetClass"`
+		Name       string  `json:"name"`
+		Symbol     *string `json:"symbol"`
+		Currency   string  `json:"currency"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
+	name, err := normalizeRequiredName(req.Name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	assetClass, err := normalizeAllowedValue(req.AssetClass, "other", validAssetClasses, "assetClass")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	currency, err := normalizeCurrency(req.Currency)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	asset, err := s.assets.Update(r.Context(), id, claims.UserID, req.Name, req.Symbol)
+	asset, err := s.assets.Update(r.Context(), id, claims.UserID, assetClass, name, currency, req.Symbol)
 	if err != nil {
 		http.Error(w, "failed to update asset", http.StatusInternalServerError)
 		return

@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Inscribed - Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Great+Vibes&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes:wght@100..900&family=Quicksand:wght@100..900&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container": "#eaeef2",
+                    "secondary-fixed-dim": "#a9c7ff",
+                    "inverse-surface": "#2c3134",
+                    "tertiary-container": "#5d77a2",
+                    "inverse-primary": "#aac7ff",
+                    "outline": "#717785",
+                    "surface-tint": "#005db8",
+                    "surface-container-low": "#f0f4f8",
+                    "surface-container-lowest": "#ffffff",
+                    "tertiary": "#445e87",
+                    "on-tertiary-container": "#ffffff",
+                    "surface-container-highest": "#dfe3e7",
+                    "surface-bright": "#f6fafe",
+                    "primary-container": "#0074e4",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#d6dade",
+                    "on-secondary-fixed-variant": "#1d477e",
+                    "inverse-on-surface": "#edf1f5",
+                    "secondary-container": "#9bbfff",
+                    "surface-container-high": "#e4e9ed",
+                    "on-background": "#171c1f",
+                    "on-tertiary": "#ffffff",
+                    "surface": "#f6fafe",
+                    "on-primary-fixed-variant": "#00458d",
+                    "secondary": "#395f98",
+                    "tertiary-fixed": "#d5e3ff",
+                    "on-tertiary-fixed-variant": "#2d476f",
+                    "outline-variant": "#c1c6d6",
+                    "primary-fixed": "#d6e3ff",
+                    "error": "#ba1a1a",
+                    "on-primary-container": "#ffffff",
+                    "on-primary-fixed": "#001b3e",
+                    "tertiary-fixed-dim": "#adc7f7",
+                    "surface-variant": "#dfe3e7",
+                    "on-surface": "#171c1f",
+                    "secondary-fixed": "#d6e3ff",
+                    "on-tertiary-fixed": "#001b3c",
+                    "on-error": "#ffffff",
+                    "background": "#f6fafe",
+                    "on-secondary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "on-surface-variant": "#414753",
+                    "on-secondary-container": "#254d85",
+                    "on-secondary-fixed": "#001b3d",
+                    "on-error-container": "#93000a",
+                    "primary-fixed-dim": "#aac7ff",
+                    "primary": "#005cb7"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "container-margin-mobile": "20px",
+                    "stack-lg": "32px",
+                    "gutter": "16px",
+                    "base": "4px",
+                    "stack-sm": "8px",
+                    "container-margin-desktop": "40px",
+                    "stack-md": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Quicksand"],
+                    "headline-md": ["Quicksand"],
+                    "headline-lg": ["Quicksand"],
+                    "label-sm": ["Quicksand"],
+                    "body-lg": ["Quicksand"],
+                    "headline-lg-mobile": ["Quicksand"],
+                    "display-accent": ["Great Vibes"]
+            },
+            "fontSize": {
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "display-accent": ["36px", {"lineHeight": "44px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body {
+            background-color: #f6fafe;
+            -webkit-font-smoothing: antialiased;
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .chart-path {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: dash 3s ease-in-out forwards;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: 0; }
+        }
+        .page-transition {
+            animation: fadeIn 0.8s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-on-surface mb-24 md:mb-0">
+<!-- Top App Bar -->
+<header class="bg-background dark:bg-background flex justify-between items-center px-container-margin-mobile py-stack-sm w-full docked full-width top-0 z-50 sticky">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-fixed shadow-sm">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a friendly user with a soft smile, captured in bright natural light. The background is a clean, minimalist workspace with soft blue accents, perfectly matching the Professional Cutesy aesthetic of the Inscribed app's color palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbyVHOmQoAWe484obUMzIVQzhb6MlE_sfodWG5mjKS7m1SduowSGI8XFuGgCPK0ywi4UHjeGUOAoFERNMZbko2mYVqR0WfB_SRcJupIiBr3eC0dNkNNv8EkrWSzAR9oYRxmv7QnjWKdp7DOlaZ6oA76iyd5gkNffe8_sfFc0D4P-Vm-gXLqMywznA6CF9N3B-iLddY1Iob26kUVM1Bg38Qfhq7awri2bEhJEuAvEHgWDSOmdfWf-60C0Q0DDPtjggzXnNzN9te2yQ"/>
+</div>
+<h1 class="font-display-accent text-display-accent text-primary dark:text-primary-fixed leading-none pt-1">Inscribed</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors active:scale-95 transition-transform text-primary">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</header>
+<main class="max-w-[1200px] mx-auto px-container-margin-mobile md:px-container-margin-desktop py-stack-md page-transition">
+<!-- Welcome Section -->
+<section class="mb-stack-lg">
+<div class="flex flex-col gap-1">
+<span class="font-display-accent text-display-accent text-secondary">Today</span>
+<p class="font-body-lg text-body-lg text-on-surface-variant italic">"A journey of a thousand miles begins with a single step."</p>
+</div>
+</section>
+<!-- Balance & Trend Bento Cluster -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter mb-stack-lg">
+<!-- Financial Card -->
+<div class="md:col-span-2 bg-white rounded-[20px] p-6 shadow-[0_20px_40px_rgba(0,92,183,0.04)] border border-outline-variant/30 flex flex-col justify-between relative overflow-hidden">
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Total Portfolio Value</span>
+<div class="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+<span class="material-symbols-outlined text-[14px]" data-icon="trending_up">trending_up</span>
+<span class="text-[12px] font-bold">+2.4%</span>
+</div>
+</div>
+<div class="font-headline-lg text-headline-lg text-primary mb-4">$42,684.50</div>
+<!-- Chart Placeholder -->
+<div class="h-24 w-full mt-4">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 400 100">
+<path class="chart-path" d="M0,80 C50,75 80,40 120,50 C160,60 200,20 250,30 C300,40 350,10 400,20" fill="none" stroke="#005cb7" stroke-linecap="round" stroke-width="3"></path>
+<path d="M0,80 C50,75 80,40 120,50 C160,60 200,20 250,30 C300,40 350,10 400,20 L400,100 L0,100 Z" fill="url(#gradient-blue)" opacity="0.1"></path>
+<defs>
+<lineargradient id="gradient-blue" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" style="stop-color:#005cb7;stop-opacity:1"></stop>
+<stop offset="100%" style="stop-color:#005cb7;stop-opacity:0"></stop>
+</lineargradient>
+</defs>
+</svg>
+</div>
+<div class="flex justify-between mt-2 px-1">
+<span class="font-label-sm text-label-sm text-outline">Mon</span>
+<span class="font-label-sm text-label-sm text-outline">Wed</span>
+<span class="font-label-sm text-label-sm text-outline">Fri</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">Sun</span>
+</div>
+</div>
+</div>
+<!-- Tip of the Day -->
+<div class="bg-secondary-container rounded-[20px] p-6 shadow-sm flex flex-col items-center justify-center text-center relative overflow-hidden group hover:shadow-md transition-shadow">
+<div class="absolute -top-4 -right-4 w-20 h-20 bg-white/20 rounded-full blur-xl group-hover:scale-150 transition-transform duration-700"></div>
+<span class="material-symbols-outlined text-on-secondary-container text-[40px] mb-3" data-icon="lightbulb">lightbulb</span>
+<h3 class="font-headline-md text-headline-md text-on-secondary-container mb-2">Tip of the Day</h3>
+<p class="font-body-md text-body-md text-on-secondary-container/80">"Small investments in your personal growth yield the highest returns over time."</p>
+<button class="mt-4 px-4 py-2 bg-white text-secondary font-bold rounded-xl text-[12px] hover:bg-surface-bright transition-colors">Read More</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<!-- Daily Planner Summary -->
+<section class="flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h2 class="font-headline-md text-headline-md text-on-surface">Daily Planner</h2>
+<span class="font-label-sm text-label-sm text-primary">View Calendar</span>
+</div>
+<div class="bg-white rounded-[20px] p-2 border border-outline-variant/30">
+<div class="flex flex-col">
+<!-- Task 1 -->
+<div class="flex items-center gap-4 p-4 hover:bg-surface-bright rounded-[16px] transition-colors cursor-pointer group">
+<div class="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center group-hover:bg-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="payments">payments</span>
+</div>
+<div class="flex-1">
+<h4 class="font-body-lg text-body-lg text-on-surface">Review Monthly Budget</h4>
+<p class="font-label-sm text-label-sm text-outline">09:00 AM — 10:00 AM</p>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-primary" data-icon="chevron_right">chevron_right</span>
+</div>
+<!-- Task 2 -->
+<div class="flex items-center gap-4 p-4 hover:bg-surface-bright rounded-[16px] transition-colors cursor-pointer group">
+<div class="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center group-hover:bg-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="handshake">handshake</span>
+</div>
+<div class="flex-1">
+<h4 class="font-body-lg text-body-lg text-on-surface">Coffee with Sarah</h4>
+<p class="font-label-sm text-label-sm text-outline">01:30 PM — 02:30 PM</p>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-primary" data-icon="chevron_right">chevron_right</span>
+</div>
+<!-- Task 3 -->
+<div class="flex items-center gap-4 p-4 hover:bg-surface-bright rounded-[16px] transition-colors cursor-pointer group opacity-60">
+<div class="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="flex-1">
+<h4 class="font-body-lg text-body-lg text-on-surface line-through">Market Analysis</h4>
+<p class="font-label-sm text-label-sm text-outline">Completed at 08:30 AM</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Categories Overview -->
+<section class="flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h2 class="font-headline-md text-headline-md text-on-surface">Allocation</h2>
+<span class="material-symbols-outlined text-outline" data-icon="more_horiz">more_horiz</span>
+</div>
+<div class="bento-grid">
+<div class="bg-surface-container-low rounded-[20px] p-5 border border-outline-variant/20 flex flex-col gap-4">
+<div class="w-10 h-10 rounded-lg bg-[#CEDDEF] flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="pie_chart">pie_chart</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-outline block">Equity</span>
+<span class="font-headline-md text-headline-md text-on-surface">64.2%</span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-[20px] p-5 border border-outline-variant/20 flex flex-col gap-4">
+<div class="w-10 h-10 rounded-lg bg-[#CEDDEF] flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="account_balance">account_balance</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-outline block">Bonds</span>
+<span class="font-headline-md text-headline-md text-on-surface">22.8%</span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-[20px] p-5 border border-outline-variant/20 flex flex-col gap-4">
+<div class="w-10 h-10 rounded-lg bg-[#CEDDEF] flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="savings">savings</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-outline block">Cash</span>
+<span class="font-headline-md text-headline-md text-on-surface">11.0%</span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-[20px] p-5 border border-outline-variant/20 flex flex-col gap-4">
+<div class="w-10 h-10 rounded-lg bg-[#CEDDEF] flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="diamond">diamond</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-outline block">Others</span>
+<span class="font-headline-md text-headline-md text-on-surface">2.0%</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Recent Activities -->
+<section class="mt-stack-lg mb-8">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-4">Recent Insights</h2>
+<div class="overflow-x-auto pb-4 -mx-container-margin-mobile px-container-margin-mobile no-scrollbar">
+<div class="flex gap-4 min-w-max">
+<!-- Activity Card 1 -->
+<div class="w-72 bg-white rounded-[20px] border border-outline-variant/30 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+<div class="h-32 relative overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-500 hover:scale-105" data-alt="A tranquil office interior at golden hour. Soft sunlight streams through large windows, illuminating a polished wooden desk with a ceramic mug and a modern tablet displaying glowing stock market charts. The atmosphere is quiet, sophisticated, and inspires focused productivity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsdKL8gL4psqqYJe2SanREqmxZ73KQU7uL8e5iC2uljqJXoZOBBVkDxlJdalx9Hr9VMfq9Gvp7GdE2DtqrN4PoPrhgNKvGUGrL7XC4S2m_j-jwzml-pXEfowg7gTtlnTvp_--a_qR9PPTMv2ViWmiVASd86vwNrwuPqKeX-a3oXrnKONzKGtCAeZIKus6_6891zY8yCka4qVQ7lAXHlMEA2vprtXxGlpnN71Zto32TT4IvFimeCJdFjL0mP5CW3RALa60b0kAXkK4"/>
+</div>
+<div class="p-4">
+<span class="font-label-sm text-label-sm text-primary mb-1 block uppercase tracking-tighter">Market Report</span>
+<h5 class="font-body-lg text-body-lg text-on-surface mb-2">Tech sector growth exceeds Q3 projections</h5>
+<button class="text-secondary font-bold text-[12px] flex items-center gap-1">Read article <span class="material-symbols-outlined text-[14px]" data-icon="arrow_forward">arrow_forward</span></button>
+</div>
+</div>
+<!-- Activity Card 2 -->
+<div class="w-72 bg-white rounded-[20px] border border-outline-variant/30 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+<div class="h-32 relative overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-500 hover:scale-105" data-alt="Macro photography of lush green succulent plants arranged in a minimalist concrete planter. The lighting is diffused and soft, creating a serene and organic mood. The colors are dominated by soft greens and neutral grays, reflecting a calm and organized digital desk aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmoMdzRA_1ButHVd37GJ1PvhMUHH5Y9SedwpdQTPulvpqFONd1MEiHvRr-rJjio9H1s0hgERZk6nl_m7OMEgpUkg1dJzvYDBU4MBj4Oyk9Benm2OjGfqNRzcGPz2sJQWWCxCqZqYBx_yGYBkDhS18XY6v_gAhBQ-Xd1zV2nMmThl0O9uQ1021V13E3LA4BzC0qqtsEQ6mTYBESlUcz-RY_dLaf16D1Gr0pmTgxBTqFpe81CNaSgKNBWEEmPVr-_hpaS3ofRwWfqqg"/>
+</div>
+<div class="p-4">
+<span class="font-label-sm text-label-sm text-primary mb-1 block uppercase tracking-tighter">Wellness</span>
+<h5 class="font-body-lg text-body-lg text-on-surface mb-2">Finding balance in a volatile landscape</h5>
+<button class="text-secondary font-bold text-[12px] flex items-center gap-1">Read article <span class="material-symbols-outlined text-[14px]" data-icon="arrow_forward">arrow_forward</span></button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 py-2 pb-safe bg-surface-container-lowest dark:bg-inverse-surface shadow-[0_-4px_20px_0_rgba(0,0,0,0.04)] rounded-t-xl md:hidden">
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-xl px-3 py-1 scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+<span class="font-body-md text-[10px]">Today</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-body-md text-[10px]">History</span>
+</a>
+<div class="relative -top-6">
+<button class="w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-[32px]" data-icon="add">add</span>
+</button>
+</div>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="folder_special">folder_special</span>
+<span class="font-body-md text-[10px]">Portfolio</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md text-[10px]">Settings</span>
+</a>
+</nav>
+<!-- Desktop Navigation Side Dock (Visual Only for context) -->
+<div class="hidden md:flex fixed left-0 top-0 h-full w-20 bg-white border-r border-outline-variant/30 flex-col items-center py-8 gap-8 shadow-sm">
+<span class="font-display-accent text-primary text-2xl">I.</span>
+<div class="flex flex-col gap-6 flex-1 pt-10">
+<span class="material-symbols-outlined text-primary text-2xl cursor-pointer" data-icon="calendar_today" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+<span class="material-symbols-outlined text-outline text-2xl cursor-pointer hover:text-primary transition-colors" data-icon="history">history</span>
+<span class="material-symbols-outlined text-outline text-2xl cursor-pointer hover:text-primary transition-colors" data-icon="folder_special">folder_special</span>
+<span class="material-symbols-outlined text-outline text-2xl cursor-pointer hover:text-primary transition-colors" data-icon="settings">settings</span>
+</div>
+<div class="w-10 h-10 rounded-full overflow-hidden mb-4">
+<img class="w-full h-full object-cover" data-alt="A small circular avatar of a user profile in high-end minimalist digital illustration style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBa55Z9A_rHy76qizwN-0im7ttdDXJrFhhen5oq-KjNeclJddVgtjKVtvn_c1GB5GDfmjOIlbiuGbwLmb8lAYglrvpmy4J8CdLChhBcTRkrk73u6P8HZrglZDwXjAqh6bPt6_iM6_yNdEn6MOHsY-pbo6-Kxtj6Ld3PKV4ZljsbqyVL7gKA1RkKBG2EphOZ7SW883Tj1AmLuBK4VgxDD_OXekhfzphEtZOgb4gqyKqERWGcfZBhl-XaeNfnkE8w_M01uEzl688Bkpo"/>
+</div>
+</div>
+<script>
+        // Simple Interaction logic
+        document.querySelectorAll('a, button').forEach(el => {
+            el.addEventListener('mousedown', () => {
+                el.classList.add('scale-95');
+            });
+            el.addEventListener('mouseup', () => {
+                el.classList.remove('scale-95');
+            });
+            el.addEventListener('mouseleave', () => {
+                el.classList.remove('scale-95');
+            });
+        });
+
+        // Add subtle scroll reveal effect
+        const observerOptions = {
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = "1";
+                    entry.target.style.transform = "translateY(0)";
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('section').forEach(section => {
+            section.style.opacity = "0";
+            section.style.transform = "translateY(20px)";
+            section.style.transition = "all 0.6s ease-out";
+            observer.observe(section);
+        });
+    </script>
+</body></html>

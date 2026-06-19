@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -17,43 +18,56 @@ import (
 )
 
 type Server struct {
-	config          config.Config
-	users           *store.UserStore
-	userPreferences *store.UserPreferenceStore
-	accounts        *store.AccountStore
-	categories      *store.CategoryStore
-	incomeSources   *store.IncomeSourceStore
-	businesses      *store.BusinessStore
-	transactions    *store.TransactionStore
-	imports         *store.ImportStore
-	investmentTypes *store.InvestmentTypeStore
-	assets          *store.AssetStore
-	assetLots       *store.AssetLotStore
-	idempotencyKeys *store.IdempotencyKeyStore
+	config           config.Config
+	db               *pgxpool.Pool
+	users            *store.UserStore
+	userPreferences  *store.UserPreferenceStore
+	accounts         *store.AccountStore
+	categories       *store.CategoryStore
+	incomeSources    *store.IncomeSourceStore
+	businesses       *store.BusinessStore
+	transactions     *store.TransactionStore
+	imports          *store.ImportStore
+	investmentTypes  *store.InvestmentTypeStore
+	assets           *store.AssetStore
+	assetValuations  *store.AssetValuationStore
+	assetLots        *store.AssetLotStore
+	loans            *store.LoanStore
+	savingsGroups    *store.SavingsGroupStore
+	bonds            *store.BondStore
+	unifiedDashboard *store.UnifiedDashboardStore
+	idempotencyKeys  *store.IdempotencyKeyStore
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
+	bondStore := store.NewBondStore(db)
 	s := &Server{
-		config:          cfg,
-		users:           store.NewUserStore(db),
-		userPreferences: store.NewUserPreferenceStore(db),
-		accounts:        store.NewAccountStore(db),
-		categories:      store.NewCategoryStore(db),
-		incomeSources:   store.NewIncomeSourceStore(db),
-		businesses:      store.NewBusinessStore(db),
-		transactions:    store.NewTransactionStore(db),
-		imports:         store.NewImportStore(db),
-		investmentTypes: store.NewInvestmentTypeStore(db),
-		assets:          store.NewAssetStore(db),
-		assetLots:       store.NewAssetLotStore(db),
-		idempotencyKeys: store.NewIdempotencyKeyStore(db),
+		config:           cfg,
+		db:               db,
+		users:            store.NewUserStore(db),
+		userPreferences:  store.NewUserPreferenceStore(db),
+		accounts:         store.NewAccountStore(db),
+		categories:       store.NewCategoryStore(db),
+		incomeSources:    store.NewIncomeSourceStore(db),
+		businesses:       store.NewBusinessStore(db),
+		transactions:     store.NewTransactionStore(db),
+		imports:          store.NewImportStore(db),
+		investmentTypes:  store.NewInvestmentTypeStore(db),
+		assets:           store.NewAssetStore(db),
+		assetValuations:  store.NewAssetValuationStore(db),
+		assetLots:        store.NewAssetLotStore(db),
+		loans:            store.NewLoanStore(db),
+		savingsGroups:    store.NewSavingsGroupStore(db),
+		bonds:            bondStore,
+		unifiedDashboard: store.NewUnifiedDashboardStore(db, bondStore),
+		idempotencyKeys:  store.NewIdempotencyKeyStore(db),
 	}
 
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
-	router.Use(cors(cfg.AppOrigin))
+	router.Use(cors(cfg.AppOrigins))
 
 	router.Get("/healthz", s.healthz)
 	router.Get("/v1/setup/status", s.setupStatus)
@@ -63,6 +77,7 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	router.Group(func(protected chi.Router) {
 		protected.Use(auth.Middleware(cfg.JWTSecret))
 		protected.Get("/v1/auth/me", s.me)
+		protected.Post("/v1/auth/refresh", s.refreshToken)
 		protected.Get("/v1/user/preferences", s.getUserPreferences)
 		protected.Patch("/v1/user/preferences", s.updateUserPreferences)
 
@@ -98,6 +113,21 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 
 		// Dashboard
 		protected.Get("/v1/dashboard/summary", s.dashboardSummary)
+		protected.Get("/v1/dashboard/unified", s.unifiedDashboardSummary)
+		protected.Get("/v1/dashboard/insights", s.insightSummary)
+		protected.Get("/v1/dashboard/annual", s.annualOverall)
+
+		// Loans
+		protected.Get("/v1/loans", s.listLoans)
+		protected.Post("/v1/loans", s.createLoan)
+		protected.Get("/v1/loans/{id}", s.getLoan)
+		protected.Post("/v1/loans/borrowed", s.recordBorrowedMoney)
+		protected.Post("/v1/loans/{id}/repayments", s.recordLoanRepayment)
+
+		// Savings groups
+		protected.Get("/v1/savings-groups", s.listSavingsGroups)
+		protected.Post("/v1/savings-groups", s.createSavingsGroup)
+		protected.Post("/v1/savings-groups/{id}/shareout", s.closeSavingsGroupCycle)
 
 		// Imports
 		protected.Post("/v1/imports/excel", s.uploadExcel)
@@ -119,10 +149,17 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 		protected.Post("/v1/assets", s.createAsset)
 		protected.Patch("/v1/assets/{id}", s.updateAsset)
 		protected.Delete("/v1/assets/{id}", s.deleteAsset)
+		protected.Post("/v1/assets/{id}/valuations", s.upsertAssetValuation)
+		protected.Get("/v1/assets/{id}/holding", s.getAssetHolding)
+		protected.Post("/v1/assets/{id}/sell", s.sellAssetFIFO)
+		protected.Post("/v1/assets/{id}/dividends", s.recordAssetDividend)
 
 		// Investments
 		protected.Get("/v1/investments/holdings", s.getHoldings)
 		protected.Get("/v1/investments/summary", s.getInvestmentSummary)
+		protected.Get("/v1/bonds", s.listBonds)
+		protected.Post("/v1/bonds", s.createBond)
+		protected.Get("/v1/bonds/{assetId}/projection", s.getBondProjection)
 
 		// Sync
 		protected.Get("/v1/sync/status", s.syncStatus)
@@ -239,6 +276,28 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// refreshToken issues a fresh access token for the currently authenticated user.
+// The caller must present a still-valid token; this lets the frontend renew the
+// short-lived access token before it expires, avoiding "invalid token" errors when
+// the NextAuth session outlives the API token.
+func (s *Server) refreshToken(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "missing auth claims", http.StatusUnauthorized)
+		return
+	}
+
+	token, err := auth.IssueToken(s.config.JWTSecret, claims.UserID, claims.Role)
+	if err != nil {
+		http.Error(w, "could not issue token", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"accessToken": token,
+	})
+}
+
 type registerRequest struct {
 	Email       string `json:"email"`
 	Password    string `json:"password"`
@@ -301,11 +360,16 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func cors(origin string) func(http.Handler) http.Handler {
+func cors(origins []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+			origin := r.Header.Get("Origin")
+			if origin != "" && (slices.Contains(origins, origin) || slices.Contains(origins, "*")) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+			}
+
+			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 			if r.Method == http.MethodOptions {
