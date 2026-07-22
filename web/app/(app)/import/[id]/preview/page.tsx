@@ -4,11 +4,23 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getApiBaseUrl } from "@/lib/client-api";
 
 interface ImportRow {
   id: string;
-  rawData: Record<string, unknown>;
-  mapped?: Record<string, unknown>;
+  rawData: {
+    fileName?: string;
+    sheetName?: string;
+    label?: string;
+    approximateDate?: string;
+    amountDisplay?: number;
+  };
+  mapped?: {
+    entryKind?: string;
+    transactionDate?: string;
+    categoryName?: string;
+    incomeSourceName?: string;
+  };
   error?: string;
 }
 
@@ -38,11 +50,12 @@ export default function PreviewPage() {
     const fetchImport = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/imports/${importId}/preview`,
+          `${getApiBaseUrl()}/v1/imports/${importId}/preview`,
           {
             headers: {
               Authorization: `Bearer ${session.accessToken}`,
             },
+            credentials: "include",
           }
         );
 
@@ -66,12 +79,13 @@ export default function PreviewPage() {
     setConfirming(true);
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/imports/${importId}/confirm`,
+        `${getApiBaseUrl()}/v1/imports/${importId}/confirm`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${session.accessToken}`,
           },
+          credentials: "include",
         }
       );
 
@@ -96,25 +110,38 @@ export default function PreviewPage() {
         <h1 className="pageTitle">Preview Import</h1>
 
         <p className="muted">Status: {imp.status}</p>
+        <p className="muted">Preview rows show the month and order preserved from the legacy workbook. Exact transaction dates were not available in the source file.</p>
 
         {imp.rows && imp.rows.length > 0 && (
-          <div className="transactionList mt-4">
-            <p className="font-semibold">First 10 rows:</p>
-            {imp.rows.map((row) => (
-              <div
-                key={row.id}
-                className="transactionItem text-sm"
-              >
-                <p className="truncate">
-                  {JSON.stringify(row.rawData)}
-                </p>
-                {row.error && (
-                  <p className="muted mt-1">
-                    Error: {row.error}
-                  </p>
-                )}
-              </div>
-            ))}
+          <div className="mt-4 overflow-x-auto rounded-lg border border-outline bg-surface shadow-sm">
+            <table className="min-w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-outline text-left text-on-surface-soft">
+                  <th className="px-4 py-3 font-semibold">File</th>
+                  <th className="px-4 py-3 font-semibold">Month</th>
+                  <th className="px-4 py-3 font-semibold">Label</th>
+                  <th className="px-4 py-3 font-semibold">Type</th>
+                  <th className="px-4 py-3 font-semibold">Approx. date</th>
+                  <th className="px-4 py-3 font-semibold">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {imp.rows.map((row) => (
+                  <tr key={row.id} className="border-b border-outline/70 last:border-b-0">
+                    <td className="px-4 py-3 text-on-surface-soft">{row.rawData.fileName ?? "-"}</td>
+                    <td className="px-4 py-3 text-on-surface-soft">{row.rawData.sheetName ?? "-"}</td>
+                    <td className="px-4 py-3 font-semibold text-on-surface">{row.rawData.label ?? "-"}</td>
+                    <td className="px-4 py-3 text-on-surface-soft">
+                      {row.mapped?.entryKind === "income_earned" ? "Income" : "Expense"}
+                    </td>
+                    <td className="px-4 py-3 text-on-surface-soft">{row.rawData.approximateDate ?? row.mapped?.transactionDate ?? "-"}</td>
+                    <td className="px-4 py-3 text-on-surface-soft">
+                      {typeof row.rawData.amountDisplay === "number" ? row.rawData.amountDisplay.toFixed(2) : "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 

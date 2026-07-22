@@ -1,7 +1,12 @@
-const CACHE_NAME = "expense-tracker-v2";
+const CACHE_NAME = "chuma-v6";
 const STATIC_ASSETS = [
+  "/logo.png",
   "/icon.svg",
-  "/mask-icon.svg"
+  "/mask-icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/maskable-512.png",
+  "/apple-touch-icon.png"
 ];
 
 // On install, cache predefined static assets only (not pages)

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { getPendingTransactions, deletePendingTransaction } from "@/lib/offline-db";
+import { getApiBaseUrl } from "@/lib/client-api";
 
 export function SyncStatus() {
   const { data: session } = useSession();
@@ -15,19 +16,30 @@ export function SyncStatus() {
     if (!session?.accessToken) return;
 
     const checkAndSync = async () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+
       // 1. Check offline items
       const pendingItems = await getPendingTransactions();
       setLocalPending(pendingItems.length);
 
       // 2. Check connection status
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setSynced(false);
+        return;
+      }
+
       let online = false;
       try {
+        const apiBaseUrl = getApiBaseUrl();
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/sync/status`,
+          `${apiBaseUrl}/v1/sync/status`,
           {
             headers: {
               Authorization: `Bearer ${session.accessToken}`,
             },
+            credentials: "include",
           }
         );
         if (response.ok) {
@@ -43,9 +55,10 @@ export function SyncStatus() {
         syncInProgress.current = true;
         setIsSyncing(true);
         try {
+          const apiBaseUrl = getApiBaseUrl();
           for (const item of pendingItems) {
             const uploadResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/transactions`,
+              `${apiBaseUrl}/v1/transactions`,
               {
                 method: "POST",
                 headers: {
@@ -53,6 +66,7 @@ export function SyncStatus() {
                   Authorization: `Bearer ${session.accessToken}`,
                 },
                 body: JSON.stringify(item.payload),
+                credentials: "include",
               }
             );
 
@@ -78,15 +92,32 @@ export function SyncStatus() {
       }
     };
 
-    checkAndSync();
-    const interval = setInterval(checkAndSync, 5000);
-    return () => clearInterval(interval);
+    void checkAndSync();
+    const interval = window.setInterval(() => {
+      void checkAndSync();
+    }, 5000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void checkAndSync();
+      }
+    };
+    const handleReconnect = () => {
+      void checkAndSync();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleReconnect);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleReconnect);
+    };
   }, [session?.accessToken]);
 
   if (synced && localPending === 0) return null;
 
   let message = "";
-  let bgColor = "#ef4444"; // Red for offline
+  let tone = "border-negative/30 bg-negative-soft text-negative";
 
   if (!synced) {
     message = localPending > 0
@@ -94,21 +125,15 @@ export function SyncStatus() {
       : "Offline - offline changes will sync when connected";
   } else if (isSyncing) {
     message = `Syncing ${localPending} pending entries...`;
-    bgColor = "#fbbf24"; // Yellow/orange for active sync
+    tone = "border-warning/30 bg-warning-soft text-warning";
   } else if (localPending > 0) {
     message = `${localPending} entries pending sync`;
-    bgColor = "#fbbf24";
+    tone = "border-warning/30 bg-warning-soft text-warning";
   }
 
   return (
-    <div
-      className="syncStatus"
-      style={{
-        backgroundColor: bgColor,
-      }}
-    >
+    <div role="status" className={`fixed right-4 top-4 z-50 rounded-md border px-4 py-2 text-sm font-semibold shadow-md ${tone}`}>
       {message}
     </div>
   );
 }
-

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -38,13 +39,14 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name         string `json:"name"`
-		AccountType  string `json:"accountType"`
-		AccountClass string `json:"accountClass"`
-		Currency     string `json:"currency"`
+		Name                string `json:"name"`
+		AccountType         string `json:"accountType"`
+		AccountClass        string `json:"accountClass"`
+		Currency            string `json:"currency"`
+		OpeningBalanceMinor int64  `json:"openingBalanceMinor"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -69,7 +71,7 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := s.accounts.Create(r.Context(), claims.UserID, name, accountType, accountClass, currency)
+	account, err := s.accounts.Create(r.Context(), claims.UserID, name, accountType, accountClass, currency, req.OpeningBalanceMinor)
 	if err != nil {
 		writeSettingsError(w, err, "failed to create account")
 		return
@@ -93,8 +95,8 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request) {
 		AccountClass string `json:"accountClass"`
 		Currency     string `json:"currency"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -729,29 +731,130 @@ func (s *Server) uploadExcel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse multipart form with 10MB max
-	if err := r.ParseMultipartForm(10 * 1024 * 1024); err != nil {
+	if err := r.ParseMultipartForm(25 * 1024 * 1024); err != nil {
 		http.Error(w, "failed to parse form", http.StatusBadRequest)
 		return
 	}
 
-	file, _, err := r.FormFile("file")
+	accountID := strings.TrimSpace(r.FormValue("accountId"))
+	newAccountName := strings.TrimSpace(r.FormValue("newAccountName"))
+	newAccountCurrency := strings.TrimSpace(r.FormValue("newAccountCurrency"))
+
+	accounts, err := s.accounts.ListByUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "file required", http.StatusBadRequest)
+		http.Error(w, "failed to load accounts", http.StatusInternalServerError)
 		return
 	}
-	defer file.Close()
 
-	// Create import record
-	imp, err := s.imports.Create(r.Context(), claims.UserID)
+	var selectedAccount *store.Account
+	for _, account := range accounts {
+		if account.ID == accountID {
+			selectedAccount = &account
+			break
+		}
+	}
+	if selectedAccount == nil {
+		if newAccountName == "" {
+			http.Error(w, "choose an account or create one for import", http.StatusBadRequest)
+			return
+		}
+
+		currency, err := normalizeCurrency(newAccountCurrency)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		accountName, err := normalizeRequiredName(newAccountName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		createdAccount, err := s.accounts.Create(r.Context(), claims.UserID, accountName, "cash", "asset", currency, 0)
+		if err != nil {
+			writeSettingsError(w, err, "failed to create import account")
+			return
+		}
+		selectedAccount = &createdAccount
+	}
+
+	fileHeaders := r.MultipartForm.File["files"]
+	if len(fileHeaders) == 0 {
+		fileHeaders = r.MultipartForm.File["file"]
+	}
+	if len(fileHeaders) == 0 {
+		http.Error(w, "at least one workbook is required", http.StatusBadRequest)
+		return
+	}
+
+	importLabel := "legacy workbook import"
+	if len(fileHeaders) == 1 {
+		importLabel = fileHeaders[0].Filename
+	}
+	imp, err := s.imports.Create(r.Context(), claims.UserID, importLabel)
 	if err != nil {
 		http.Error(w, "failed to create import", http.StatusInternalServerError)
 		return
 	}
 
-	// Parse Excel file using excelize and store rows
-	// For now, return import record with status=uploaded
-	// Parsing happens in background or on next request
+	rowCount := 0
+	for _, header := range fileHeaders {
+		file, err := header.Open()
+		if err != nil {
+			msg := "failed to open workbook"
+			_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		payload, err := io.ReadAll(file)
+		file.Close()
+		if err != nil {
+			msg := "failed to read workbook"
+			_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		entries, err := parseLegacyWorkbook(header.Filename, payload, selectedAccount.Currency, selectedAccount.ID)
+		if err != nil {
+			msg := err.Error()
+			_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		for _, entry := range entries {
+			row, err := s.imports.CreateRow(r.Context(), imp.ID, entry.Raw.SheetName, entry.Raw.EntryIndex, marshalLegacyJSON(entry.Raw))
+			if err != nil {
+				msg := "failed to save import rows"
+				_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
+				http.Error(w, msg, http.StatusInternalServerError)
+				return
+			}
+			if err := s.imports.UpdateRowMapped(r.Context(), row.ID, marshalLegacyJSON(entry.Mapped), nil); err != nil {
+				msg := "failed to map import rows"
+				_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
+				http.Error(w, msg, http.StatusInternalServerError)
+				return
+			}
+			rowCount++
+		}
+	}
+
+	if rowCount == 0 {
+		msg := "no importable rows were found"
+		_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	if err := s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "ready_to_confirm", nil); err != nil {
+		http.Error(w, "failed to update import status", http.StatusInternalServerError)
+		return
+	}
+
+	imp, _ = s.imports.GetByID(r.Context(), imp.ID, claims.UserID)
 	writeJSON(w, http.StatusCreated, imp)
 }
 
@@ -870,35 +973,81 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	categories, err := s.categories.ListByUser(r.Context(), claims.UserID)
+	if err != nil {
+		http.Error(w, "failed to load categories", http.StatusInternalServerError)
+		return
+	}
+	categoryIDsByName := make(map[string]string, len(categories))
+	for _, category := range categories {
+		categoryIDsByName[strings.ToLower(category.CategoryGroup)+"::"+strings.ToLower(strings.TrimSpace(category.Name))] = category.ID
+	}
+
+	incomeSources, err := s.incomeSources.ListByUser(r.Context(), claims.UserID)
+	if err != nil {
+		http.Error(w, "failed to load income sources", http.StatusInternalServerError)
+		return
+	}
+	incomeSourceIDsByName := make(map[string]string, len(incomeSources))
+	for _, source := range incomeSources {
+		incomeSourceIDsByName[strings.ToLower(strings.TrimSpace(source.Name))] = source.ID
+	}
+
 	for _, row := range rows {
-		// Parse mapped data and create transaction
-		if row.Mapped != nil {
-			var txData struct {
-				TransactionDate string  `json:"transactionDate"`
-				EntryKind       string  `json:"entryKind"`
-				Amount          int64   `json:"amount"`
-				Currency        string  `json:"currency"`
-				AccountID       string  `json:"accountId"`
-				CategoryID      *string `json:"categoryId"`
-			}
-			if err := json.Unmarshal(*row.Mapped, &txData); err != nil {
-				continue
-			}
-
-			tx := store.Transaction{
-				UserID:          claims.UserID,
-				TransactionDate: txData.TransactionDate,
-				EntryKind:       txData.EntryKind,
-				Amount:          txData.Amount,
-				Currency:        txData.Currency,
-				AccountID:       txData.AccountID,
-				CategoryID:      txData.CategoryID,
-				Source:          "import",
-				ImportID:        &id,
-			}
-
-			s.transactions.Create(r.Context(), tx)
+		if row.Mapped == nil {
+			continue
 		}
+
+		var txData legacyMappedTransaction
+		if err := json.Unmarshal(*row.Mapped, &txData); err != nil {
+			continue
+		}
+
+		var categoryID *string
+		if txData.CategoryName != nil && strings.TrimSpace(*txData.CategoryName) != "" {
+			key := "expense::" + strings.ToLower(strings.TrimSpace(*txData.CategoryName))
+			idValue, exists := categoryIDsByName[key]
+			if !exists {
+				category, err := s.categories.Create(r.Context(), claims.UserID, *txData.CategoryName, "expense", nil)
+				if err != nil {
+					continue
+				}
+				idValue = category.ID
+				categoryIDsByName[key] = idValue
+			}
+			categoryID = &idValue
+		}
+
+		var incomeSourceID *string
+		if txData.IncomeSourceName != nil && strings.TrimSpace(*txData.IncomeSourceName) != "" {
+			key := strings.ToLower(strings.TrimSpace(*txData.IncomeSourceName))
+			idValue, exists := incomeSourceIDsByName[key]
+			if !exists {
+				source, err := s.incomeSources.Create(r.Context(), claims.UserID, *txData.IncomeSourceName, inferIncomeSourceType(*txData.IncomeSourceName))
+				if err != nil {
+					continue
+				}
+				idValue = source.ID
+				incomeSourceIDsByName[key] = idValue
+			}
+			incomeSourceID = &idValue
+		}
+
+		tx := store.Transaction{
+			UserID:          claims.UserID,
+			TransactionDate: txData.TransactionDate,
+			EntryKind:       txData.EntryKind,
+			Amount:          txData.Amount,
+			Currency:        txData.Currency,
+			AccountID:       txData.AccountID,
+			CategoryID:      categoryID,
+			IncomeSourceID:  incomeSourceID,
+			Note:            txData.Note,
+			Source:          "import",
+			ImportID:        &id,
+		}
+
+		s.transactions.Create(r.Context(), tx)
 	}
 
 	if err := s.imports.UpdateStatus(r.Context(), id, claims.UserID, "confirmed", nil); err != nil {
@@ -929,16 +1078,14 @@ func (s *Server) undoImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find all transactions created by this import and soft delete them
-	rows, err := s.imports.GetRows(r.Context(), id)
-	if err != nil {
-		http.Error(w, "failed to get rows", http.StatusInternalServerError)
+	if _, err := s.db.Exec(r.Context(), `
+		update transactions
+		set deleted_at = now(), updated_at = now()
+		where user_id = $1 and import_id = $2 and deleted_at is null
+	`, claims.UserID, id); err != nil {
+		http.Error(w, "failed to undo imported transactions", http.StatusInternalServerError)
 		return
 	}
-
-	// Note: would need to track transaction IDs in import_rows to delete them
-	// For now, simplified approach - mark import as undone
-	_ = rows
 
 	if err := s.imports.UpdateStatus(r.Context(), id, claims.UserID, "undone", nil); err != nil {
 		http.Error(w, "failed to undo import", http.StatusInternalServerError)

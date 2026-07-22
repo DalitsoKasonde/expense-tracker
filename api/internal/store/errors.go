@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("resource not found")
-	ErrConflict = errors.New("resource conflict")
+	ErrNotFound           = errors.New("resource not found")
+	ErrConflict           = errors.New("resource conflict")
+	ErrAccountHasBalance  = errors.New("account still has balance")
 )
 
 func normalizeWriteError(err error) error {

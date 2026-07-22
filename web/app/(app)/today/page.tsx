@@ -1,25 +1,27 @@
 "use client";
 
-import { AppPageHeader } from "@/components/app-page-header";
-import { DashboardIcon } from "@/components/nav-icons";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useApiCall } from "@/lib/client-api";
 import { getPendingTransactions } from "@/lib/offline-db";
-import { UnifiedDashboardData, useUnifiedDashboard } from "@/lib/use-unified-dashboard";
+import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
+import { adaptSavingsGoals, type SavingsGoal } from "@/lib/dashboard-adapters";
+import { formatMoney } from "@/lib/format-money";
+import {
+  AccountCard,
+  ChartCard,
+  EmptyState,
+  LoadingSkeleton,
+  MetricCard,
+  PageHeader,
+  SavingsGoalCard,
+  TransactionRow,
+  type TransactionRowData,
+} from "@/components/ui";
+import { AddEntryButton } from "@/components/add-entry-button";
 
-interface Transaction {
-  id: string;
-  transactionDate: string;
-  entryKind: string;
-  amount: number;
-  currency: string;
-  note?: string;
-  isPending?: boolean;
-}
-
-interface InsightSummary {
+type InsightSummary = {
   freeCashFlow: number;
   netWorthChange: number;
   wealthBuildRateBps?: number | null;
@@ -27,13 +29,15 @@ interface InsightSummary {
   interestLeakageBps?: number | null;
   borrowedDependencyBps?: number | null;
   alerts: string[];
-}
+};
 
-const categoryLabels: Record<keyof Pick<UnifiedDashboardData, "income" | "expense" | "saving" | "investment">, string> = {
-  income: "Income",
-  expense: "Expense",
-  saving: "Saving",
-  investment: "Investment",
+type SavingsGroupResponse = {
+  id: string;
+  accountId: string;
+  name: string;
+  targetMinor?: number | null;
+  contributedMinor?: number;
+  currentBalance?: number;
 };
 
 export default function TodayPage() {
@@ -41,30 +45,29 @@ export default function TodayPage() {
   const apiCall = useApiCall();
   const apiCallRef = useRef(apiCall);
   apiCallRef.current = apiCall;
-  const { data, loading: dashboardLoading } = useUnifiedDashboard();
-
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const { data, loading: dashboardLoading, error: dashboardError } = useUnifiedDashboard();
+  const [transactions, setTransactions] = useState<TransactionRowData[]>([]);
   const [insights, setInsights] = useState<InsightSummary | null>(null);
-  const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [groups, setGroups] = useState<SavingsGroupResponse[]>([]);
+  const [secondaryLoading, setSecondaryLoading] = useState(true);
 
   useEffect(() => {
     if (!session?.accessToken) {
-      setTransactionsLoading(false);
+      setSecondaryLoading(false);
       return;
     }
-
-    const fetchDashboard = async () => {
+    let ignore = false;
+    async function loadSupportingData() {
       try {
-        const apiFn = apiCallRef.current;
-        const [transactions, insightResult] = await Promise.all([
-          apiFn<Transaction[]>("/v1/transactions?limit=5"),
-          apiFn<InsightSummary>("/v1/dashboard/insights").catch(() => null),
+        const api = apiCallRef.current;
+        const [recent, insightResult, groupResult, pending] = await Promise.all([
+          api<TransactionRowData[]>("/v1/transactions?limit=5"),
+          api<InsightSummary>("/v1/dashboard/insights").catch(() => null),
+          api<SavingsGroupResponse[]>("/v1/savings-groups").catch(() => []),
+          getPendingTransactions(),
         ]);
-        setInsights(insightResult);
-
-        // Fetch offline transactions to prepend
-        const pending = await getPendingTransactions();
-        const pendingTxList = pending.map((item) => ({
+        if (ignore) return;
+        const pendingRows: TransactionRowData[] = pending.map((item) => ({
           id: item.id,
           transactionDate: item.payload.transactionDate,
           entryKind: item.payload.entryKind,
@@ -73,317 +76,146 @@ export default function TodayPage() {
           note: item.payload.note,
           isPending: true,
         }));
-
-        const combinedTransactions = [...pendingTxList, ...(transactions ?? [])];
-        setRecentTransactions(combinedTransactions.slice(0, 5));
-      } catch (err) {
-        console.error("Failed to fetch dashboard", err);
+        setTransactions([...pendingRows, ...(recent ?? [])].slice(0, 5));
+        setInsights(insightResult);
+        setGroups(groupResult ?? []);
       } finally {
-        setTransactionsLoading(false);
+        if (!ignore) setSecondaryLoading(false);
       }
-    };
-
-    void fetchDashboard();
+    }
+    void loadSupportingData();
+    return () => { ignore = true; };
   }, [session?.accessToken]);
 
-  const trendPoints = useMemo(() => {
-    if (!data) return [];
-    return [
-      0,
-      data.income * 0.35,
-      data.income * 0.8,
-      data.income * 0.8 - data.expense * 0.4,
-      data.income * 0.8 - data.expense * 0.7,
-      data.netCashFlow,
-    ].map((v) => v / 100);
-  }, [data]);
+  const currency = data?.currency || "ZMW";
+  const goals: SavingsGoal[] = useMemo(
+    () => adaptSavingsGoals(groups, data?.accountBalances ?? [], currency),
+    [currency, data?.accountBalances, groups],
+  );
 
-  const plannerItems = useMemo(() => {
-    if (!data) {
-      return [];
-    }
+  if (dashboardLoading || secondaryLoading) {
+    return <main className="mx-auto grid min-h-screen max-w-app gap-6 px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10"><LoadingSkeleton className="h-24" /><div className="grid gap-6 md:grid-cols-3"><LoadingSkeleton className="h-40" /><LoadingSkeleton className="h-40" /><LoadingSkeleton className="h-40" /></div><LoadingSkeleton className="h-80" /></main>;
+  }
 
-    const expenseRatio = data.income > 0 ? Math.round((data.expense / data.income) * 100) : 0;
-    const reserveRatio = data.expense > 0 ? Math.round(((data.saving + data.investment) / data.expense) * 100) : 0;
-    const pendingCount = recentTransactions.filter((tx) => tx.isPending).length;
+  if (!data) {
+    return <main className="mx-auto min-h-screen max-w-app px-4 py-8 pb-28 sm:px-8 lg:px-12"><EmptyState title="Dashboard unavailable" description={dashboardError || "We could not load your financial overview. Please check your connection and try again."} action={<button className="primaryButton" type="button" onClick={() => window.location.reload()}>Try again</button>} /></main>;
+  }
 
-    return [
-      {
-        title: "Watch the expense load",
-        note: `${expenseRatio}% of income is already supporting this month's outflow.`,
-      },
-      {
-        title: "Protect the reserve rhythm",
-        note: `${reserveRatio}% of current outflow is matched by saving and investment movement.`,
-      },
-      {
-        title: "Close the open entries",
-        note: pendingCount > 0 ? `${pendingCount} recent entr${pendingCount === 1 ? "y is" : "ies are"} still syncing.` : "Everything recent is already in step.",
-      },
-    ];
-  }, [data, recentTransactions]);
-
-  const insightCards = useMemo(() => {
-    if (!insights) {
-      return [];
-    }
-    return [
-      { label: "Free Cash Flow", value: formatMoney(insights.freeCashFlow) },
-      { label: "Net Worth Change", value: formatMoney(insights.netWorthChange) },
-      { label: "Wealth Build Rate", value: formatBps(insights.wealthBuildRateBps) },
-      { label: "Debt Remaining", value: formatMoney(insights.debtRemaining) },
-      { label: "Interest Leakage", value: formatBps(insights.interestLeakageBps) },
-      { label: "Borrowed Dependency", value: formatBps(insights.borrowedDependencyBps) },
-    ];
-  }, [insights]);
-
-  if (dashboardLoading || transactionsLoading) return <div className="shell">Loading...</div>;
+  const assetAccounts = data.accountBalances.filter((account) => account.accountClass !== "liability");
+  const liabilityAccounts = data.accountBalances.filter((account) => account.accountClass === "liability");
 
   return (
-    <main className="shell">
-      <section className="appChrome workspaceStack">
-        <AppPageHeader
-          eyebrow="Inscribed ledger"
-          title="Overview"
-          accent="Today"
-          lead="A premium, quick-reading picture of this month's balance, allocation, and latest money movement."
-          icon={DashboardIcon}
-        />
+    <main className="mx-auto grid min-h-screen max-w-app gap-8 px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10">
+      <PageHeader
+        eyebrow="Home"
+        title="Your money today"
+        subtitle="See what is available, what changed this month, and what needs your attention."
+        actions={<Link href="/reports" className="ghostButton">View reports</Link>}
+      />
 
-        {data ? (
-          <>
-            <div className="overviewHeroGrid">
-              <section className="heroCard overviewPrimaryCard">
-                <div className="overviewHeroTop">
-                  <div>
-                    <p className="heroMeta">This month</p>
-                    <h2 className="dashboardHeroAmount">ZMW {(data.netCashFlow / 100).toFixed(2)}</h2>
-                    <p className="heroSubline">Net balance across income, spending, saving, and investment movement.</p>
-                  </div>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Financial summary">
+        <MetricCard label="Cash balance" value={formatMoney(data.cashBalance, currency)} detail={`As of ${new Date(data.asOfDate).toLocaleDateString()}`} />
+        <MetricCard label="Monthly cash flow" value={formatMoney(data.netCashFlow, currency)} tone={data.netCashFlow >= 0 ? "income" : "expense"} detail="Inflow less monthly movement" />
+        <MetricCard label="Income" value={formatMoney(data.income, currency)} tone="income" detail="Earned this month" />
+        <MetricCard label="Expenses" value={formatMoney(data.expense, currency)} tone="expense" detail="Spent this month" />
+      </section>
 
-                  <div className="pillList">
-                    <span className="pill">Net worth ZMW {(data.netWorth / 100).toFixed(0)}</span>
-                    <span className="pill">Income ZMW {(data.income / 100).toFixed(0)}</span>
-                    <span className="pill">Expense ZMW {(data.expense / 100).toFixed(0)}</span>
-                  </div>
-                </div>
+      <AddEntryButton className="flex min-h-14 items-center justify-center rounded-md bg-primary px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:justify-self-start">
+        <span className="mr-2 text-xl" aria-hidden="true">+</span> Add entry
+      </AddEntryButton>
 
-                <div className="trendFrame">
-                  <TrendChart points={trendPoints} />
-                </div>
-              </section>
+      <section className="rounded-lg border border-outline bg-surface p-5 shadow-sm" aria-labelledby="attention-heading">
+        <div className="mb-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Next steps</p>
+          <h2 id="attention-heading" className="mt-1 text-lg font-semibold text-on-surface">Needs your attention</h2>
+        </div>
+        {insights?.alerts?.length ? (
+          <ul className="grid gap-2">
+            {insights.alerts.map((alert) => <li key={alert} className="rounded-md bg-warning-soft px-4 py-3 text-sm text-on-surface">{alert}</li>)}
+          </ul>
+        ) : (
+          <EmptyState title="Nothing urgent" description="Your recorded accounts and recent activity do not need attention right now." />
+        )}
+      </section>
 
-              <aside className="spotlightCard overviewAccentQuote">
-                <span className="sectionKicker">Inscribed note</span>
-                <h2 className="sectionHeading">A calm ledger is built from consistent entries, not dramatic corrections.</h2>
-                <p className="muted">
-                  Keep saving and investment movement visible enough to guide the month before spending becomes reactive.
-                </p>
-                <span className="pageAccent">Small entries, steady clarity</span>
-              </aside>
-            </div>
-
-            {insightCards.length > 0 ? (
-              <section className="card allocationPanel">
-                <div className="sectionHeaderCopy">
-                  <p className="sectionKicker">Financial pulse</p>
-                  <h2 className="sectionHeading">Practical insight</h2>
-                </div>
-                <div className="allocationGrid">
-                  {insightCards.map((item) => (
-                    <article key={item.label} className="allocationTile">
-                      <span className="metricCardLabel">{item.label}</span>
-                      <strong className="metricCardValue">{item.value}</strong>
-                    </article>
-                  ))}
-                </div>
-                {insights?.alerts?.length ? (
-                  <div className="pillList">
-                    {insights.alerts.map((alert) => (
-                      <span key={alert} className="pill">
-                        {alert}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
-
-            <div className="editorialBoard">
-              <section className="card plannerCard">
-                <div className="sectionHeaderCopy">
-                  <p className="sectionKicker">Daily rhythm</p>
-                  <h2 className="sectionHeading">Guidance for the next few entries</h2>
-                </div>
-                <div className="plannerList">
-                  {plannerItems.map((item) => (
-                    <article key={item.title} className="plannerItem">
-                      <div className="plannerBullet" aria-hidden="true" />
-                      <div className="resourceBody">
-                        <strong>{item.title}</strong>
-                        <span className="muted">{item.note}</span>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-
-              <section className="card allocationPanel">
-                <div className="sectionHeaderCopy">
-                  <p className="sectionKicker">Allocation</p>
-                  <h2 className="sectionHeading">How the month is being divided</h2>
-                </div>
-                <div className="allocationGrid">
-                  {(["income", "expense", "saving", "investment"] as const).map((key) => (
-                    <article key={key} className="allocationTile">
-                      <span className="metricCardLabel">{categoryLabels[key]}</span>
-                      <strong className="metricCardValue">ZMW {(data[key] / 100).toFixed(2)}</strong>
-                      <span className="muted">
-                        {key === "income"
-                          ? "Incoming"
-                          : key === "expense"
-                            ? "Spent"
-                            : key === "saving"
-                              ? "Set aside"
-                              : "Committed"}
-                      </span>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            </div>
-          </>
-        ) : null}
-
-        <section className="card recentLedgerPanel">
-          <div className="sectionHeader">
-            <div className="sectionHeaderCopy">
-              <p className="sectionKicker">Recent activity</p>
-              <h2 className="sectionHeading">Latest entries</h2>
-            </div>
-            <Link href="/transactions" className="ghostButton">
-              Open history
-            </Link>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <section className="rounded-lg border border-outline bg-surface p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4 border-b border-outline pb-4">
+            <div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Activity</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Recent transactions</h2></div>
+            <Link href="/transactions" className="text-sm font-semibold text-accent hover:underline">View history</Link>
           </div>
-
-          {recentTransactions.length === 0 ? (
-            <div className="resourceBody">
-              <strong>No transactions yet</strong>
-              <span className="muted">Start with a quick entry and the dashboard will begin to take shape.</span>
-            </div>
-          ) : (
-            <div className="ledgerList">
-              {recentTransactions.map((tx) => {
-                const isPositive =
-                  tx.entryKind === "income_earned" ||
-                  tx.entryKind === "income_borrowed" ||
-                  tx.entryKind === "investment_income" ||
-                  tx.entryKind === "bond_principal_redemption";
-                const transactionDate = new Date(tx.transactionDate);
-
-                return (
-                  <div key={tx.id} className="ledgerRow">
-                    <div className="ledgerDateBlock">
-                      <span className="ledgerDateDay">{transactionDate.getDate()}</span>
-                      <span className="ledgerDateMonth">
-                        {transactionDate.toLocaleDateString(undefined, { month: "short" })}
-                      </span>
-                    </div>
-                    <div className="ledgerPrimary">
-                      <p className="ledgerTitle">{tx.note?.trim() || tx.entryKind.replaceAll("_", " ")}</p>
-                      <div className="ledgerMeta">
-                        <span className="metaBadge">{tx.isPending ? "Pending sync" : tx.entryKind.replaceAll("_", " ")}</span>
-                        <span className="muted">{transactionDate.toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                    <div className="ledgerAmountBlock">
-                      <span className={isPositive ? "ledgerAmount positive" : "ledgerAmount negative"}>
-                        {isPositive ? "+" : "-"}
-                        {tx.currency} {(tx.amount / 100).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {transactions.length ? <div>{transactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</div> : <div className="pt-5"><EmptyState title="No transactions yet" description="Add your first entry and recent activity will appear here." /></div>}
         </section>
 
-        <div className="formActions">
-          <Link href="/add" className="primaryButton">
-            Add entry
-          </Link>
-          <Link href="/settings" className="ghostButton">
-            Review settings
-          </Link>
-        </div>
+        <section>
+          <div className="mb-4 flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Accounts</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Your balances</h2></div><Link href="/settings/accounts" className="text-sm font-semibold text-accent hover:underline">Manage</Link></div>
+          {data.accountBalances.length ? (
+            <div className="grid gap-5">
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-on-surface">Accounts</h3>
+                    <p className="text-xs text-on-surface-soft">Places where your money lives.</p>
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-on-surface-soft">{assetAccounts.length}</span>
+                </div>
+                {assetAccounts.length ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">{assetAccounts.slice(0, 4).map((account, index) => <AccountCard key={account.accountId} name={account.name} type={account.accountType} accountClass={account.accountClass} balanceMinor={account.balanceMinor} currency={account.currency} primary={index === 0} />)}</div> : <EmptyState title="No accounts" description="Create an account to begin tracking balances." />}
+              </div>
+              {liabilityAccounts.length ? (
+                <div>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                      <h3 className="text-sm font-semibold text-on-surface">Money you owe</h3>
+                      <p className="text-xs text-on-surface-soft">Debt from loans you have recorded in the app.</p>
+                    </div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-on-surface-soft">{liabilityAccounts.length}</span>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                    {liabilityAccounts.slice(0, 3).map((account, index) => (
+                      <AccountCard
+                        key={account.accountId}
+                        name={account.name}
+                        type={account.accountType}
+                        accountClass={account.accountClass}
+                        balanceMinor={account.balanceMinor}
+                        currency={account.currency}
+                        primary={index === 0}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : <EmptyState title="No accounts" description="Create an account to begin tracking balances." />}
+        </section>
+      </div>
+
+      <section>
+        <div className="mb-4 flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Goals</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Savings progress</h2></div><Link href="/settings/savings-groups" className="text-sm font-semibold text-accent hover:underline">Manage goals</Link></div>
+        {goals.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{goals.slice(0, 3).map((goal) => <SavingsGoalCard key={goal.id} {...goal} />)}</div> : <EmptyState title="No savings goals yet" description="Create a savings group with a target to track its progress here." action={<Link href="/settings/savings-groups" className="ghostButton">Create a goal</Link>} />}
       </section>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <ChartCard title="Income and expenses" subtitle="Current month movement" summary={`Income is ${formatMoney(data.income, currency)} and expenses are ${formatMoney(data.expense, currency)}. Net cash flow is ${formatMoney(data.netCashFlow, currency)}.`}>
+          <CashFlowChart income={data.income} expense={data.expense} />
+        </ChartCard>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1" aria-label="Financial insights">
+          <MetricCard label="Net worth" value={formatMoney(data.netWorth, currency)} detail="Assets less liabilities" />
+          <MetricCard label="Free cash flow" value={formatMoney(insights?.freeCashFlow ?? data.freeCashFlow, currency)} tone={(insights?.freeCashFlow ?? data.freeCashFlow) >= 0 ? "savings" : "expense"} />
+        </section>
+      </div>
     </main>
   );
 }
 
-function formatMoney(value: number) {
-  return `ZMW ${(value / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
-
-function formatBps(value?: number | null) {
-  if (value === null || value === undefined) return "—";
-  return `${(value / 100).toFixed(1)}%`;
-}
-
-// Custom Minimalist SVG Trend Chart Component
-function TrendChart({ points }: { points: number[] }) {
-  if (points.length < 2) return null;
-
-  const width = 500;
-  const height = 120;
-  const padding = 10;
-
-  const max = Math.max(...points, 1);
-  const min = Math.min(...points, 0);
-  const range = max - min === 0 ? 1 : max - min;
-
-  const coords = points.map((p, i) => {
-    const x = padding + (i / (points.length - 1)) * (width - 2 * padding);
-    const y = height - padding - ((p - min) / range) * (height - 2 * padding);
-    return { x, y };
-  });
-
-  const linePath = coords
-    .map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`)
-    .join(" ");
-  const areaPath = `${linePath} L ${coords[coords.length - 1].x.toFixed(1)} ${height} L ${coords[0].x.toFixed(1)} ${height} Z`;
-
+function CashFlowChart({ income, expense }: { income: number; expense: number }) {
+  const max = Math.max(income, expense, 1);
+  const incomeHeight = Math.max(4, Math.round((income / max) * 150));
+  const expenseHeight = Math.max(4, Math.round((expense / max) * 150));
   return (
-    <div style={{ width: "100%", height: "130px", marginTop: "24px" }}>
-      <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.10" />
-            <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.00" />
-          </linearGradient>
-        </defs>
-        <path d={areaPath} fill="url(#areaGradient)" />
-        <path
-          d={linePath}
-          fill="none"
-          stroke="var(--primary)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {coords.map((c, i) => (
-          <circle
-            key={i}
-            cx={c.x}
-            cy={c.y}
-            r="3.5"
-            fill="var(--surface)"
-            stroke="var(--primary)"
-            strokeWidth="1.5"
-          />
-        ))}
-      </svg>
+    <div className="flex h-52 items-end justify-center gap-12 border-b border-l border-outline px-8 pb-0">
+      <div className="grid justify-items-center gap-2"><div className="w-16 rounded-t-md bg-income" style={{ height: incomeHeight }} /><span className="text-xs font-semibold text-on-surface-soft">Income</span></div>
+      <div className="grid justify-items-center gap-2"><div className="w-16 rounded-t-md bg-expense" style={{ height: expenseHeight }} /><span className="text-xs font-semibold text-on-surface-soft">Expenses</span></div>
     </div>
   );
 }

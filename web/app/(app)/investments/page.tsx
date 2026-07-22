@@ -1,72 +1,77 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
-import { AppPageHeader } from "@/components/app-page-header";
-import { PortfolioIcon } from "@/components/nav-icons";
+import { PageHeader } from "@/components/ui";
 import { UnifiedDashboardAsset, useUnifiedDashboard } from "@/lib/use-unified-dashboard";
-
-type RangeKey = "1M" | "1Y" | "ALL";
+import { formatMoney } from "@/lib/format-money";
 
 export default function InvestmentsPage() {
   const { data, loading } = useUnifiedDashboard();
-  const [range, setRange] = useState<RangeKey>("1Y");
 
-  const assets = data?.assets ?? [];
-  const totalCurrentValue = useMemo(
-    () => assets.reduce((sum, asset) => sum + asset.currentValueMinor, 0),
-    [assets]
-  );
-  const totalInvested = useMemo(
-    () => assets.reduce((sum, asset) => sum + asset.investedAmountMinor, 0),
-    [assets]
-  );
-  const largestHolding = useMemo(
-    () =>
-      assets.reduce<UnifiedDashboardAsset | null>((largest, asset) => {
-        if (!largest || asset.currentValueMinor > largest.currentValueMinor) {
-          return asset;
+  const {
+    assets,
+    allocation,
+    allocationById,
+    currencyTotals,
+    largestHolding,
+    primaryCurrency,
+    totalCurrentValue,
+    totalInvested,
+  } = useMemo(() => {
+    const nextAssets = data?.assets ?? [];
+    const nextPrimaryCurrency = data?.currency ?? nextAssets[0]?.currency ?? "ZMW";
+    const totals = new Map<string, { current: number; invested: number }>();
+    let nextLargestHolding: UnifiedDashboardAsset | null = null;
+    let nextTotalCurrentValue = 0;
+    let nextTotalInvested = 0;
+
+    for (const asset of nextAssets) {
+      const total = totals.get(asset.currency) ?? { current: 0, invested: 0 };
+      total.current += asset.currentValueMinor;
+      total.invested += asset.investedAmountMinor;
+      totals.set(asset.currency, total);
+
+      if (asset.currency === nextPrimaryCurrency) {
+        nextTotalCurrentValue += asset.currentValueMinor;
+        nextTotalInvested += asset.investedAmountMinor;
+        if (!nextLargestHolding || asset.currentValueMinor > nextLargestHolding.currentValueMinor) {
+          nextLargestHolding = asset;
         }
-        return largest;
-      }, null),
-    [assets]
-  );
-  const allocation = useMemo(
-    () =>
-      assets.map((asset) => ({
-        ...asset,
-        weight:
-          totalCurrentValue > 0
-            ? Math.round((asset.currentValueMinor / totalCurrentValue) * 100)
-            : 0,
-      })),
-    [assets, totalCurrentValue]
-  );
-  const chartPoints = useMemo(() => {
-    const factor = range === "1M" ? 0.18 : range === "1Y" ? 0.44 : 0.66;
-    if (assets.length === 0) {
-      return [0, 0.2, 0.25, 0.32, 0.35, 0.4];
+      }
     }
 
-    const base = Math.max(totalCurrentValue / 100, 1);
-    return [0.55, 0.62, 0.68, 0.74, 0.88, 1].map((multiplier, index) => {
-      const asset = assets[index % assets.length];
-      const influence = asset ? asset.currentValueMinor / Math.max(totalCurrentValue, 1) : 0;
-      return base * (multiplier + influence * factor);
+    const nextAllocation = nextAssets.map((asset) => {
+      const currencyTotal = totals.get(asset.currency)?.current ?? 0;
+      return {
+        ...asset,
+        weight: currencyTotal > 0 ? Math.round((asset.currentValueMinor / currencyTotal) * 100) : 0,
+      };
     });
-  }, [assets, range, totalCurrentValue]);
+    const nextAllocationById = new Map(nextAllocation.map((asset) => [asset.assetId, asset.weight]));
+
+    return {
+      assets: nextAssets,
+      allocation: nextAllocation,
+      allocationById: nextAllocationById,
+      currencyTotals: [...totals.entries()],
+      largestHolding: nextLargestHolding,
+      primaryCurrency: nextPrimaryCurrency,
+      totalCurrentValue: nextTotalCurrentValue,
+      totalInvested: nextTotalInvested,
+    };
+  }, [data?.assets, data?.currency]);
+  const performanceDifference = totalCurrentValue - totalInvested;
 
   if (loading) return <div className="shell">Loading...</div>;
 
   return (
     <main className="shell">
       <section className="appChrome workspaceStack">
-        <AppPageHeader
-          eyebrow="Inscribed ledger"
+        <PageHeader
+          eyebrow="Portfolio"
           title="Portfolio"
-          accent="Measured for the long view"
-          lead="Track invested capital, live asset value, and allocation in one portfolio workspace tied directly to net worth."
-          icon={PortfolioIcon}
+          subtitle={largestHolding ? `Largest holding: ${largestHolding.name}. See what you invested, what each holding is worth now, and how your money is allocated.` : "Add your first investment to track cost, current value, and allocation."}
         />
 
         <div className="portfolioStage">
@@ -74,26 +79,31 @@ export default function InvestmentsPage() {
             <div className="portfolioSummaryTop">
               <div className="resourceBody">
                 <span className="sectionKicker">Portfolio value</span>
-                <strong className="portfolioValue">ZMW {(totalCurrentValue / 100).toFixed(2)}</strong>
-                <span className="muted">Current asset value flowing into the unified net worth total.</span>
+                <strong className="portfolioValue">{formatMoney(totalCurrentValue, primaryCurrency)}</strong>
+                <span className="muted">Current value in your reporting currency. Other currencies stay separate below.</span>
+                <div className="pillList">{currencyTotals.map(([currency, totals]) => <span className="pill" key={currency}>{formatMoney(totals.current, currency)}</span>)}</div>
               </div>
 
-              <div className="rangeSwitcher" role="tablist" aria-label="Portfolio range">
-                {(["1M", "1Y", "ALL"] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={range === value ? "rangeChip active" : "rangeChip"}
-                    onClick={() => setRange(value)}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
+              <span className={performanceDifference >= 0 ? "metaBadge positive" : "metaBadge negative"}>
+                {performanceDifference >= 0 ? "+" : ""}{formatMoney(performanceDifference, primaryCurrency)} vs invested
+              </span>
             </div>
 
-            <div className="portfolioChartFrame">
-              <PortfolioTrendChart points={chartPoints} />
+            <div className="rounded-lg border border-outline bg-surface-soft p-4" aria-label="Current value compared with invested amount">
+              <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+                <span className="text-on-surface-soft">Recorded cost</span>
+                <strong>{formatMoney(totalInvested, primaryCurrency)}</strong>
+              </div>
+              <div className="h-3 overflow-hidden rounded-pill bg-primary-soft">
+                <div
+                  className="h-full rounded-pill bg-investment"
+                  style={{ width: `${totalCurrentValue > 0 ? Math.min(100, Math.max(4, (totalInvested / Math.max(totalCurrentValue, totalInvested)) * 100)) : 0}%` }}
+                />
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                <span className="text-on-surface-soft">Current recorded value</span>
+                <strong>{formatMoney(totalCurrentValue, primaryCurrency)}</strong>
+              </div>
             </div>
 
             <div className="portfolioMiniGrid">
@@ -104,23 +114,25 @@ export default function InvestmentsPage() {
               </div>
               <div className="metricCard">
                 <span className="metricCardLabel">Invested amount</span>
-                <strong className="metricCardValue">ZMW {(totalInvested / 100).toFixed(2)}</strong>
-                <span className="muted">Recorded principal and cost basis across holdings.</span>
+                <strong className="metricCardValue">{formatMoney(totalInvested, primaryCurrency)}</strong>
+                <span className="muted">Recorded principal in the reporting currency.</span>
               </div>
             </div>
           </section>
 
           <aside className="spotlightCard marketSummaryCard">
-            <span className="sectionKicker">Market summary</span>
+            <span className="sectionKicker">Review next</span>
             <h2 className="sectionHeading">
-              {largestHolding ? "Concentration is visible at a glance." : "The portfolio is ready for its first position."}
+              {largestHolding ? `Check ${largestHolding.name}` : "Add a stock or government bond"}
             </h2>
             <p className="muted">
               {largestHolding
-                ? `${largestHolding.name} represents ${Math.round((largestHolding.currentValueMinor / Math.max(totalCurrentValue, 1)) * 100)}% of portfolio value, making it the clearest place to watch concentration and change.`
-                : "Add your first bond or stock position to begin tracking invested capital and current value."}
+                ? `${largestHolding.name} represents ${Math.round((largestHolding.currentValueMinor / Math.max(totalCurrentValue, 1)) * 100)}% of ${primaryCurrency} portfolio value. Review its latest value and concentration.`
+                : "Record what you paid and the app will track cost, current value, allocation, dividends, and bond payments."}
             </p>
-            <span className="pageAccent">Inscribed Insight</span>
+            <Link href={largestHolding ? `/investments/${largestHolding.assetId}` : "/investments/add"} className="ghostButton">
+              {largestHolding ? "Review holding" : "Add investment"}
+            </Link>
           </aside>
         </div>
 
@@ -154,8 +166,8 @@ export default function InvestmentsPage() {
 
           <section className="card portfolioInsightPanel">
             <div className="sectionHeaderCopy">
-              <p className="sectionKicker">Editorial read</p>
-              <h2 className="sectionHeading">What deserves attention next</h2>
+              <p className="sectionKicker">Concentration</p>
+              <h2 className="sectionHeading">Your largest holding</h2>
             </div>
             <div className="utilityList">
               <div className="utilityRow">
@@ -199,19 +211,19 @@ export default function InvestmentsPage() {
                       </span>
                     </div>
                     <div className="ledgerAmountBlock">
-                      <span className="ledgerAmount positive">ZMW {(asset.currentValueMinor / 100).toFixed(2)}</span>
-                      <span className="muted">Invested ZMW {(asset.investedAmountMinor / 100).toFixed(2)}</span>
+                      <span className="ledgerAmount positive">{formatMoney(asset.currentValueMinor, asset.currency)}</span>
+                      <span className="muted">Invested {formatMoney(asset.investedAmountMinor, asset.currency)}</span>
                     </div>
                   </div>
                   <div className="portfolioLegend">
                     <div className="utilityRow">
                       <span className="muted">Portfolio weight</span>
-                      <strong>{Math.round((asset.currentValueMinor / Math.max(totalCurrentValue, 1)) * 100)}%</strong>
+                      <strong>{allocationById.get(asset.assetId) ?? 0}%</strong>
                     </div>
                     <div className="portfolioBar" aria-hidden="true">
                       <div
                         className="portfolioBarFill"
-                        style={{ width: `${Math.max(8, Math.round((asset.currentValueMinor / Math.max(totalCurrentValue, 1)) * 100))}%` }}
+                        style={{ width: `${Math.max(8, allocationById.get(asset.assetId) ?? 0)}%` }}
                       />
                     </div>
                   </div>
@@ -228,48 +240,5 @@ export default function InvestmentsPage() {
         </div>
       </section>
     </main>
-  );
-}
-
-function PortfolioTrendChart({ points }: { points: number[] }) {
-  if (points.length === 0) {
-    return null;
-  }
-
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const spread = Math.max(max - min, 1);
-  const width = 100;
-  const height = 52;
-
-  const line = points
-    .map((value, index) => {
-      const x = (index / Math.max(points.length - 1, 1)) * width;
-      const y = height - ((value - min) / spread) * height;
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="portfolioChart" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="portfolioLineFill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="rgba(38, 78, 134, 0.26)" />
-          <stop offset="100%" stopColor="rgba(38, 78, 134, 0.02)" />
-        </linearGradient>
-      </defs>
-      <polyline
-        fill="none"
-        stroke="rgba(38, 78, 134, 0.92)"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={line}
-      />
-      <polygon
-        fill="url(#portfolioLineFill)"
-        points={`0,${height} ${line} ${width},${height}`}
-      />
-    </svg>
   );
 }

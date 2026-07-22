@@ -1,7 +1,10 @@
 "use client";
 
 import { useApiCall } from "@/lib/client-api";
-import { useEffect, useMemo, useState } from "react";
+import { formatMoney } from "@/lib/format-money";
+import { useUserCurrency } from "@/lib/use-user-currency";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FormDialog } from "@/components/ui/dialogs";
 
 type Account = {
   id: string;
@@ -31,16 +34,15 @@ function toMinor(value: string) {
   return Math.round((parseFloat(value || "0") || 0) * 100);
 }
 
-function formatMoney(value: number) {
-  return `ZMW ${(value / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 export default function SavingsGroupsSettingsPage() {
   const apiCall = useApiCall();
+  const { currency: userCurrency } = useUserCurrency();
   const [groups, setGroups] = useState<SavingsGroup[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [shareoutOpen, setShareoutOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -59,7 +61,7 @@ export default function SavingsGroupsSettingsPage() {
 
   const cashAccounts = useMemo(() => accounts.filter((account) => account.accountClass !== "liability"), [accounts]);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const [loadedGroups, loadedAccounts] = await Promise.all([
       apiCall<SavingsGroup[]>("/v1/savings-groups"),
       apiCall<Account[]>("/v1/accounts"),
@@ -71,13 +73,23 @@ export default function SavingsGroupsSettingsPage() {
       groupId: current.groupId || loadedGroups?.[0]?.id || "",
       cashAccountId: current.cashAccountId || loadedAccounts?.find((account) => account.accountClass !== "liability")?.id || "",
     }));
-  }
+  }, [apiCall]);
 
   useEffect(() => {
     void loadData()
       .catch((error) => setStatus(error instanceof Error ? error.message : "Failed to load savings groups"))
       .finally(() => setLoading(false));
-  }, [apiCall]);
+  }, [loadData]);
+
+  function resetCreateForm() {
+    setCreateOpen(false);
+    setForm({ name: "", cycleStart: today(), cycleLengthMonths: "12", target: "", isShareoutGroup: true });
+  }
+
+  function resetShareoutForm() {
+    setShareoutOpen(false);
+    setShareout((current) => ({ ...current, payout: "", note: "" }));
+  }
 
   async function createGroup(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,10 +104,10 @@ export default function SavingsGroupsSettingsPage() {
           cycleLengthMonths: Number(form.cycleLengthMonths) || 12,
           targetMinor: form.target ? toMinor(form.target) : undefined,
           isShareoutGroup: form.isShareoutGroup,
-          currency: "ZMW",
+          currency: userCurrency,
         },
       });
-      setForm({ name: "", cycleStart: today(), cycleLengthMonths: "12", target: "", isShareoutGroup: true });
+      resetCreateForm();
       await loadData();
       setStatus("Savings group created.");
     } catch (error) {
@@ -117,10 +129,10 @@ export default function SavingsGroupsSettingsPage() {
           payoutMinor: toMinor(shareout.payout),
           cycleEnd: shareout.cycleEnd,
           note: shareout.note || undefined,
-          currency: "ZMW",
+          currency: userCurrency,
         },
       });
-      setShareout((current) => ({ ...current, payout: "", note: "" }));
+      resetShareoutForm();
       await loadData();
       setStatus("Share-out recorded and cycle rolled forward.");
     } catch (error) {
@@ -132,18 +144,68 @@ export default function SavingsGroupsSettingsPage() {
 
   return (
     <section className="settingsSection">
-      <div className="card settingsLeadCard">
-        <p className="sectionKicker">Savings Groups</p>
-        <h2 className="sectionHeading">Share-out cycles</h2>
-        <p className="muted">Contributions stay as savings. Share-out records return of capital plus gain or loss.</p>
+      <div className="grid gap-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="resourceBody">
+            <strong>Groups</strong>
+            <span className="muted">Current balance and cycle contributions are shown separately.</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button className="primaryButton" type="button" onClick={() => setCreateOpen(true)}>
+              Create group
+            </button>
+            <button className="ghostButton" type="button" onClick={() => setShareoutOpen(true)} disabled={groups.length === 0 || cashAccounts.length === 0}>
+              Record share-out
+            </button>
+          </div>
+        </div>
+
+        <section className="card settingsListPanel overflow-hidden">
+          <div className="settingsHeaderRow">
+            <strong>Groups table</strong>
+          </div>
+          <div className="overflow-x-auto">
+            {loading ? <div className="muted">Loading groups...</div> : null}
+            {!loading && groups.length === 0 ? <div className="muted">No savings groups yet.</div> : null}
+            {groups.length ? (
+              <table className="min-w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-outline text-left text-on-surface-soft">
+                    <th className="px-4 py-3 font-semibold">Name</th>
+                    <th className="px-4 py-3 font-semibold">Cycle</th>
+                    <th className="px-4 py-3 font-semibold">Balance</th>
+                    <th className="px-4 py-3 font-semibold">Contributed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((group) => (
+                    <tr key={group.id} className="border-b border-outline/70 last:border-b-0">
+                      <td className="px-4 py-3 font-semibold text-on-surface">{group.name}</td>
+                      <td className="px-4 py-3 text-on-surface-soft">{`${new Date(group.cycleStart).toLocaleDateString()} · ${group.cycleLengthMonths} months`}</td>
+                      <td className="px-4 py-3 text-on-surface">{formatMoney(group.currentBalance, userCurrency)}</td>
+                      <td className="px-4 py-3 text-on-surface-soft">{formatMoney(group.contributedMinor, userCurrency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
+        </section>
       </div>
 
-      <div className="settingsDetailGrid">
-        <form className="card settingsFormPanel" onSubmit={createGroup}>
-          <div className="resourceBody">
-            <strong>Create group</strong>
-            <span className="muted">A savings account is created automatically for the group.</span>
-          </div>
+      {status ? <p className="statusText">{status}</p> : null}
+
+      <FormDialog
+        open={createOpen}
+        title="Create group"
+        description="A savings account is created automatically for the group."
+        submitLabel="Create group"
+        pending={saving}
+        error={status.startsWith("Failed") ? status : undefined}
+        onSubmit={createGroup}
+        onClose={resetCreateForm}
+      >
+        <div className="grid gap-4">
           <div className="field">
             <label>Name</label>
             <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
@@ -166,16 +228,20 @@ export default function SavingsGroupsSettingsPage() {
             <input type="checkbox" checked={form.isShareoutGroup} onChange={(event) => setForm((current) => ({ ...current, isShareoutGroup: event.target.checked }))} />
             Share-out group
           </label>
-          <button className="primaryButton" type="submit" disabled={saving}>
-            Create group
-          </button>
-        </form>
+        </div>
+      </FormDialog>
 
-        <form className="card settingsFormPanel" onSubmit={closeCycle}>
-          <div className="resourceBody">
-            <strong>Record share-out</strong>
-            <span className="muted">Payout minus contributions becomes gain or loss.</span>
-          </div>
+      <FormDialog
+        open={shareoutOpen}
+        title="Record share-out"
+        description="Payout minus contributions becomes gain or loss."
+        submitLabel="Record share-out"
+        pending={saving}
+        error={status.startsWith("Failed") ? status : undefined}
+        onSubmit={closeCycle}
+        onClose={resetShareoutForm}
+      >
+        <div className="grid gap-4">
           <div className="field">
             <label>Group</label>
             <select value={shareout.groupId} onChange={(event) => setShareout((current) => ({ ...current, groupId: event.target.value }))} required>
@@ -212,39 +278,8 @@ export default function SavingsGroupsSettingsPage() {
             <label>Note</label>
             <input value={shareout.note} onChange={(event) => setShareout((current) => ({ ...current, note: event.target.value }))} />
           </div>
-          <button className="primaryButton" type="submit" disabled={saving || groups.length === 0 || cashAccounts.length === 0}>
-            Record share-out
-          </button>
-        </form>
-      </div>
-
-      <section className="card settingsListPanel">
-        <div className="resourceBody">
-          <strong>Groups</strong>
-          <span className="muted">Current balance and cycle contributions are shown separately.</span>
         </div>
-        <div className="resourceList">
-          {loading ? <div className="muted">Loading groups...</div> : null}
-          {!loading && groups.length === 0 ? <div className="muted">No savings groups yet.</div> : null}
-          {groups.map((group) => (
-            <div key={group.id} className="resourceRow">
-              <div className="resourceBody">
-                <strong>{group.name}</strong>
-                <div className="resourceMeta">
-                  <span className="metaBadge">Started {new Date(group.cycleStart).toLocaleDateString()}</span>
-                  <span className="metaBadge">{group.cycleLengthMonths} months</span>
-                </div>
-              </div>
-              <div className="resourceBody">
-                <strong>{formatMoney(group.currentBalance)}</strong>
-                <span className="muted">Contributed {formatMoney(group.contributedMinor)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {status ? <p className="statusText">{status}</p> : null}
+      </FormDialog>
     </section>
   );
 }

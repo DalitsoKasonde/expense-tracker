@@ -1,13 +1,29 @@
 "use client";
 
+import type { Route } from "next";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { formatMoney } from "@/lib/format-money";
+import { useUserCurrency } from "@/lib/use-user-currency";
+import { ConfirmationDialog, FormDialog } from "@/components/ui/dialogs";
 
 type Account = {
   id: string;
   name: string;
   accountType: string;
+  accountClass: string;
   currency: string;
+  openingBalanceMinor: number;
+};
+
+type DashboardAccountBalance = {
+  accountId: string;
+  balanceMinor: number;
+};
+
+type UnifiedDashboardResponse = {
+  accountBalances: DashboardAccountBalance[];
 };
 
 const accountTypeOptions = [
@@ -19,18 +35,46 @@ const accountTypeOptions = [
   { value: "other", label: "Other" },
 ];
 
+function toMinor(value: string) {
+  return Math.round((parseFloat(value || "0") || 0) * 100);
+}
+
 export default function AccountsSettingsPage() {
   const apiCall = useApiCall();
+  const { currency: userCurrency } = useUserCurrency();
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [balancesByAccountId, setBalancesByAccountId] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
-  const [form, setForm] = useState({ name: "", accountType: "cash", currency: "ZMW" });
+  const [form, setForm] = useState({ name: "", accountType: "cash", currency: userCurrency, openingBalance: "" });
+  const assetAccounts = accounts.filter((account) => account.accountClass !== "liability");
+  const liabilityAccounts = accounts.filter((account) => account.accountClass === "liability");
 
   async function loadAccounts() {
     const result = await apiCall<Account[]>("/v1/accounts");
-    setAccounts(result ?? []);
+    const nextAccounts = result ?? [];
+    setAccounts(nextAccounts);
+
+    const currencies = [...new Set(nextAccounts.map((account) => account.currency))];
+    const dashboards = await Promise.all(
+      currencies.map(async (currency) => {
+        const dashboard = await apiCall<UnifiedDashboardResponse>(
+          `/v1/dashboard/unified?currency=${encodeURIComponent(currency)}`
+        );
+        return dashboard?.accountBalances ?? [];
+      })
+    );
+
+    const nextBalances = dashboards.flat().reduce<Record<string, number>>((accumulator, item) => {
+      accumulator[item.accountId] = item.balanceMinor;
+      return accumulator;
+    }, {});
+
+    setBalancesByAccountId(nextBalances);
   }
 
   useEffect(() => {
@@ -41,8 +85,15 @@ export default function AccountsSettingsPage() {
 
   function resetForm() {
     setEditingId(null);
-    setForm({ name: "", accountType: "cash", currency: "ZMW" });
+    setCreateOpen(false);
+    setForm({ name: "", accountType: "cash", currency: userCurrency, openingBalance: "" });
   }
+
+  useEffect(() => {
+    if (!editingId) {
+      setForm((current) => (current.currency === userCurrency ? current : { ...current, currency: userCurrency }));
+    }
+  }, [editingId, userCurrency]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,12 +104,21 @@ export default function AccountsSettingsPage() {
       if (editingId) {
         await apiCall<Account>(`/v1/accounts/${editingId}`, {
           method: "PATCH",
-          body: form,
+          body: {
+            name: form.name,
+            accountType: form.accountType,
+            currency: form.currency,
+          },
         });
       } else {
         await apiCall<Account>("/v1/accounts", {
           method: "POST",
-          body: form,
+          body: {
+            name: form.name,
+            accountType: form.accountType,
+            currency: form.currency,
+            openingBalanceMinor: toMinor(form.openingBalance),
+          },
         });
       }
 
@@ -72,20 +132,17 @@ export default function AccountsSettingsPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    const confirmed = window.confirm(
-      "Delete this account? If it already has transactions, the backend will archive it instead of hard deleting it."
-    );
-    if (!confirmed) {
+  async function handleDelete() {
+    if (!deleteId) {
       return;
     }
-
     try {
-      await apiCall(`/v1/accounts/${id}`, { method: "DELETE" });
+      await apiCall(`/v1/accounts/${deleteId}`, { method: "DELETE" });
       await loadAccounts();
-      if (editingId === id) {
+      if (editingId === deleteId) {
         resetForm();
       }
+      setDeleteId(null);
       setStatus("Account removed or archived.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to remove account");
@@ -94,21 +151,129 @@ export default function AccountsSettingsPage() {
 
   return (
     <section className="settingsSection">
-      <div className="card settingsLeadCard">
-        <p className="sectionKicker">Accounts</p>
-        <h2 className="sectionHeading">Where money lives</h2>
-        <p className="muted">Create the live balance homes that quick entry, history, and portfolio views rely on.</p>
+      <div className="grid gap-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="resourceBody">
+            <strong>Existing accounts</strong>
+            <span className="muted">Manage the accounts that hold your money here. Loan balances are shown below as read-only.</span>
+          </div>
+          <button
+            className="primaryButton"
+            type="button"
+            onClick={() => {
+              setStatus("");
+              setEditingId(null);
+              setCreateOpen(true);
+              setForm({ name: "", accountType: "cash", currency: userCurrency, openingBalance: "" });
+            }}
+          >
+            Create account
+          </button>
+        </div>
+
+        <div className="card settingsListPanel overflow-hidden">
+          <div className="settingsHeaderRow">
+            <strong>Accounts table</strong>
+          </div>
+          <div className="overflow-x-auto">
+            {loading ? <div className="muted">Loading accounts...</div> : null}
+            {!loading && accounts.length === 0 ? (
+              <div className="muted">No accounts yet. Create one to start tracking balances.</div>
+            ) : null}
+            {assetAccounts.length ? (
+              <table className="min-w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-outline text-left text-on-surface-soft">
+                    <th className="px-4 py-3 font-semibold">Name</th>
+                    <th className="px-4 py-3 font-semibold">Type</th>
+                    <th className="px-4 py-3 font-semibold">Balance</th>
+                    <th className="px-4 py-3 font-semibold">Currency</th>
+                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assetAccounts.map((account) => (
+                    <tr key={account.id} className="border-b border-outline/70 last:border-b-0">
+                      <td className="px-4 py-3 font-semibold text-on-surface">{account.name}</td>
+                      <td className="px-4 py-3 text-on-surface-soft">{account.accountType.replaceAll("_", " ")}</td>
+                      <td className="px-4 py-3 text-on-surface">
+                        {formatMoney(balancesByAccountId[account.id] ?? 0, account.currency)}
+                      </td>
+                      <td className="px-4 py-3 text-on-surface-soft">{account.currency}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="ghostButton"
+                            type="button"
+                            onClick={() => {
+                              setStatus("");
+                              setCreateOpen(false);
+                              setEditingId(account.id);
+                              setForm({
+                                name: account.name,
+                                accountType: account.accountType,
+                                currency: account.currency,
+                                openingBalance: "",
+                              });
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button className="ghostButton" type="button" onClick={() => setDeleteId(account.id)}>
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+            {!loading && assetAccounts.length === 0 && accounts.length > 0 ? (
+              <div className="muted">No editable asset accounts yet.</div>
+            ) : null}
+          </div>
+          {liabilityAccounts.length ? (
+            <div className="resourceList">
+              <div className="resourceBody">
+                <strong>Money you owe</strong>
+                <span className="muted">These balances are created automatically when you add a loan. To change them, open Loans.</span>
+              </div>
+              {liabilityAccounts.map((account) => (
+                <div key={account.id} className="resourceRow">
+                  <div className="resourceBody">
+                    <strong>{account.name}</strong>
+                    <div className="resourceMeta">
+                      <span className="metaBadge">{account.currency}</span>
+                      <span className="metaBadge">loan balance</span>
+                      <span className="metaBadge">{account.accountType.replaceAll("_", " ")}</span>
+                    </div>
+                  </div>
+                  <div className="formActions">
+                    <Link className="ghostButton" href={"/loans" as Route}>
+                      Manage in loans
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      <div className="settingsDetailGrid">
-        <form className="card settingsFormPanel" onSubmit={handleSubmit}>
-          <div className="settingsHeaderRow">
-            <div className="resourceBody">
-              <strong>{editingId ? "Edit account" : "Create account"}</strong>
-              <span className="muted">Accounts represent the wallets, banks, savings spaces, and investment homes behind the ledger.</span>
-            </div>
-          </div>
+      {status ? <p className="statusText">{status}</p> : null}
 
+      <FormDialog
+        open={createOpen || editingId !== null}
+        title={editingId ? "Edit account" : "Create account"}
+        description="Use this for the places where your money is kept."
+        submitLabel={editingId ? "Update account" : "Create account"}
+        pending={saving}
+        error={status.startsWith("Failed") ? status : undefined}
+        onSubmit={handleSubmit}
+        onClose={resetForm}
+      >
+        <div className="grid gap-4">
           <div className="field">
             <label htmlFor="name">Name</label>
             <input
@@ -146,65 +311,31 @@ export default function AccountsSettingsPage() {
             />
           </div>
 
-          <div className="formActions">
-            <button className="primaryButton" type="submit" disabled={saving}>
-              {saving ? "Saving..." : editingId ? "Update account" : "Create account"}
-            </button>
-            {editingId ? (
-              <button className="ghostButton" type="button" onClick={resetForm}>
-                Cancel edit
-              </button>
-            ) : null}
-          </div>
-
-          {status ? <p className="statusText">{status}</p> : null}
-        </form>
-
-        <div className="card settingsListPanel">
-          <div className="settingsHeaderRow">
-            <div className="resourceBody">
-              <strong>Existing accounts</strong>
-              <span className="muted">Review account type, currency, and balance destination before editing.</span>
+          {!editingId ? (
+            <div className="field">
+              <label htmlFor="openingBalance">Current balance</label>
+              <input
+                id="openingBalance"
+                type="number"
+                step="0.01"
+                value={form.openingBalance}
+                onChange={(event) => setForm((current) => ({ ...current, openingBalance: event.target.value }))}
+                placeholder="0.00"
+              />
             </div>
-          </div>
-          <div className="resourceList">
-            {loading ? <div className="muted">Loading accounts...</div> : null}
-            {!loading && accounts.length === 0 ? (
-              <div className="muted">No accounts yet. Create one to start tracking balances.</div>
-            ) : null}
-            {accounts.map((account) => (
-              <div key={account.id} className="resourceRow">
-                <div className="resourceBody">
-                  <strong>{account.name}</strong>
-                  <div className="resourceMeta">
-                    <span className="metaBadge">{account.currency}</span>
-                    <span className="metaBadge">{account.accountType.replaceAll("_", " ")}</span>
-                  </div>
-                </div>
-                <div className="formActions">
-                  <button
-                    className="ghostButton"
-                    type="button"
-                    onClick={() => {
-                      setEditingId(account.id);
-                      setForm({
-                        name: account.name,
-                        accountType: account.accountType,
-                        currency: account.currency,
-                      });
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button className="ghostButton" type="button" onClick={() => void handleDelete(account.id)}>
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          ) : null}
         </div>
-      </div>
+      </FormDialog>
+
+      <ConfirmationDialog
+        open={deleteId !== null}
+        title="Remove account?"
+        description="If the account still has money or debt, removal will be blocked. If the balance is zero but history exists, it will be archived instead of permanently deleted."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => void handleDelete()}
+        onClose={() => setDeleteId(null)}
+      />
     </section>
   );
 }

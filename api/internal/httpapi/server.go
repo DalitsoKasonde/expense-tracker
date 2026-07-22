@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -67,17 +68,29 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
+	router.Use(limitRequestBody(cfg.MaxBodyBytes))
 	router.Use(cors(cfg.AppOrigins))
+
+	s.registerRoutes(router)
+	router.Route("/api", s.registerRoutes)
+
+	return router
+}
+
+func (s *Server) registerRoutes(router chi.Router) {
+	authLimiter := newAuthRateLimiter(10, 5*time.Minute)
+	registerLimiter := newAuthRateLimiter(5, 15*time.Minute)
 
 	router.Get("/healthz", s.healthz)
 	router.Get("/v1/setup/status", s.setupStatus)
-	router.Post("/v1/auth/login", s.login)
-	router.Post("/v1/auth/register", s.register)
+	router.With(authLimiter.middleware).Post("/v1/auth/login", s.login)
+	router.With(registerLimiter.middleware).Post("/v1/auth/register", s.register)
 
 	router.Group(func(protected chi.Router) {
-		protected.Use(auth.Middleware(cfg.JWTSecret))
+		protected.Use(auth.Middleware(s.config.JWTSecret, s.config.CookieName))
 		protected.Get("/v1/auth/me", s.me)
-		protected.Post("/v1/auth/refresh", s.refreshToken)
+		protected.With(authLimiter.middleware).Post("/v1/auth/refresh", s.refreshToken)
+		protected.With(authLimiter.middleware).Post("/v1/auth/logout", s.logout)
 		protected.Get("/v1/user/preferences", s.getUserPreferences)
 		protected.Patch("/v1/user/preferences", s.updateUserPreferences)
 
@@ -115,6 +128,7 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 		protected.Get("/v1/dashboard/summary", s.dashboardSummary)
 		protected.Get("/v1/dashboard/unified", s.unifiedDashboardSummary)
 		protected.Get("/v1/dashboard/insights", s.insightSummary)
+		protected.Get("/v1/notifications", s.notifications)
 		protected.Get("/v1/dashboard/annual", s.annualOverall)
 
 		// Loans
@@ -164,8 +178,6 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 		// Sync
 		protected.Get("/v1/sync/status", s.syncStatus)
 	})
-
-	return router
 }
 
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
@@ -197,8 +209,8 @@ type loginRequest struct {
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var request loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if err := decodeJSON(r, &request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -252,6 +264,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setAuthCookie(w, s.config, token)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"accessToken": token,
 		"user": map[string]string{
@@ -293,9 +306,15 @@ func (s *Server) refreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setAuthCookie(w, s.config, token)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"accessToken": token,
 	})
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	clearAuthCookie(w, s.config)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type registerRequest struct {
@@ -306,8 +325,8 @@ type registerRequest struct {
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	var request registerRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if err := decodeJSON(r, &request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -317,6 +336,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 
 	if email == "" || password == "" || displayName == "" {
 		http.Error(w, "email, password, and displayName are required", http.StatusBadRequest)
+		return
+	}
+	if err := auth.ValidatePassword(password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -349,6 +372,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setAuthCookie(w, s.config, token)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"accessToken": token,
 		"user": map[string]string{
@@ -364,9 +388,19 @@ func cors(origins []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			if origin != "" && (slices.Contains(origins, origin) || slices.Contains(origins, "*")) {
+			if origin != "" {
+				if !slices.Contains(origins, origin) {
+					if r.Method == http.MethodOptions {
+						http.Error(w, "origin not allowed", http.StatusForbidden)
+						return
+					}
+					next.ServeHTTP(w, r)
+					return
+				}
+
 				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Vary", "Origin")
+				w.Header().Add("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
 			}
 
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { ConfirmationDialog, FormDialog } from "@/components/ui/dialogs";
 
 type IncomeSource = {
   id: string;
@@ -23,7 +24,9 @@ export default function IncomeSourcesSettingsPage() {
   const [sources, setSources] = useState<IncomeSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({ name: "", sourceType: "salary" });
 
@@ -40,6 +43,7 @@ export default function IncomeSourcesSettingsPage() {
 
   function resetForm() {
     setEditingId(null);
+    setCreateOpen(false);
     setForm({ name: "", sourceType: "salary" });
   }
 
@@ -71,17 +75,18 @@ export default function IncomeSourcesSettingsPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!window.confirm("Delete this income source? Existing transactions will keep their history with a null reference.")) {
+  async function handleDelete() {
+    if (!deleteId) {
       return;
     }
 
     try {
-      await apiCall(`/v1/income-sources/${id}`, { method: "DELETE" });
+      await apiCall(`/v1/income-sources/${deleteId}`, { method: "DELETE" });
       await loadSources();
-      if (editingId === id) {
+      if (editingId === deleteId) {
         resetForm();
       }
+      setDeleteId(null);
       setStatus("Income source removed.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to remove income source");
@@ -90,99 +95,127 @@ export default function IncomeSourcesSettingsPage() {
 
   return (
     <section className="settingsSection">
-      <div className="card settingsLeadCard">
-        <p className="sectionKicker">Income Sources</p>
-        <h2 className="sectionHeading">Where revenue begins</h2>
-        <p className="muted">Track salary, business revenue, freelance work, and investment income from one clean source library.</p>
-      </div>
-
-      <div className="settingsDetailGrid">
-      <form className="card settingsFormPanel" onSubmit={handleSubmit}>
-        <div className="resourceBody">
-          <strong>{editingId ? "Edit income source" : "Create income source"}</strong>
-          <span className="muted">Income sources explain where money came from, especially in filtered reports and history views.</span>
-        </div>
-
-        <div className="field">
-          <label htmlFor="name">Name</label>
-          <input
-            id="name"
-            value={form.name}
-            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-            placeholder="e.g. Main business"
-            required
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="sourceType">Source type</label>
-          <select
-            id="sourceType"
-            value={form.sourceType}
-            onChange={(event) => setForm((current) => ({ ...current, sourceType: event.target.value }))}
-          >
-            {sourceTypes.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="formActions">
-          <button className="primaryButton" type="submit" disabled={saving}>
-            {saving ? "Saving..." : editingId ? "Update source" : "Create source"}
-          </button>
-          {editingId ? (
-            <button className="ghostButton" type="button" onClick={resetForm}>
-              Cancel edit
-            </button>
-          ) : null}
-        </div>
-
-        {status ? <p className="statusText">{status}</p> : null}
-      </form>
-
-      <div className="card settingsListPanel">
-        <div className="settingsHeaderRow">
+      <div className="grid gap-6">
+        <div className="flex items-center justify-between gap-3">
           <div className="resourceBody">
             <strong>Existing income sources</strong>
             <span className="muted">Review naming and source types before changing how income is classified.</span>
           </div>
+          <button
+            className="primaryButton"
+            type="button"
+            onClick={() => {
+              setStatus("");
+              setEditingId(null);
+              setCreateOpen(true);
+              setForm({ name: "", sourceType: "salary" });
+            }}
+          >
+            Create source
+          </button>
         </div>
-        <div className="resourceList">
-          {loading ? <div className="muted">Loading income sources...</div> : null}
-          {!loading && sources.length === 0 ? (
-            <div className="muted">No income sources yet. Add one for cleaner income reporting.</div>
-          ) : null}
-          {sources.map((source) => (
-            <div key={source.id} className="resourceRow">
-              <div className="resourceBody">
-                <strong>{source.name}</strong>
-                <div className="resourceMeta">
-                  <span className="metaBadge">{source.sourceType.replaceAll("_", " ")}</span>
-                </div>
-              </div>
-              <div className="formActions">
-                <button
-                  className="ghostButton"
-                  type="button"
-                  onClick={() => {
-                    setEditingId(source.id);
-                    setForm({ name: source.name, sourceType: source.sourceType });
-                  }}
-                >
-                  Edit
-                </button>
-                <button className="ghostButton" type="button" onClick={() => void handleDelete(source.id)}>
-                  Remove
-                </button>
-              </div>
-            </div>
-          ))}
+
+        <div className="card settingsListPanel overflow-hidden">
+          <div className="settingsHeaderRow">
+            <strong>Income sources table</strong>
+          </div>
+          <div className="overflow-x-auto">
+            {loading ? <div className="muted">Loading income sources...</div> : null}
+            {!loading && sources.length === 0 ? (
+              <div className="muted">No income sources yet. Add one for cleaner income reporting.</div>
+            ) : null}
+            {sources.length ? (
+              <table className="min-w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-outline text-left text-on-surface-soft">
+                    <th className="px-4 py-3 font-semibold">Name</th>
+                    <th className="px-4 py-3 font-semibold">Type</th>
+                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sources.map((source) => (
+                    <tr key={source.id} className="border-b border-outline/70 last:border-b-0">
+                      <td className="px-4 py-3 font-semibold text-on-surface">{source.name}</td>
+                      <td className="px-4 py-3 text-on-surface-soft">{source.sourceType.replaceAll("_", " ")}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="ghostButton"
+                            type="button"
+                            onClick={() => {
+                              setStatus("");
+                              setCreateOpen(false);
+                              setEditingId(source.id);
+                              setForm({ name: source.name, sourceType: source.sourceType });
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button className="ghostButton" type="button" onClick={() => setDeleteId(source.id)}>
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
         </div>
       </div>
-      </div>
+
+      {status ? <p className="statusText">{status}</p> : null}
+
+      <FormDialog
+        open={createOpen || editingId !== null}
+        title={editingId ? "Edit income source" : "Create income source"}
+        description="Income sources explain where money came from, especially in filtered reports and history views."
+        submitLabel={editingId ? "Update source" : "Create source"}
+        pending={saving}
+        error={status.startsWith("Failed") ? status : undefined}
+        onSubmit={handleSubmit}
+        onClose={resetForm}
+      >
+        <div className="grid gap-4">
+          <div className="field">
+            <label htmlFor="name">Name</label>
+            <input
+              id="name"
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              placeholder="e.g. Main business"
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="sourceType">Source type</label>
+            <select
+              id="sourceType"
+              value={form.sourceType}
+              onChange={(event) => setForm((current) => ({ ...current, sourceType: event.target.value }))}
+            >
+              {sourceTypes.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </FormDialog>
+
+      <ConfirmationDialog
+        open={deleteId !== null}
+        title="Remove income source?"
+        description="Existing transactions will keep their history with a null reference."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => void handleDelete()}
+        onClose={() => setDeleteId(null)}
+      />
     </section>
   );
 }

@@ -1,11 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Great+Vibes&family=Quicksand:wght@400;500;600;700&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ============================================================================
-   INSCRIBED DESIGN SYSTEM
+   CHUMA DESIGN SYSTEM
    ----------------------------------------------------------------------------
    One in-project system that governs every page. Pages should compose these
    primitives instead of inventing one-off styles. Layers, in order:
@@ -13,26 +11,31 @@
      2. Primitives  — card variants, buttons, fields, chips, list rows
      3. Regions     — header, navigation, page scaffolds
    Brand: blue-led, Quicksand-first, calm/architectural, controlled softness.
-   Great Vibes is reserved for a single rare brand moment (the wordmark).
    ========================================================================== */
 
 :root {
   color-scheme: light;
 
   /* --- Color: surfaces (calm, layered ice-blue -> paper) --- */
-  --background: #eef2f8;
-  --background-soft: #e7ecf4;
+  --background: #f4f8fc;
+  --background-soft: #eef4fa;
+  --background-strong: #e6eef7;
   --surface: #ffffff;
   --surface-soft: #f5f8fc;
   --surface-muted: #eaf0f8;
   --surface-strong: #dde6f2;
+  --surface-soft-2: #eaf0f8;
+  --surface-raised: #ffffff;
 
   /* --- Color: brand blues + ink --- */
-  --primary: #2c4f86;          /* Ocean Blue */
-  --primary-strong: #1d3a63;   /* Deep Blue */
+  --primary: #264e86;
+  --primary-strong: #183b69;
   --primary-deep: #112545;     /* Midnight */
-  --highlight: #1f6fe0;        /* Bright Blue (interactive) */
-  --highlight-soft: #3d86f0;
+  --primary-soft: #d6e3f5;
+  --primary-softer: #edf4fc;
+  --highlight: #0074e4;
+  --highlight-soft: #3d91ea;
+  --accent: #0074e4;
 
   /* --- Color: lines + text --- */
   --border: #e4e9f1;
@@ -40,8 +43,24 @@
   --text: #1b2238;             /* Midnight Text */
   --text-strong: #10182b;      /* Charcoal */
   --text-muted: #5d6a85;       /* Warm Gray */
-  --positive: #0c6b4a;
-  --negative: #9a3052;
+  --on-surface: #181a2a;
+  --on-surface-soft: #5d6a85;
+  --outline: #e2e8f0;
+  --outline-strong: #cbd7e5;
+  --income: #087a55;
+  --income-soft: #e4f5ee;
+  --expense: #b4233f;
+  --expense-soft: #fbe8ec;
+  --savings: #0074e4;
+  --savings-soft: #e5f2ff;
+  --investment: #6046a8;
+  --investment-soft: #eeeafd;
+  --positive: var(--income);
+  --positive-soft: var(--income-soft);
+  --negative: var(--expense);
+  --negative-soft: var(--expense-soft);
+  --warning: #9a5b00;
+  --warning-soft: #fff3d6;
 
   /* --- Tints: centralized tonal washes (replace ad-hoc rgba fills) --- */
   --tint: rgba(44, 79, 134, 0.045);
@@ -50,11 +69,12 @@
 
   /* --- Radius scale (architectural, restrained)
      full is reserved for truly circular semantics only. --- */
-  --radius-sm: 8px;
+  --radius-sm: 4px;
   --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-xl: 14px;
+  --radius-lg: 16px;
+  --radius-xl: 16px;
   --radius-full: 999px;
+  --radius-pill: 999px;
 
   
   /* --- Spacing scale (4px base) --- */
@@ -80,32 +100,56 @@
   --focus-ring: 0 0 0 3px rgba(31, 111, 224, 0.18);
 
   /* --- Type --- */
-  --font-body: "Quicksand", sans-serif;
-  --font-accent: "Great Vibes", cursive;
+  --font-body: var(--font-quicksand), sans-serif;
+  --font-display: var(--font-quicksand), sans-serif;
+  --shadow-sm: var(--shadow-soft);
+  --shadow-md: var(--shadow-raised);
 }
 
 html[data-theme="dark"] {
   color-scheme: dark;
   --background: #0e1730;
   --background-soft: #0b1226;
+  --background-strong: #0a1124;
   --surface: #16213d;
   --surface-soft: #1b2848;
   --surface-muted: #1f2e51;
   --surface-strong: #273a64;
+  --surface-soft-2: #1f2e51;
+  --surface-raised: #1b2848;
 
   --primary: #cdddf2;
   --primary-strong: #eef3fa;
   --primary-deep: #ffffff;
   --highlight: #5aa2ff;
   --highlight-soft: #82bbff;
+  --accent: #5aa2ff;
+  --primary-soft: #253c65;
+  --primary-softer: #1b2b4c;
 
   --border: #24365f;
   --border-strong: #314c7f;
   --text: #e7edf6;
   --text-strong: #ffffff;
   --text-muted: #a7b6d0;
+  --on-surface: #e7edf6;
+  --on-surface-soft: #a7b6d0;
+  --outline: #24365f;
+  --outline-strong: #314c7f;
+  --income: #74d6a4;
+  --income-soft: #173d35;
+  --expense: #f29ec0;
+  --expense-soft: #4a2538;
+  --savings: #82bbff;
+  --savings-soft: #203b62;
+  --investment: #b8a7ff;
+  --investment-soft: #352e60;
   --positive: #74d6a4;
+  --positive-soft: #173d35;
   --negative: #f29ec0;
+  --negative-soft: #4a2538;
+  --warning: #ffd27a;
+  --warning-soft: #493818;
 
   --tint: rgba(255, 255, 255, 0.04);
   --tint-strong: rgba(255, 255, 255, 0.07);
@@ -124,6 +168,17 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 body {
@@ -747,10 +802,9 @@ svg {
   gap: 1px;
 }
 
-/* The one rare Great Vibes brand moment. */
 .sidebarAppName {
   color: #fff;
-  font-family: var(--font-accent);
+  font-family: var(--font-display);
   font-size: 1.85rem;
   line-height: 1;
 }

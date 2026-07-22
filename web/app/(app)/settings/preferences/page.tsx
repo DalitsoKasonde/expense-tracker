@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
 import { applyTheme } from "@/components/preference-theme-sync";
+import { primeUserCurrency } from "@/lib/use-user-currency";
 
 type UserPreferences = {
   defaultCurrency: string;
@@ -12,54 +13,78 @@ type UserPreferences = {
 
 export default function PreferencesSettingsPage() {
   const apiCall = useApiCall();
+  const apiCallRef = useRef(apiCall);
+  apiCallRef.current = apiCall;
   const [form, setForm] = useState<UserPreferences>({
     defaultCurrency: "ZMW",
     theme: "light",
     notificationsEnabled: false,
   });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const lastSavedRef = useRef<string>("");
+  const saveVersionRef = useRef(0);
 
   useEffect(() => {
-    void apiCall<UserPreferences>("/v1/user/preferences")
+    void apiCallRef.current<UserPreferences>("/v1/user/preferences")
       .then((prefs) => {
         setForm(prefs);
+        lastSavedRef.current = JSON.stringify(prefs);
+        primeUserCurrency(prefs.defaultCurrency);
         applyTheme(prefs.theme);
+        setHasLoaded(true);
       })
       .catch((error) => setStatus(error instanceof Error ? error.message : "Failed to load preferences"))
       .finally(() => setLoading(false));
-  }, [apiCall]);
+  }, []);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setStatus("");
+  useEffect(() => {
+    if (!hasLoaded || loading) {
+      return;
+    }
 
-    try {
-      const prefs = await apiCall<UserPreferences>("/v1/user/preferences", {
+    const serializedForm = JSON.stringify(form);
+    if (serializedForm === lastSavedRef.current) {
+      return;
+    }
+
+    const saveVersion = ++saveVersionRef.current;
+    setStatus("Saving preferences...");
+
+    const timeoutId = window.setTimeout(() => {
+      void apiCallRef.current<UserPreferences>("/v1/user/preferences", {
         method: "PATCH",
         body: form,
-      });
-      setForm(prefs);
-      applyTheme(prefs.theme);
-      setStatus("Preferences saved.");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to save preferences");
-    } finally {
-      setSaving(false);
-    }
-  }
+      })
+        .then((prefs) => {
+          if (saveVersion !== saveVersionRef.current) {
+            return;
+          }
+
+          setForm(prefs);
+          lastSavedRef.current = JSON.stringify(prefs);
+          primeUserCurrency(prefs.defaultCurrency);
+          applyTheme(prefs.theme);
+          setStatus("Preferences saved.");
+        })
+        .catch((error) => {
+          if (saveVersion !== saveVersionRef.current) {
+            return;
+          }
+
+          setStatus(error instanceof Error ? error.message : "Failed to save preferences");
+        });
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [form, hasLoaded, loading]);
 
   return (
     <section className="settingsSection">
-      <div className="card settingsLeadCard">
-        <p className="sectionKicker">Preferences</p>
-        <h2 className="sectionHeading">Everyday defaults</h2>
-        <p className="muted">These settings shape the live experience across the app, not just this workspace.</p>
-      </div>
-
-      <form className="card settingsFormPanel" onSubmit={handleSubmit}>
+      <form className="card settingsFormPanel">
         <div className="field">
           <label htmlFor="defaultCurrency">Default currency</label>
           <select
@@ -104,13 +129,8 @@ export default function PreferencesSettingsPage() {
           />
         </label>
 
-        <div className="formActions">
-          <button className="primaryButton" type="submit" disabled={saving || loading}>
-            {saving ? "Saving..." : "Save preferences"}
-          </button>
-        </div>
-
         {status ? <p className="statusText">{status}</p> : null}
+        {!status && hasLoaded ? <p className="statusText">Changes save automatically.</p> : null}
       </form>
     </section>
   );

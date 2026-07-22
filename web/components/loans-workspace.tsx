@@ -1,0 +1,323 @@
+"use client";
+
+import { useApiCall } from "@/lib/client-api";
+import { formatMoney } from "@/lib/format-money";
+import { useUserCurrency } from "@/lib/use-user-currency";
+import type { Dispatch, SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+type Account = {
+  id: string;
+  name: string;
+  accountType: string;
+  accountClass: string;
+  currency: string;
+};
+
+type LoanSummary = {
+  id: string;
+  creditorName: string;
+  loanType: string;
+  interestMethod: string;
+  fixedInterestMinor: number;
+  isForced: boolean;
+  status: string;
+  principalBorrowed: number;
+  principalRepaid: number;
+  remainingPrincipal: number;
+  outstandingInterest: number;
+  outstandingFees: number;
+  totalRemainingBalance: number;
+  interestAndFeesPaid: number;
+  availablePayoffPriority: string;
+};
+
+function today() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function toMinor(value: string) {
+  return Math.round((parseFloat(value || "0") || 0) * 100);
+}
+
+export function LoansWorkspace() {
+  const apiCall = useApiCall();
+  const { currency: userCurrency } = useUserCurrency();
+  const [loans, setLoans] = useState<LoanSummary[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState("");
+  const [loanForm, setLoanForm] = useState({
+    creditorName: "",
+    loanType: "personal",
+    interestMethod: "fixed",
+    fixedInterest: "0",
+    isForced: false,
+    openedAt: today(),
+    currency: userCurrency,
+  });
+  const [borrowForm, setBorrowForm] = useState({
+    loanId: "",
+    cashAccountId: "",
+    amount: "",
+    transactionDate: today(),
+    note: "",
+  });
+  const [repayForm, setRepayForm] = useState({
+    loanId: "",
+    cashAccountId: "",
+    amount: "",
+    transactionDate: today(),
+    note: "",
+  });
+
+  const cashAccounts = useMemo(
+    () => accounts.filter((account) => account.accountClass !== "liability"),
+    [accounts]
+  );
+
+  useEffect(() => {
+    setLoanForm((current) => (current.currency === userCurrency ? current : { ...current, currency: userCurrency }));
+  }, [userCurrency]);
+
+  const loadData = useCallback(async () => {
+    const [loadedLoans, loadedAccounts] = await Promise.all([
+      apiCall<LoanSummary[]>("/v1/loans"),
+      apiCall<Account[]>("/v1/accounts"),
+    ]);
+    setLoans(loadedLoans ?? []);
+    setAccounts(loadedAccounts ?? []);
+    const firstLoan = loadedLoans?.[0]?.id ?? "";
+    const firstCash = loadedAccounts?.find((account) => account.accountClass !== "liability")?.id ?? "";
+    setBorrowForm((current) => ({ ...current, loanId: current.loanId || firstLoan, cashAccountId: current.cashAccountId || firstCash }));
+    setRepayForm((current) => ({ ...current, loanId: current.loanId || firstLoan, cashAccountId: current.cashAccountId || firstCash }));
+  }, [apiCall]);
+
+  useEffect(() => {
+    void loadData()
+      .catch((error) => setStatus(error instanceof Error ? error.message : "Failed to load loans"))
+      .finally(() => setLoading(false));
+  }, [loadData]);
+
+  async function createLoan(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setStatus("");
+    try {
+      await apiCall<LoanSummary>("/v1/loans", {
+        method: "POST",
+        body: {
+          ...loanForm,
+          fixedInterestMinor: toMinor(loanForm.fixedInterest),
+        },
+      });
+      setLoanForm({ creditorName: "", loanType: "personal", interestMethod: "fixed", fixedInterest: "0", isForced: false, openedAt: today(), currency: userCurrency });
+      await loadData();
+      setStatus("Loan created.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to create loan");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function recordBorrowed(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setStatus("");
+    try {
+      await apiCall("/v1/loans/borrowed", {
+        method: "POST",
+        body: {
+          loanId: borrowForm.loanId,
+          cashAccountId: borrowForm.cashAccountId,
+          amountMinor: toMinor(borrowForm.amount),
+          currency: userCurrency,
+          transactionDate: borrowForm.transactionDate,
+          note: borrowForm.note || undefined,
+        },
+      });
+      setBorrowForm((current) => ({ ...current, amount: "", note: "" }));
+      await loadData();
+      setStatus("Borrowed money recorded with matching liability.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to record borrowed money");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function recordRepayment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setStatus("");
+    try {
+      await apiCall(`/v1/loans/${repayForm.loanId}/repayments`, {
+        method: "POST",
+        body: {
+          cashAccountId: repayForm.cashAccountId,
+          amountMinor: toMinor(repayForm.amount),
+          currency: userCurrency,
+          transactionDate: repayForm.transactionDate,
+          note: repayForm.note || undefined,
+        },
+      });
+      setRepayForm((current) => ({ ...current, amount: "", note: "" }));
+      await loadData();
+      setStatus("Repayment allocated to fees, interest, then principal.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to record repayment");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="settingsSection">
+      <div className="card settingsLeadCard">
+        <p className="sectionKicker">Loans</p>
+        <h2 className="sectionHeading">Borrowing and repayments</h2>
+        <p className="muted">When you record borrowed money, the app adds cash to your account and tracks the amount you owe. Repayments clear fees, then interest, then the amount borrowed.</p>
+      </div>
+
+      <div className="settingsDetailGrid">
+        <form className="card settingsFormPanel" onSubmit={createLoan}>
+          <div className="resourceBody">
+            <strong>Create loan</strong>
+            <span className="muted">The app will create a linked balance to track how much you owe this lender.</span>
+          </div>
+          <div className="field">
+            <label htmlFor="creditorName">Creditor</label>
+            <input id="creditorName" value={loanForm.creditorName} onChange={(event) => setLoanForm((current) => ({ ...current, creditorName: event.target.value }))} required />
+          </div>
+          <div className="splitFields">
+            <div className="field">
+              <label htmlFor="loanType">Loan type</label>
+              <input id="loanType" value={loanForm.loanType} onChange={(event) => setLoanForm((current) => ({ ...current, loanType: event.target.value }))} />
+            </div>
+            <div className="field">
+              <label htmlFor="fixedInterest">Fixed interest</label>
+              <input id="fixedInterest" type="number" step="0.01" value={loanForm.fixedInterest} onChange={(event) => setLoanForm((current) => ({ ...current, fixedInterest: event.target.value }))} />
+            </div>
+          </div>
+          <label className="checkboxRow">
+            <input type="checkbox" checked={loanForm.isForced} onChange={(event) => setLoanForm((current) => ({ ...current, isForced: event.target.checked }))} />
+            Forced loan
+          </label>
+          <button className="primaryButton" type="submit" disabled={saving}>
+            {saving ? "Saving..." : "Create loan"}
+          </button>
+        </form>
+
+        <div className="card settingsListPanel">
+          <div className="resourceBody">
+            <strong>Loan register</strong>
+            <span className="muted">Principal is kept separate from interest and fees.</span>
+          </div>
+          <div className="resourceList">
+            {loading ? <div className="muted">Loading loans...</div> : null}
+            {!loading && loans.length === 0 ? <div className="muted">No loans yet.</div> : null}
+            {loans.map((loan) => (
+              <div key={loan.id} className="resourceRow">
+                <div className="resourceBody">
+                  <strong>{loan.creditorName}</strong>
+                  <div className="resourceMeta">
+                    <span className="metaBadge">{loan.loanType}</span>
+                    {loan.isForced ? <span className="metaBadge">Forced</span> : null}
+                    <span className="metaBadge">{loan.availablePayoffPriority.replaceAll("_", " ")}</span>
+                  </div>
+                </div>
+                <div className="resourceBody">
+                  <strong>{formatMoney(loan.totalRemainingBalance, userCurrency)}</strong>
+                  <span className="muted">Principal {formatMoney(loan.remainingPrincipal, userCurrency)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="settingsDetailGrid">
+        <form className="card settingsFormPanel" onSubmit={recordBorrowed}>
+          <div className="resourceBody">
+            <strong>Record borrowed money</strong>
+            <span className="muted">Adds money to your chosen account and updates what you owe.</span>
+          </div>
+          <LoanAccountFields loans={loans} cashAccounts={cashAccounts} form={borrowForm} setForm={setBorrowForm} />
+          <button className="primaryButton" type="submit" disabled={saving || loans.length === 0 || cashAccounts.length === 0}>
+            Record borrowed
+          </button>
+        </form>
+
+        <form className="card settingsFormPanel" onSubmit={recordRepayment}>
+          <div className="resourceBody">
+            <strong>Record repayment</strong>
+            <span className="muted">Your payment goes to fees first, then interest, then the amount borrowed.</span>
+          </div>
+          <LoanAccountFields loans={loans} cashAccounts={cashAccounts} form={repayForm} setForm={setRepayForm} />
+          <button className="primaryButton" type="submit" disabled={saving || loans.length === 0 || cashAccounts.length === 0}>
+            Record repayment
+          </button>
+        </form>
+      </div>
+
+      {status ? <p className="statusText">{status}</p> : null}
+    </section>
+  );
+}
+
+function LoanAccountFields({
+  loans,
+  cashAccounts,
+  form,
+  setForm,
+}: {
+  loans: LoanSummary[];
+  cashAccounts: Account[];
+  form: { loanId: string; cashAccountId: string; amount: string; transactionDate: string; note: string };
+  setForm: Dispatch<SetStateAction<{ loanId: string; cashAccountId: string; amount: string; transactionDate: string; note: string }>>;
+}) {
+  return (
+    <>
+      <div className="splitFields">
+        <div className="field">
+          <label>Loan</label>
+          <select value={form.loanId} onChange={(event) => setForm((current) => ({ ...current, loanId: event.target.value }))} required>
+            <option value="">Select loan</option>
+            {loans.map((loan) => (
+              <option key={loan.id} value={loan.id}>
+                {loan.creditorName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Cash account</label>
+          <select value={form.cashAccountId} onChange={(event) => setForm((current) => ({ ...current, cashAccountId: event.target.value }))} required>
+            <option value="">Select account</option>
+            {cashAccounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="splitFields">
+        <div className="field">
+          <label>Amount</label>
+          <input type="number" step="0.01" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} required />
+        </div>
+        <div className="field">
+          <label>Date</label>
+          <input type="date" value={form.transactionDate} onChange={(event) => setForm((current) => ({ ...current, transactionDate: event.target.value }))} required />
+        </div>
+      </div>
+      <div className="field">
+        <label>Note</label>
+        <input value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} />
+      </div>
+    </>
+  );
+}

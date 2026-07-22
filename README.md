@@ -1,8 +1,8 @@
-# Expense Tracker
+# Chuma
 
-Phase 0 foundation for a local-first expense tracker monorepo:
+A local-first financial workspace for accounts, daily money movement, goals, imports, and investments:
 
-- `web/`: Next.js 16 + TypeScript PWA shell with invite-only NextAuth login
+- `web/`: Next.js 16 + TypeScript PWA shell with NextAuth login and self-service registration
 - `api/`: Go + `chi` + `pgx` API with JWT auth and bootstrap-admin login
 - `api/migrations/`: SQL migrations for the core schema
 
@@ -55,13 +55,19 @@ npm install
 npm run dev
 ```
 
-## Bootstrap admin
+## Accounts and bootstrap admin
 
-Invite-only auth means users cannot self-register. The first successful login with:
+New users can create a member account at `/register`. Passwords must contain at least eight characters, including a letter and a number.
+
+The bootstrap credentials are only used to create the first administrator. When the database contains no users, the first successful login with:
 
 - `ADMIN_BOOTSTRAP_EMAIL`
 - `ADMIN_BOOTSTRAP_PASSWORD`
 
 creates the first admin user automatically in PostgreSQL if no users exist yet.
 
-After that, only existing users in the `users` table can sign in.
+After the first user exists, changing these environment variables does not change that administrator's stored password. Additional users should register through `/register` and receive the `member` role.
+
+### Registration security
+
+Registration is intended for local or trusted-group deployments. New accounts become active immediately; email verification is not implemented. Every request is scoped to the authenticated user's data, but `admin` and `member` are currently identity labels rather than different permission tiers—there is no admin-only control panel. Add email verification and review role permissions before exposing registration to an untrusted public audience.

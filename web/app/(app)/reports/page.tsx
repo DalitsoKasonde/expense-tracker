@@ -1,9 +1,11 @@
 "use client";
 
-import { AppPageHeader } from "@/components/app-page-header";
-import { DashboardIcon } from "@/components/nav-icons";
+import { PageHeader } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
-import { useEffect, useMemo, useState } from "react";
+import { formatMoney } from "@/lib/format-money";
+import { useUserCurrency } from "@/lib/use-user-currency";
+import { useSession } from "next-auth/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Bps = number | null | undefined;
 
@@ -32,6 +34,8 @@ type MonthlyInsight = {
 
 type AnnualOverall = {
   year: number;
+  latestDataYear: number;
+  availableYears: number[];
   rows: string[];
   data: MonthlyInsight[];
   ytd: MonthlyInsight;
@@ -67,35 +71,51 @@ const moneyRows: Array<{ label: string; key: keyof MonthlyInsight; ytdMode?: "su
   { label: "Net Worth", key: "netWorth", ytdMode: "latest" },
 ];
 
-function formatMoney(value: number) {
-  return `ZMW ${(value / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 function formatBps(value: Bps) {
   if (value === null || value === undefined) return "—";
   return `${(value / 100).toFixed(1)}%`;
 }
 
 export default function ReportsPage() {
+  const { data: session, status: sessionStatus } = useSession();
   const apiCall = useApiCall();
+  const apiCallRef = useRef(apiCall);
+  apiCallRef.current = apiCall;
+  const { currency } = useUserCurrency();
   const [annual, setAnnual] = useState<AnnualOverall | null>(null);
   const [summary, setSummary] = useState<InsightSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [yearInitialized, setYearInitialized] = useState(false);
 
   useEffect(() => {
+    if (sessionStatus === "loading") {
+      return;
+    }
+    if (!session?.accessToken) {
+      setLoading(false);
+      return;
+    }
+
     let ignore = false;
     const loadReports = async () => {
       try {
         const [annualResult, summaryResult] = await Promise.all([
-          apiCall<AnnualOverall>(`/v1/dashboard/annual?year=${currentYear}`),
-          apiCall<InsightSummary>("/v1/dashboard/insights"),
+          apiCallRef.current<AnnualOverall>(`/v1/dashboard/annual?year=${selectedYear}`),
+          apiCallRef.current<InsightSummary>("/v1/dashboard/insights"),
         ]);
         if (!ignore) {
+          if (!yearInitialized && annualResult?.availableYears?.length && annualResult.latestDataYear !== selectedYear) {
+            setSelectedYear(annualResult.latestDataYear);
+            setYearInitialized(true);
+            return;
+          }
           setAnnual(annualResult);
           setSummary(summaryResult);
           setError("");
+          setYearInitialized(true);
         }
       } catch (loadError) {
         if (!ignore) setError(loadError instanceof Error ? loadError.message : "Failed to load reports");
@@ -108,31 +128,29 @@ export default function ReportsPage() {
     return () => {
       ignore = true;
     };
-  }, [apiCall, currentYear]);
+  }, [currentYear, selectedYear, session?.accessToken, sessionStatus, yearInitialized]);
 
   const headlineMetrics = useMemo(
     () => [
-      { label: "Free Cash Flow", value: summary ? formatMoney(summary.freeCashFlow) : "—" },
-      { label: "Net Worth Change", value: summary ? formatMoney(summary.netWorthChange) : "—" },
+      { label: "Free Cash Flow", value: summary ? formatMoney(summary.freeCashFlow, currency) : "—" },
+      { label: "Net Worth Change", value: summary ? formatMoney(summary.netWorthChange, currency) : "—" },
       { label: "Wealth Build Rate", value: summary ? formatBps(summary.wealthBuildRateBps) : "—" },
-      { label: "Debt Remaining", value: summary ? formatMoney(summary.debtRemaining) : "—" },
+      { label: "Debt Remaining", value: summary ? formatMoney(summary.debtRemaining, currency) : "—" },
       { label: "Interest Leakage", value: summary ? formatBps(summary.interestLeakageBps) : "—" },
       { label: "Borrowed Dependency", value: summary ? formatBps(summary.borrowedDependencyBps) : "—" },
     ],
-    [summary]
+    [currency, summary]
   );
 
-  if (loading) return <div className="shell">Loading...</div>;
+  if (loading || sessionStatus === "loading") return <div className="shell">Loading...</div>;
 
   return (
     <main className="shell">
       <section className="appChrome workspaceStack">
-        <AppPageHeader
-          eyebrow="Inscribed ledger"
+        <PageHeader
+          eyebrow="Reports"
           title="Reports"
-          accent="Annual overall"
-          lead="A finance-first view separating earned income, borrowed money, living costs, debt service, and wealth-building movement."
-          icon={DashboardIcon}
+          subtitle="Compare earned income, borrowed money, living costs, debt payments, savings, and investments."
         />
 
         {error ? <p className="statusText">{error}</p> : null}
@@ -161,9 +179,27 @@ export default function ReportsPage() {
 
         {annual ? (
           <section className="card annualPanel">
-            <div className="sectionHeaderCopy">
-              <p className="sectionKicker">{annual.year}</p>
-              <h2 className="sectionHeading">OVERALL matrix</h2>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="sectionHeaderCopy">
+                <p className="sectionKicker">{annual.year}</p>
+                <h2 className="sectionHeading">OVERALL matrix</h2>
+              </div>
+              {annual.availableYears.length ? (
+                <div className="field max-w-[180px]">
+                  <label htmlFor="reportYear">Year</label>
+                  <select
+                    id="reportYear"
+                    value={selectedYear}
+                    onChange={(event) => setSelectedYear(Number(event.target.value))}
+                  >
+                    {annual.availableYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </div>
 
             <div className="annualTableScroll">
@@ -183,10 +219,10 @@ export default function ReportsPage() {
                       <th>{row.label}</th>
                       {annual.data.map((month) => (
                         <td key={`${row.key}-${month.month}`}>
-                          {formatMoney(Number(month[row.key] ?? 0))}
+                          {formatMoney(Number(month[row.key] ?? 0), currency)}
                         </td>
                       ))}
-                      <td>{formatMoney(Number(annual.ytd[row.key] ?? 0))}</td>
+                      <td>{formatMoney(Number(annual.ytd[row.key] ?? 0), currency)}</td>
                     </tr>
                   ))}
                   <tr>

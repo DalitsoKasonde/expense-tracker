@@ -4,8 +4,8 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AppPageHeader } from "@/components/app-page-header";
-import { HistoryIcon } from "@/components/nav-icons";
+import { PageHeader } from "@/components/ui";
+import { getApiBaseUrl } from "@/lib/client-api";
 
 interface Import {
   id: string;
@@ -34,11 +34,12 @@ export default function ImportDetailPage() {
     const fetchImport = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/imports/${importId}`,
+          `${getApiBaseUrl()}/v1/imports/${importId}`,
           {
             headers: {
               Authorization: `Bearer ${session.accessToken}`,
             },
+            credentials: "include",
           }
         );
 
@@ -62,12 +63,13 @@ export default function ImportDetailPage() {
     setUndoing(true);
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/imports/${importId}/undo`,
+        `${getApiBaseUrl()}/v1/imports/${importId}/undo`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${session.accessToken}`,
           },
+          credentials: "include",
         }
       );
 
@@ -89,12 +91,10 @@ export default function ImportDetailPage() {
   return (
     <main className="shell">
       <section className="appChrome workspaceStack">
-        <AppPageHeader
-          eyebrow="Inscribed imports"
-          title="Import Details"
-          accent="Traceable by design"
-          lead="Review the current import state, then preview or reverse it without leaving the import workspace."
-          icon={HistoryIcon}
+        <PageHeader
+          eyebrow="Imports"
+          title="Import details"
+          subtitle="Check this import’s status, preview its transactions, or undo it."
         />
 
         <div className="card resourceBody">
@@ -116,7 +116,7 @@ export default function ImportDetailPage() {
         {error && <p className="muted mt-4">{error}</p>}
 
         <div className="mt-8 flex gap-4">
-          {imp.status === "uploaded" && (
+          {imp.status === "ready_to_confirm" && (
             <Link href={`/import/${importId}/preview`} className="primaryButton">
               View Preview
             </Link>

@@ -1,9 +1,5 @@
 export async function apiFetch<T>(path: string, token?: string): Promise<T> {
-  const apiBaseUrl = process.env.API_BASE_URL;
-
-  if (!apiBaseUrl) {
-    throw new Error("API_BASE_URL is not configured.");
-  }
+  const apiBaseUrl = process.env.API_BASE_URL?.trim() || "http://127.0.0.1:8080";
 
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: token
@@ -20,4 +16,3 @@ export async function apiFetch<T>(path: string, token?: string): Promise<T> {
 
   return (await response.json()) as T;
 }
-

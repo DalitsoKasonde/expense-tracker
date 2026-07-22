@@ -3,8 +3,8 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AppPageHeader } from "@/components/app-page-header";
-import { HistoryIcon } from "@/components/nav-icons";
+import { PageHeader } from "@/components/ui";
+import { getApiBaseUrl } from "@/lib/client-api";
 
 interface Import {
   id: string;
@@ -27,11 +27,12 @@ export default function ImportPage() {
     const fetchImports = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/imports`,
+          `${getApiBaseUrl()}/v1/imports`,
           {
             headers: {
               Authorization: `Bearer ${session.accessToken}`,
             },
+            credentials: "include",
           }
         );
 
@@ -54,12 +55,10 @@ export default function ImportPage() {
   return (
     <main className="shell">
       <section className="appChrome workspaceStack">
-        <AppPageHeader
-          eyebrow="Inscribed imports"
-          title="Import History"
-          accent="Reviewed before it reaches the ledger"
-          lead="Track uploaded workbooks, preview state, confirmation status, and reversals in one quieter review surface."
-          icon={HistoryIcon}
+        <PageHeader
+          eyebrow="Imports"
+          title="Import history"
+          subtitle="Review uploaded workbooks, confirm prepared transactions, or undo an import."
         />
 
         <Link href="/import/new" className="primaryButton block text-center">

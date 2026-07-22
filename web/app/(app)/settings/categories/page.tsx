@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { ConfirmationDialog, FormDialog } from "@/components/ui/dialogs";
 
 type Category = {
   id: string;
@@ -46,7 +47,9 @@ export default function CategoriesSettingsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -76,6 +79,7 @@ export default function CategoriesSettingsPage() {
 
   function resetForm() {
     setEditingId(null);
+    setCreateOpen(false);
     setForm({ name: "", categoryGroup: "expense", parentId: "" });
   }
 
@@ -113,17 +117,18 @@ export default function CategoriesSettingsPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!window.confirm("Delete this category? Transactions will keep their history, and child categories will be detached.")) {
+  async function handleDelete() {
+    if (!deleteId) {
       return;
     }
 
     try {
-      await apiCall(`/v1/categories/${id}`, { method: "DELETE" });
+      await apiCall(`/v1/categories/${deleteId}`, { method: "DELETE" });
       await loadCategories();
-      if (editingId === id) {
+      if (editingId === deleteId) {
         resetForm();
       }
+      setDeleteId(null);
       setStatus("Category removed.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to remove category");
@@ -132,122 +137,156 @@ export default function CategoriesSettingsPage() {
 
   return (
     <section className="settingsSection">
-      <div className="card settingsLeadCard">
-        <p className="sectionKicker">Categories</p>
-        <h2 className="sectionHeading">Ledger language</h2>
-        <p className="muted">Keep income, spending, saving, and investing clear enough for history and reports to stay readable.</p>
-      </div>
-
-      <div className="settingsDetailGrid">
-      <form className="card settingsFormPanel" onSubmit={handleSubmit}>
-        <div className="resourceBody">
-          <strong>{editingId ? "Edit category" : "Create category"}</strong>
-          <span className="muted">Categories can be grouped and nested without making the ledger feel noisy.</span>
-        </div>
-
-        <div className="field">
-          <label htmlFor="name">Name</label>
-          <input
-            id="name"
-            value={form.name}
-            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-            placeholder="e.g. Groceries"
-            required
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="categoryGroup">Category group</label>
-          <select
-            id="categoryGroup"
-            value={form.categoryGroup}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, categoryGroup: event.target.value, parentId: "" }))
-            }
-          >
-            {categoryGroups.map((group) => (
-              <option key={group.value} value={group.value}>
-                {group.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor="parentId">Parent category</label>
-          <select
-            id="parentId"
-            value={form.parentId}
-            onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))}
-          >
-            <option value="">No parent</option>
-            {parentOptions.map((category) => (
-              <option key={category.id} value={category.id}>
-                {`${"  ".repeat(category.depth)}${category.name}`}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="formActions">
-          <button className="primaryButton" type="submit" disabled={saving}>
-            {saving ? "Saving..." : editingId ? "Update category" : "Create category"}
-          </button>
-          {editingId ? (
-            <button className="ghostButton" type="button" onClick={resetForm}>
-              Cancel edit
-            </button>
-          ) : null}
-        </div>
-
-        {status ? <p className="statusText">{status}</p> : null}
-      </form>
-
-      <div className="card settingsListPanel">
-        <div className="settingsHeaderRow">
+      <div className="grid gap-6">
+        <div className="flex items-center justify-between gap-3">
           <div className="resourceBody">
             <strong>Existing categories</strong>
-            <span className="muted">Parent-child structure is shown directly in the list for easier editing.</span>
+            <span className="muted">Parent-child structure is shown directly in the table for easier editing.</span>
+          </div>
+          <button
+            className="primaryButton"
+            type="button"
+            onClick={() => {
+              setStatus("");
+              setEditingId(null);
+              setCreateOpen(true);
+              setForm({ name: "", categoryGroup: "expense", parentId: "" });
+            }}
+          >
+            Create category
+          </button>
+        </div>
+
+        <div className="card settingsListPanel overflow-hidden">
+          <div className="settingsHeaderRow">
+            <strong>Categories table</strong>
+          </div>
+          <div className="overflow-x-auto">
+            {loading ? <div className="muted">Loading categories...</div> : null}
+            {!loading && orderedCategories.length === 0 ? (
+              <div className="muted">No categories yet. Create your first category.</div>
+            ) : null}
+            {orderedCategories.length ? (
+              <table className="min-w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-outline text-left text-on-surface-soft">
+                    <th className="px-4 py-3 font-semibold">Name</th>
+                    <th className="px-4 py-3 font-semibold">Group</th>
+                    <th className="px-4 py-3 font-semibold">Level</th>
+                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderedCategories.map((category) => (
+                    <tr key={category.id} className="border-b border-outline/70 last:border-b-0">
+                      <td
+                        className="px-4 py-3 font-semibold text-on-surface"
+                        style={{ paddingLeft: `${1 + category.depth * 1.25}rem` }}
+                      >
+                        {category.name}
+                      </td>
+                      <td className="px-4 py-3 text-on-surface-soft">{category.categoryGroup}</td>
+                      <td className="px-4 py-3 text-on-surface-soft">{category.parentId ? "Subcategory" : "Top level"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="ghostButton"
+                            type="button"
+                            onClick={() => {
+                              setStatus("");
+                              setCreateOpen(false);
+                              setEditingId(category.id);
+                              setForm({
+                                name: category.name,
+                                categoryGroup: category.categoryGroup,
+                                parentId: category.parentId ?? "",
+                              });
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button className="ghostButton" type="button" onClick={() => setDeleteId(category.id)}>
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
           </div>
         </div>
-        <div className="resourceList">
-          {loading ? <div className="muted">Loading categories...</div> : null}
-          {!loading && orderedCategories.length === 0 ? (
-            <div className="muted">No categories yet. Create your first category above.</div>
-          ) : null}
-          {orderedCategories.map((category) => (
-            <div key={category.id} className="resourceRow">
-              <div className="resourceBody">
-                <strong>{`${"— ".repeat(category.depth)}${category.name}`}</strong>
-                <div className="resourceMeta">
-                  <span className="metaBadge">{category.categoryGroup}</span>
-                  {category.parentId ? <span className="metaBadge">Subcategory</span> : null}
-                </div>
-              </div>
-              <div className="formActions">
-                <button
-                  className="ghostButton"
-                  type="button"
-                  onClick={() => {
-                    setEditingId(category.id);
-                    setForm({
-                      name: category.name,
-                      categoryGroup: category.categoryGroup,
-                      parentId: category.parentId ?? "",
-                    });
-                  }}
-                >
-                  Edit
-                </button>
-                <button className="ghostButton" type="button" onClick={() => void handleDelete(category.id)}>
-                  Remove
-                </button>
-              </div>
-            </div>
-          ))}
+      </div>
+
+      {status ? <p className="statusText">{status}</p> : null}
+
+      <FormDialog
+        open={createOpen || editingId !== null}
+        title={editingId ? "Edit category" : "Create category"}
+        description="Categories can be grouped and nested without making the ledger feel noisy."
+        submitLabel={editingId ? "Update category" : "Create category"}
+        pending={saving}
+        error={status.startsWith("Failed") ? status : undefined}
+        onSubmit={handleSubmit}
+        onClose={resetForm}
+      >
+        <div className="grid gap-4">
+          <div className="field">
+            <label htmlFor="name">Name</label>
+            <input
+              id="name"
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              placeholder="e.g. Groceries"
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="categoryGroup">Category group</label>
+            <select
+              id="categoryGroup"
+              value={form.categoryGroup}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, categoryGroup: event.target.value, parentId: "" }))
+              }
+            >
+              {categoryGroups.map((group) => (
+                <option key={group.value} value={group.value}>
+                  {group.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="parentId">Parent category</label>
+            <select
+              id="parentId"
+              value={form.parentId}
+              onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))}
+            >
+              <option value="">No parent</option>
+              {parentOptions.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {`${"  ".repeat(category.depth)}${category.name}`}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
-      </div>
+      </FormDialog>
+
+      <ConfirmationDialog
+        open={deleteId !== null}
+        title="Remove category?"
+        description="Transactions will keep their history, and child categories will be detached."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => void handleDelete()}
+        onClose={() => setDeleteId(null)}
+      />
     </section>
   );
 }

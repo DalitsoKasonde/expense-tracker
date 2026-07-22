@@ -3,12 +3,13 @@
 import { useApiCall } from "@/lib/client-api";
 import { useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
+import { useUserCurrency } from "./use-user-currency";
 
 export interface UnifiedDashboardAccountBalance {
   accountId: string;
   name: string;
   accountType: string;
-  accountClass: string;
+  accountClass: "asset" | "liability";
   currency: string;
   balanceMinor: number;
 }
@@ -48,18 +49,19 @@ export interface UnifiedDashboardData {
   assets: UnifiedDashboardAsset[];
 }
 
-export function useUnifiedDashboard(currency = "ZMW") {
+export function useUnifiedDashboard(currency?: string) {
   const { data: session } = useSession();
   const apiCall = useApiCall();
   const apiCallRef = useRef(apiCall);
   apiCallRef.current = apiCall;
+  const { currency: userCurrency, loading: currencyLoading } = useUserCurrency();
 
   const [data, setData] = useState<UnifiedDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!session?.accessToken) {
+    if (!session?.accessToken || currencyLoading) {
       setLoading(false);
       return;
     }
@@ -67,8 +69,9 @@ export function useUnifiedDashboard(currency = "ZMW") {
     let ignore = false;
     const fetchDashboard = async () => {
       try {
+        const reportingCurrency = currency ?? userCurrency;
         const result = await apiCallRef.current<UnifiedDashboardData>(
-          `/v1/dashboard/unified?currency=${encodeURIComponent(currency)}`
+          `/v1/dashboard/unified?currency=${encodeURIComponent(reportingCurrency)}`
         );
         if (!ignore) {
           setData(result ?? null);
@@ -89,7 +92,7 @@ export function useUnifiedDashboard(currency = "ZMW") {
     return () => {
       ignore = true;
     };
-  }, [currency, session?.accessToken]);
+  }, [currency, currencyLoading, session?.accessToken, userCurrency]);
 
   return { data, loading, error };
 }

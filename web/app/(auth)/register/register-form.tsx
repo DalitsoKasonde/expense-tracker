@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { getApiBaseUrl } from "@/lib/client-api";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -23,17 +24,23 @@ export function RegisterForm() {
       setIsPending(false);
       return;
     }
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      setError("Use at least 8 characters with a letter and a number.");
+      setIsPending(false);
+      return;
+    }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/auth/register`, {
+      const response = await fetch(`${getApiBaseUrl()}/v1/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, displayName }),
+        credentials: "include",
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        setError(data.error || "Registration failed. Please try again.");
+        const message = await response.text();
+        setError(message || "Registration failed. Please try again.");
         setIsPending(false);
         return;
       }
@@ -78,12 +85,13 @@ export function RegisterForm() {
 
       <div className="field">
         <label htmlFor="password">Password</label>
-        <input id="password" name="password" type="password" autoComplete="new-password" required />
+        <input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+        <span className="muted">At least 8 characters with a letter and a number.</span>
       </div>
 
       <div className="field">
         <label htmlFor="confirmPassword">Confirm Password</label>
-        <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required />
+        <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required />
       </div>
 
       {error ? <p className="muted">{error}</p> : null}

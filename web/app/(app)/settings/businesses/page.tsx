@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { ConfirmationDialog, FormDialog } from "@/components/ui/dialogs";
 
 type Business = {
   id: string;
@@ -17,7 +18,9 @@ export default function BusinessesSettingsPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [name, setName] = useState("");
 
@@ -34,6 +37,7 @@ export default function BusinessesSettingsPage() {
 
   function resetForm() {
     setEditingId(null);
+    setCreateOpen(false);
     setName("");
   }
 
@@ -69,17 +73,18 @@ export default function BusinessesSettingsPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!window.confirm("Delete this business? Existing linked transactions will keep their history with a null reference.")) {
+  async function handleDelete() {
+    if (!deleteId) {
       return;
     }
 
     try {
-      await apiCall(`/v1/businesses/${id}`, { method: "DELETE" });
-      setBusinesses((current) => current.filter((business) => business.id !== id));
-      if (editingId === id) {
+      await apiCall(`/v1/businesses/${deleteId}`, { method: "DELETE" });
+      setBusinesses((current) => current.filter((business) => business.id !== deleteId));
+      if (editingId === deleteId) {
         resetForm();
       }
+      setDeleteId(null);
       setStatus("Business removed.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to remove business");
@@ -88,19 +93,87 @@ export default function BusinessesSettingsPage() {
 
   return (
     <section className="settingsSection">
-      <div className="card settingsLeadCard">
-        <p className="sectionKicker">Businesses</p>
-        <h2 className="sectionHeading">Business context</h2>
-        <p className="muted">Tag business-linked movement without turning the ledger into a full accounting suite.</p>
-      </div>
-
-      <div className="settingsDetailGrid">
-      <form className="card settingsFormPanel" onSubmit={handleSubmit}>
-        <div className="resourceBody">
-          <strong>{editingId ? "Edit business" : "Create business"}</strong>
-          <span className="muted">Businesses help separate personal and business-linked spending, income, and reporting context.</span>
+      <div className="grid gap-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="resourceBody">
+            <strong>Existing businesses</strong>
+            <span className="muted">Use short, stable names that will remain clear inside history and reports.</span>
+          </div>
+          <button
+            className="primaryButton"
+            type="button"
+            onClick={() => {
+              setStatus("");
+              setEditingId(null);
+              setCreateOpen(true);
+              setName("");
+            }}
+          >
+            Create business
+          </button>
         </div>
 
+        <div className="card settingsListPanel overflow-hidden">
+          <div className="settingsHeaderRow">
+            <strong>Businesses table</strong>
+          </div>
+          <div className="overflow-x-auto">
+            {loading ? <div className="muted">Loading businesses...</div> : null}
+            {!loading && businesses.length === 0 ? (
+              <div className="muted">No businesses yet. Add one if you want separate business-linked reporting.</div>
+            ) : null}
+            {businesses.length ? (
+              <table className="min-w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-outline text-left text-on-surface-soft">
+                    <th className="px-4 py-3 font-semibold">Name</th>
+                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {businesses.map((business) => (
+                    <tr key={business.id} className="border-b border-outline/70 last:border-b-0">
+                      <td className="px-4 py-3 font-semibold text-on-surface">{business.name}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="ghostButton"
+                            type="button"
+                            onClick={() => {
+                              setStatus("");
+                              setCreateOpen(false);
+                              setEditingId(business.id);
+                              setName(business.name);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button className="ghostButton" type="button" onClick={() => setDeleteId(business.id)}>
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {status ? <p className="statusText">{status}</p> : null}
+
+      <FormDialog
+        open={createOpen || editingId !== null}
+        title={editingId ? "Edit business" : "Create business"}
+        description="Businesses help separate personal and business-linked spending, income, and reporting context."
+        submitLabel={editingId ? "Update business" : "Create business"}
+        pending={saving}
+        error={status.startsWith("Failed") ? status : undefined}
+        onSubmit={handleSubmit}
+        onClose={resetForm}
+      >
         <div className="field">
           <label htmlFor="businessName">Name</label>
           <input
@@ -111,58 +184,17 @@ export default function BusinessesSettingsPage() {
             required
           />
         </div>
+      </FormDialog>
 
-        <div className="formActions">
-          <button className="primaryButton" type="submit" disabled={saving}>
-            {saving ? "Saving..." : editingId ? "Update business" : "Create business"}
-          </button>
-          {editingId ? (
-            <button className="ghostButton" type="button" onClick={resetForm}>
-              Cancel edit
-            </button>
-          ) : null}
-        </div>
-
-        {status ? <p className="statusText">{status}</p> : null}
-      </form>
-
-      <div className="card settingsListPanel">
-        <div className="settingsHeaderRow">
-          <div className="resourceBody">
-            <strong>Existing businesses</strong>
-            <span className="muted">Use short, stable names that will remain clear inside history and reports.</span>
-          </div>
-        </div>
-        <div className="resourceList">
-          {loading ? <div className="muted">Loading businesses...</div> : null}
-          {!loading && businesses.length === 0 ? (
-            <div className="muted">No businesses yet. Add one if you want separate business-linked reporting.</div>
-          ) : null}
-          {businesses.map((business) => (
-            <div key={business.id} className="resourceRow">
-              <div className="resourceBody">
-                <strong>{business.name}</strong>
-              </div>
-              <div className="formActions">
-                <button
-                  className="ghostButton"
-                  type="button"
-                  onClick={() => {
-                    setEditingId(business.id);
-                    setName(business.name);
-                  }}
-                >
-                  Edit
-                </button>
-                <button className="ghostButton" type="button" onClick={() => void handleDelete(business.id)}>
-                  Remove
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      </div>
+      <ConfirmationDialog
+        open={deleteId !== null}
+        title="Remove business?"
+        description="Existing linked transactions will keep their history with a null reference."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => void handleDelete()}
+        onClose={() => setDeleteId(null)}
+      />
     </section>
   );
 }

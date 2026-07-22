@@ -13,11 +13,7 @@ type LoginResponse = {
 };
 
 async function loginWithApi(email: string, password: string) {
-  const apiBaseUrl = process.env.API_BASE_URL;
-
-  if (!apiBaseUrl) {
-    throw new Error("API_BASE_URL is not configured.");
-  }
+  const apiBaseUrl = process.env.API_BASE_URL?.trim() || "http://127.0.0.1:8080";
 
   const response = await fetch(`${apiBaseUrl}/v1/auth/login`, {
     method: "POST",
@@ -26,6 +22,7 @@ async function loginWithApi(email: string, password: string) {
     },
     body: JSON.stringify({ email, password }),
     cache: "no-store",
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -53,8 +50,7 @@ function getTokenExpiryMs(token: string): number {
 // Calls the API refresh endpoint with the current (still-valid) token to get a
 // fresh access token. Returns null on failure.
 async function refreshApiToken(currentToken: string): Promise<string | null> {
-  const apiBaseUrl = process.env.API_BASE_URL;
-  if (!apiBaseUrl) return null;
+  const apiBaseUrl = process.env.API_BASE_URL?.trim() || "http://127.0.0.1:8080";
 
   try {
     const response = await fetch(`${apiBaseUrl}/v1/auth/refresh`, {
@@ -63,6 +59,7 @@ async function refreshApiToken(currentToken: string): Promise<string | null> {
         Authorization: `Bearer ${currentToken}`,
       },
       cache: "no-store",
+      credentials: "include",
     });
 
     if (!response.ok) return null;
@@ -164,4 +161,3 @@ export const authOptions: NextAuthOptions = {
 export function getAuthSession() {
   return getServerSession(authOptions);
 }
-

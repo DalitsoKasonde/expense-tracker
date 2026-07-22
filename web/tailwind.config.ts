@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: ["class", '[data-theme="dark"]'],
   content: [
     "./app/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
@@ -24,6 +25,7 @@ const config: Config = {
           soft: "var(--primary-soft)",
           softer: "var(--primary-softer)",
         },
+        accent: "var(--accent)",
         outline: {
           DEFAULT: "var(--outline)",
           strong: "var(--outline-strong)",
@@ -36,16 +38,22 @@ const config: Config = {
         },
         positive: {
           DEFAULT: "var(--positive)",
+          soft: "var(--positive-soft)",
         },
         negative: {
           DEFAULT: "var(--negative)",
+          soft: "var(--negative-soft)",
         },
+        income: { DEFAULT: "var(--income)", soft: "var(--income-soft)" },
+        expense: { DEFAULT: "var(--expense)", soft: "var(--expense-soft)" },
+        savings: { DEFAULT: "var(--savings)", soft: "var(--savings-soft)" },
+        investment: { DEFAULT: "var(--investment)", soft: "var(--investment-soft)" },
         warning: {
           DEFAULT: "var(--warning)",
+          soft: "var(--warning-soft)",
         },
       },
       fontFamily: {
-        accent: ["var(--font-accent)", "cursive"],
         display: ["var(--font-display)", "sans-serif"],
         body: ["var(--font-body)", "sans-serif"],
       },
@@ -58,6 +66,9 @@ const config: Config = {
       boxShadow: {
         sm: "var(--shadow-sm)",
         md: "var(--shadow-md)",
+      },
+      maxWidth: {
+        app: "1280px",
       },
     },
   },

@@ -1,18 +1,26 @@
 import { useSession } from "next-auth/react";
 import { useCallback } from "react";
+import {
+  getCachedData,
+  queuePendingTransaction,
+  setCachedData,
+  type JsonValue,
+  type PendingTransactionPayload,
+} from "./offline-db";
 
 function isLoopbackHostname(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
-function getApiBaseUrl() {
-  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!configuredBaseUrl) {
-    throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured. Add it to web/.env.local.");
-  }
+export function getApiBaseUrl() {
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "http://localhost:8080";
 
   if (typeof window === "undefined") {
     return configuredBaseUrl;
+  }
+
+  if (configuredBaseUrl.startsWith("/")) {
+    return configuredBaseUrl.replace(/\/$/, "");
   }
 
   const configuredUrl = new URL(configuredBaseUrl);
@@ -30,26 +38,28 @@ function unreachableApiMessage(baseUrl: string) {
   return `Could not reach the API at ${baseUrl}. Make sure the Go API is running and your web env is using NEXT_PUBLIC_API_BASE_URL.`;
 }
 
-import { getCachedData, setCachedData, queuePendingTransaction } from "./offline-db";
+function isPendingTransactionPayload(value: unknown): value is PendingTransactionPayload {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+type ApiCallOptions = {
+  method?: string;
+  body?: JsonValue | Record<string, JsonValue | undefined>;
+};
+
+type PendingTransactionResult = PendingTransactionPayload & {
+  id: string;
+  isPending: true;
+};
 
 async function performApiCall<T>(
   token: string,
   path: string,
-  options?: {
-    method?: string;
-    body?: unknown;
-  }
+  options?: ApiCallOptions
 ): Promise<T> {
-  if (!token) {
-    throw new Error("Not authenticated");
-  }
-
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path}`;
   const isGet = !options?.method || options.method === "GET";
-  if (!baseUrl) {
-    throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured. Add it to web/.env.local.");
-  }
 
   if (!isGet) {
     // Mutation: POST/PUT/DELETE
@@ -59,20 +69,22 @@ async function performApiCall<T>(
         method: options.method,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: options.body ? JSON.stringify(options.body) : undefined,
+        credentials: "include",
       });
     } catch (error) {
       if (error instanceof TypeError) {
         // If posting a transaction, queue it offline
-        if (path === "/v1/transactions" && options.method === "POST") {
+        if (path === "/v1/transactions" && options.method === "POST" && isPendingTransactionPayload(options.body)) {
           const localId = await queuePendingTransaction(options.body);
-          return {
+          const pendingResult: PendingTransactionResult = {
             id: localId,
-            ...(options.body as any),
+            ...options.body,
             isPending: true,
-          } as unknown as T;
+          };
+          return pendingResult as T;
         }
         throw new Error(unreachableApiMessage(baseUrl));
       }
@@ -102,8 +114,9 @@ async function performApiCall<T>(
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        credentials: "include",
       });
 
       if (response.ok) {
@@ -147,18 +160,10 @@ export function useApiCall() {
   return useCallback(
     async function boundApiCall<T>(
       path: string,
-      options?: {
-        method?: string;
-        body?: unknown;
-      }
+      options?: ApiCallOptions
     ): Promise<T> {
       const token = session?.accessToken;
-
-      if (!token) {
-        throw new Error("Not authenticated");
-      }
-
-      return performApiCall<T>(token, path, options);
+      return performApiCall<T>(token ?? "", path, options);
     },
     [session?.accessToken]
   );
@@ -171,10 +176,7 @@ export function useApiCall() {
 export async function apiCallWithToken<T>(
   token: string,
   path: string,
-  options?: {
-    method?: string;
-    body?: unknown;
-  }
+  options?: ApiCallOptions
 ): Promise<T> {
   return performApiCall<T>(token, path, options);
 }

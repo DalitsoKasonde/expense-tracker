@@ -5,14 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items: Array<{ href: Route; label: string }> = [
-  { href: "/settings", label: "Overview" },
   { href: "/settings/preferences", label: "Preferences" },
   { href: "/settings/accounts", label: "Accounts" },
-  { href: "/settings/loans" as Route, label: "Loans" },
-  { href: "/settings/savings-groups" as Route, label: "Savings Groups" },
+  { href: "/settings/savings-groups" as Route, label: "Savings" },
   { href: "/settings/categories", label: "Categories" },
-  { href: "/settings/income-sources", label: "Income Sources" },
-  { href: "/settings/businesses", label: "Businesses" },
+  { href: "/settings/income-sources", label: "Income" },
+  { href: "/settings/businesses", label: "Business" },
+  { href: "/settings/imports" as Route, label: "Import" },
 ];
 
 export function SettingsNav() {
@@ -20,21 +19,17 @@ export function SettingsNav() {
   const currentPath = pathname ?? "";
 
   return (
-    <div className="settingsNavFrame">
-      <div className="settingsNavIntro">
-        <span className="settingsNavLabel">Workspace</span>
-        <span className="muted">Move between preferences, balances, categories, and income structure without losing your place.</span>
-      </div>
-      <nav className="settingsNav" aria-label="Settings sections">
+    <div className="rounded-lg border border-outline bg-surface p-1.5 shadow-sm">
+      <nav className="flex gap-1.5 overflow-x-auto" aria-label="Settings sections">
         {items.map((item) => {
           const isActive =
-            currentPath === item.href || (item.href !== "/settings" && currentPath.startsWith(`${item.href}/`));
+            currentPath === item.href || currentPath.startsWith(`${item.href}/`);
           return (
             <Link
               key={item.href}
               href={item.href}
               aria-current={isActive ? "page" : undefined}
-              className={isActive ? "settingsNavLink active" : "settingsNavLink"}
+              className={`flex min-h-10 shrink-0 items-center rounded-md px-3 text-sm font-semibold whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${isActive ? "bg-primary-softer text-primary" : "text-on-surface-soft hover:bg-surface-soft hover:text-on-surface"}`}
             >
               {item.label}
             </Link>

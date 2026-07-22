@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { establishApiSession } from "@/lib/browser-auth";
 
 export function LoginForm() {
   const router = useRouter();
@@ -13,21 +14,31 @@ export function LoginForm() {
     setIsPending(true);
     setError("");
 
-    const result = await signIn("credentials", {
-      email: String(formData.get("email") ?? ""),
-      password: String(formData.get("password") ?? ""),
-      redirect: false,
-    });
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const password = String(formData.get("password") ?? "");
 
-    setIsPending(false);
+    try {
+      await establishApiSession({ email, password });
 
-    if (result?.error) {
-      setError("Login failed. Check your email, password, bootstrap env vars, and database connection.");
-      return;
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      setIsPending(false);
+
+      if (result?.error) {
+        setError("Login failed. Check your email, password, bootstrap env vars, and database connection.");
+        return;
+      }
+
+      router.push("/today");
+      router.refresh();
+    } catch (error) {
+      setIsPending(false);
+      setError(error instanceof Error ? error.message : "Login failed. Please try again.");
     }
-
-    router.push("/today");
-    router.refresh();
   }
 
   return (

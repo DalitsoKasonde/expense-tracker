@@ -1,12 +1,12 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AppPageHeader } from "@/components/app-page-header";
-import { PortfolioIcon } from "@/components/nav-icons";
+import { PageHeader } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
-import { UnifiedDashboardAsset, useUnifiedDashboard } from "@/lib/use-unified-dashboard";
+import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
+import { formatMoney } from "@/lib/format-money";
 
 interface BondProjection {
   totalProjectedPayoutMinor: number;
@@ -49,6 +49,8 @@ export default function AssetDetailPage() {
   const params = useParams<{ assetId: string }>();
   const assetId = params?.assetId ?? "";
   const apiCall = useApiCall();
+  const apiCallRef = useRef(apiCall);
+  apiCallRef.current = apiCall;
   const { data, loading } = useUnifiedDashboard();
   const [projection, setProjection] = useState<BondProjection | null>(null);
   const [holding, setHolding] = useState<AssetHolding | null>(null);
@@ -86,8 +88,8 @@ export default function AssetDetailPage() {
     const fetchDetails = async () => {
       try {
         const [accountsResult, holdingResult] = await Promise.all([
-          apiCall<Account[]>("/v1/accounts").catch(() => []),
-          apiCall<AssetHolding>(`/v1/assets/${assetId}/holding`).catch(() => null),
+          apiCallRef.current<Account[]>("/v1/accounts").catch(() => []),
+          apiCallRef.current<AssetHolding>(`/v1/assets/${assetId}/holding`).catch(() => null),
         ]);
         if (!ignore) {
           setAccounts(accountsResult ?? []);
@@ -105,7 +107,7 @@ export default function AssetDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [apiCall, assetId]);
+  }, [assetId]);
 
   useEffect(() => {
     if (!assetId || asset?.assetClass !== "bond") {
@@ -116,7 +118,7 @@ export default function AssetDetailPage() {
     let ignore = false;
     const fetchProjection = async () => {
       try {
-        const result = await apiCall<BondProjection>(`/v1/bonds/${assetId}/projection`);
+        const result = await apiCallRef.current<BondProjection>(`/v1/bonds/${assetId}/projection`);
         if (!ignore) setProjection(result ?? null);
       } catch (err) {
         console.error("Failed to fetch bond projection", err);
@@ -127,10 +129,10 @@ export default function AssetDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [apiCall, asset?.assetClass, assetId]);
+  }, [asset?.assetClass, assetId]);
 
   async function refreshHolding() {
-    const result = await apiCall<AssetHolding>(`/v1/assets/${assetId}/holding`);
+    const result = await apiCallRef.current<AssetHolding>(`/v1/assets/${assetId}/holding`);
     setHolding(result);
   }
 
@@ -139,14 +141,14 @@ export default function AssetDetailPage() {
     setSavingAction(true);
     setActionStatus("");
     try {
-      await apiCall(`/v1/assets/${assetId}/sell`, {
+      await apiCallRef.current(`/v1/assets/${assetId}/sell`, {
         method: "POST",
         body: {
           cashAccountId: sellForm.cashAccountId,
           quantity: parseFloat(sellForm.quantity),
           unitPriceMinor: toMinor(sellForm.unitPrice),
           feesMinor: toMinor(sellForm.fees),
-          currency: "ZMW",
+          currency: asset?.currency ?? "ZMW",
           executionDate: sellForm.executionDate,
           note: sellForm.note || undefined,
         },
@@ -166,14 +168,14 @@ export default function AssetDetailPage() {
     setSavingAction(true);
     setActionStatus("");
     try {
-      await apiCall(`/v1/assets/${assetId}/dividends`, {
+      await apiCallRef.current(`/v1/assets/${assetId}/dividends`, {
         method: "POST",
         body: {
           cashAccountId: dividendForm.cashAccountId,
           amountMinor: toMinor(dividendForm.amount),
           reinvestmentPriceMinor: dividendForm.disposition === "drip" ? toMinor(dividendForm.reinvestmentPrice) : undefined,
           dividendDisposition: dividendForm.disposition,
-          currency: "ZMW",
+          currency: asset?.currency ?? "ZMW",
           executionDate: dividendForm.executionDate,
           note: dividendForm.note || undefined,
         },
@@ -193,12 +195,12 @@ export default function AssetDetailPage() {
     setSavingAction(true);
     setActionStatus("");
     try {
-      await apiCall(`/v1/assets/${assetId}/valuations`, {
+      await apiCallRef.current(`/v1/assets/${assetId}/valuations`, {
         method: "POST",
         body: {
           valuationDate: valuationForm.valuationDate,
           currentValueMinor: toMinor(valuationForm.currentValue),
-          currency: "ZMW",
+          currency: asset?.currency ?? "ZMW",
           source: "manual",
         },
       });
@@ -228,23 +230,21 @@ export default function AssetDetailPage() {
   return (
     <main className="shell">
       <section className="appChrome workspaceStack">
-        <AppPageHeader
-          eyebrow="Inscribed portfolio"
+        <PageHeader
+          eyebrow="Portfolio"
           title={asset.name}
-          accent={asset.assetClass.replaceAll("_", " ")}
-          lead="Review invested capital, current value, and upcoming bond cash-flow detail inside the same portfolio workspace."
-          icon={PortfolioIcon}
+          subtitle={`${asset.assetClass.replaceAll("_", " ")}. Review invested cost, current value, and upcoming payments.`}
         />
 
         <div className="portfolioStage">
           <section className="heroCard resourceBody">
             <p className="sectionKicker">Current position</p>
-            <h2 className="text-2xl font-bold my-2">ZMW {(asset.currentValueMinor / 100).toFixed(2)}</h2>
+            <h2 className="text-2xl font-bold my-2">{formatMoney(asset.currentValueMinor, asset.currency)}</h2>
             <p className="muted">Current value contributing to net worth.</p>
             <div className="portfolioMiniGrid mt-4">
               <div className="metricCard">
                 <span className="metricCardLabel">Invested</span>
-                <strong className="metricCardValue">ZMW {(asset.investedAmountMinor / 100).toFixed(2)}</strong>
+                <strong className="metricCardValue">{formatMoney(asset.investedAmountMinor, asset.currency)}</strong>
               </div>
               {holding ? (
                 <div className="metricCard">
@@ -255,7 +255,7 @@ export default function AssetDetailPage() {
               <div className="metricCard">
                 <span className="metricCardLabel">Change</span>
                 <strong className="metricCardValue">
-                  ZMW {((asset.currentValueMinor - asset.investedAmountMinor) / 100).toFixed(2)}
+                  {formatMoney(asset.currentValueMinor - asset.investedAmountMinor, asset.currency)}
                 </strong>
               </div>
             </div>
@@ -271,7 +271,7 @@ export default function AssetDetailPage() {
                 ? "Bond coupons can now project forward and automatically move into cash once the reinvestment cutoff is reached."
                 : "This asset flows directly into portfolio value and unified net worth through the shared valuation model."}
             </p>
-            <span className="pageAccent">Inscribed Detail</span>
+            <span className="pageAccent">Asset detail</span>
           </aside>
         </div>
 
@@ -286,11 +286,11 @@ export default function AssetDetailPage() {
               <div className="statsGrid">
                 <div className="statCard">
                   <p className="muted">Average cost</p>
-                  <strong>ZMW {(holding.avgCostBasis / 100).toFixed(2)}</strong>
+                  <strong>{formatMoney(holding.avgCostBasis, asset.currency)}</strong>
                 </div>
                 <div className="statCard">
                   <p className="muted">Unrealized P&L</p>
-                  <strong>ZMW {(holding.unrealizedPnl / 100).toFixed(2)}</strong>
+                  <strong>{formatMoney(holding.unrealizedPnl, asset.currency)}</strong>
                 </div>
               </div>
             ) : null}
@@ -301,25 +301,25 @@ export default function AssetDetailPage() {
                   <strong>Sell FIFO</strong>
                   <span className="muted">Consumes oldest lots first and calculates realized gain.</span>
                 </div>
-                <ActionAccountSelect accounts={accounts} value={sellForm.cashAccountId} onChange={(value) => setSellForm((current) => ({ ...current, cashAccountId: value }))} />
+                <ActionAccountSelect inputId="sell-cash-account" accounts={accounts} value={sellForm.cashAccountId} onChange={(value) => setSellForm((current) => ({ ...current, cashAccountId: value }))} />
                 <div className="splitFields">
                   <div className="field">
-                    <label>Quantity</label>
-                    <input type="number" step="0.000001" value={sellForm.quantity} onChange={(event) => setSellForm((current) => ({ ...current, quantity: event.target.value }))} required />
+                    <label htmlFor="sell-quantity">Quantity</label>
+                    <input id="sell-quantity" type="number" step="0.000001" value={sellForm.quantity} onChange={(event) => setSellForm((current) => ({ ...current, quantity: event.target.value }))} required />
                   </div>
                   <div className="field">
-                    <label>Unit price</label>
-                    <input type="number" step="0.01" value={sellForm.unitPrice} onChange={(event) => setSellForm((current) => ({ ...current, unitPrice: event.target.value }))} required />
+                    <label htmlFor="sell-unit-price">Unit price</label>
+                    <input id="sell-unit-price" type="number" step="0.01" value={sellForm.unitPrice} onChange={(event) => setSellForm((current) => ({ ...current, unitPrice: event.target.value }))} required />
                   </div>
                 </div>
                 <div className="splitFields">
                   <div className="field">
-                    <label>Fees</label>
-                    <input type="number" step="0.01" value={sellForm.fees} onChange={(event) => setSellForm((current) => ({ ...current, fees: event.target.value }))} />
+                    <label htmlFor="sell-fees">Fees</label>
+                    <input id="sell-fees" type="number" step="0.01" value={sellForm.fees} onChange={(event) => setSellForm((current) => ({ ...current, fees: event.target.value }))} />
                   </div>
                   <div className="field">
-                    <label>Date</label>
-                    <input type="date" value={sellForm.executionDate} onChange={(event) => setSellForm((current) => ({ ...current, executionDate: event.target.value }))} required />
+                    <label htmlFor="sell-execution-date">Date</label>
+                    <input id="sell-execution-date" type="date" value={sellForm.executionDate} onChange={(event) => setSellForm((current) => ({ ...current, executionDate: event.target.value }))} required />
                   </div>
                 </div>
                 <button className="primaryButton" type="submit" disabled={savingAction}>Record sale</button>
@@ -330,29 +330,29 @@ export default function AssetDetailPage() {
                   <strong>Dividend</strong>
                   <span className="muted">Cash dividends increase cash; DRIP creates a partial-share lot.</span>
                 </div>
-                <ActionAccountSelect accounts={accounts} value={dividendForm.cashAccountId} onChange={(value) => setDividendForm((current) => ({ ...current, cashAccountId: value }))} />
+                <ActionAccountSelect inputId="dividend-cash-account" accounts={accounts} value={dividendForm.cashAccountId} onChange={(value) => setDividendForm((current) => ({ ...current, cashAccountId: value }))} />
                 <div className="splitFields">
                   <div className="field">
-                    <label>Disposition</label>
-                    <select value={dividendForm.disposition} onChange={(event) => setDividendForm((current) => ({ ...current, disposition: event.target.value }))}>
+                    <label htmlFor="dividend-disposition">Disposition</label>
+                    <select id="dividend-disposition" value={dividendForm.disposition} onChange={(event) => setDividendForm((current) => ({ ...current, disposition: event.target.value }))}>
                       <option value="cash">Cash</option>
                       <option value="drip">DRIP</option>
                     </select>
                   </div>
                   <div className="field">
-                    <label>Amount</label>
-                    <input type="number" step="0.01" value={dividendForm.amount} onChange={(event) => setDividendForm((current) => ({ ...current, amount: event.target.value }))} required />
+                    <label htmlFor="dividend-amount">Amount</label>
+                    <input id="dividend-amount" type="number" step="0.01" value={dividendForm.amount} onChange={(event) => setDividendForm((current) => ({ ...current, amount: event.target.value }))} required />
                   </div>
                 </div>
                 {dividendForm.disposition === "drip" ? (
                   <div className="field">
-                    <label>Reinvestment price</label>
-                    <input type="number" step="0.01" value={dividendForm.reinvestmentPrice} onChange={(event) => setDividendForm((current) => ({ ...current, reinvestmentPrice: event.target.value }))} required />
+                    <label htmlFor="dividend-reinvestment-price">Reinvestment price</label>
+                    <input id="dividend-reinvestment-price" type="number" step="0.01" value={dividendForm.reinvestmentPrice} onChange={(event) => setDividendForm((current) => ({ ...current, reinvestmentPrice: event.target.value }))} required />
                   </div>
                 ) : null}
                 <div className="field">
-                  <label>Date</label>
-                  <input type="date" value={dividendForm.executionDate} onChange={(event) => setDividendForm((current) => ({ ...current, executionDate: event.target.value }))} required />
+                  <label htmlFor="dividend-execution-date">Date</label>
+                  <input id="dividend-execution-date" type="date" value={dividendForm.executionDate} onChange={(event) => setDividendForm((current) => ({ ...current, executionDate: event.target.value }))} required />
                 </div>
                 <button className="primaryButton" type="submit" disabled={savingAction}>Record dividend</button>
               </form>
@@ -363,16 +363,16 @@ export default function AssetDetailPage() {
                 <strong>Manual valuation</strong>
                 <span className="muted">Update current value for unrealized P&L and net worth reporting.</span>
               </div>
-              <div className="splitFields">
-                <div className="field">
-                  <label>Current value</label>
-                  <input type="number" step="0.01" value={valuationForm.currentValue} onChange={(event) => setValuationForm((current) => ({ ...current, currentValue: event.target.value }))} required />
+                <div className="splitFields">
+                  <div className="field">
+                    <label htmlFor="valuation-current-value">Current value</label>
+                    <input id="valuation-current-value" type="number" step="0.01" value={valuationForm.currentValue} onChange={(event) => setValuationForm((current) => ({ ...current, currentValue: event.target.value }))} required />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="valuation-date">Valuation date</label>
+                    <input id="valuation-date" type="date" value={valuationForm.valuationDate} onChange={(event) => setValuationForm((current) => ({ ...current, valuationDate: event.target.value }))} required />
+                  </div>
                 </div>
-                <div className="field">
-                  <label>Valuation date</label>
-                  <input type="date" value={valuationForm.valuationDate} onChange={(event) => setValuationForm((current) => ({ ...current, valuationDate: event.target.value }))} required />
-                </div>
-              </div>
               <button className="primaryButton" type="submit" disabled={savingAction}>Update valuation</button>
             </form>
 
@@ -390,19 +390,19 @@ export default function AssetDetailPage() {
             <div className="statsGrid">
               <div className="statCard">
                 <p className="muted">Projected payout</p>
-                <strong>ZMW {(projection.totalProjectedPayoutMinor / 100).toFixed(2)}</strong>
+                <strong>{formatMoney(projection.totalProjectedPayoutMinor, asset.currency)}</strong>
               </div>
               <div className="statCard">
                 <p className="muted">Coupons</p>
-                <strong>ZMW {(projection.totalCouponMinor / 100).toFixed(2)}</strong>
+                <strong>{formatMoney(projection.totalCouponMinor, asset.currency)}</strong>
               </div>
               <div className="statCard">
                 <p className="muted">To cash balance</p>
-                <strong>ZMW {(projection.totalCashBalanceMinor / 100).toFixed(2)}</strong>
+                <strong>{formatMoney(projection.totalCashBalanceMinor, asset.currency)}</strong>
               </div>
               <div className="statCard">
                 <p className="muted">Reinvested before cutoff</p>
-                <strong>ZMW {(projection.totalReinvestedMinor / 100).toFixed(2)}</strong>
+                <strong>{formatMoney(projection.totalReinvestedMinor, asset.currency)}</strong>
               </div>
             </div>
 
@@ -417,7 +417,7 @@ export default function AssetDetailPage() {
                     </div>
                   </div>
                   <div className="ledgerAmountBlock">
-                    <span className="ledgerAmount positive">ZMW {(cashflow.netAmountMinor / 100).toFixed(2)}</span>
+                    <span className="ledgerAmount positive">{formatMoney(cashflow.netAmountMinor, asset.currency)}</span>
                     <span className="muted">{cashflow.status}</span>
                   </div>
                 </div>
@@ -446,18 +446,20 @@ export default function AssetDetailPage() {
 }
 
 function ActionAccountSelect({
+  inputId,
   accounts,
   value,
   onChange,
 }: {
+  inputId: string;
   accounts: Account[];
   value: string;
   onChange: (value: string) => void;
 }) {
   return (
     <div className="field">
-      <label>Cash account</label>
-      <select value={value} onChange={(event) => onChange(event.target.value)} required>
+      <label htmlFor={inputId}>Cash account</label>
+      <select id={inputId} value={value} onChange={(event) => onChange(event.target.value)} required>
         <option value="">Select account</option>
         {accounts
           .filter((account) => account.accountClass !== "liability")

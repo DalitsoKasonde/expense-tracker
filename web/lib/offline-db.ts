@@ -1,45 +1,72 @@
 const DB_NAME = "expense_tracker_offline";
 const DB_VERSION = 1;
 
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+export interface PendingTransactionPayload {
+  transactionDate: string;
+  entryKind: string;
+  amount: number;
+  currency: string;
+  note?: string;
+  accountId?: string;
+  categoryId?: string;
+  destinationAccountId?: string;
+  [key: string]: JsonValue | undefined;
+}
+
 export interface OfflineCacheEntry {
   key: string;
-  data: any;
+  data: JsonValue;
   timestamp: number;
 }
 
 export interface PendingTransaction {
   id: string; // Temporary UUID or timestamp
-  payload: any;
+  payload: PendingTransactionPayload;
   createdAt: number;
 }
 
+let dbPromise: Promise<IDBDatabase> | null = null;
+
 export function initDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === "undefined" || !window.indexedDB) {
-      reject(new Error("IndexedDB is not supported"));
-      return;
-    }
-
-    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = () => {
-      reject(request.error);
-    };
-
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
-
-    request.onupgradeneeded = (event) => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains("cache")) {
-        db.createObjectStore("cache", { keyPath: "key" });
+  if (!dbPromise) {
+    dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+      if (typeof window === "undefined" || !window.indexedDB) {
+        reject(new Error("IndexedDB is not supported"));
+        return;
       }
-      if (!db.objectStoreNames.contains("pending_transactions")) {
-        db.createObjectStore("pending_transactions", { keyPath: "id" });
-      }
-    };
-  });
+
+      const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+
+      request.onerror = () => {
+        reject(request.error);
+      };
+
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains("cache")) {
+          db.createObjectStore("cache", { keyPath: "key" });
+        }
+        if (!db.objectStoreNames.contains("pending_transactions")) {
+          db.createObjectStore("pending_transactions", { keyPath: "id" });
+        }
+      };
+    }).catch((error): never => {
+      dbPromise = null;
+      throw error;
+    });
+  }
+
+  return dbPromise as Promise<IDBDatabase>;
 }
 
 export async function getCachedData<T>(key: string): Promise<T | null> {
@@ -53,7 +80,7 @@ export async function getCachedData<T>(key: string): Promise<T | null> {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const result = request.result as OfflineCacheEntry | undefined;
-        resolve(result ? result.data : null);
+        resolve(result ? (result.data as T) : null);
       };
     });
   } catch (error) {
@@ -62,7 +89,7 @@ export async function getCachedData<T>(key: string): Promise<T | null> {
   }
 }
 
-export async function setCachedData(key: string, data: any): Promise<void> {
+export async function setCachedData(key: string, data: JsonValue): Promise<void> {
   try {
     const db = await initDb();
     return new Promise((resolve, reject) => {
@@ -83,7 +110,7 @@ export async function setCachedData(key: string, data: any): Promise<void> {
   }
 }
 
-export async function queuePendingTransaction(payload: any): Promise<string> {
+export async function queuePendingTransaction(payload: PendingTransactionPayload): Promise<string> {
   const id = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   try {
     const db = await initDb();

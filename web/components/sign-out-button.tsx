@@ -1,6 +1,6 @@
 "use client";
 
-import { signOut } from "next-auth/react";
+import { signOutEverywhere } from "@/lib/browser-auth";
 
 type SignOutButtonProps = {
   className?: string;
@@ -11,7 +11,9 @@ export function SignOutButton({ className = "ghostButton" }: SignOutButtonProps)
     <button
       type="button"
       className={className}
-      onClick={() => signOut({ callbackUrl: "/login" })}
+      onClick={() => {
+        void signOutEverywhere();
+      }}
     >
       Log out
     </button>
