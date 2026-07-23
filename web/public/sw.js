@@ -1,5 +1,6 @@
-const CACHE_NAME = "chuma-v0.3";
+const CACHE_NAME = "expenses-v0.3";
 const STATIC_ASSETS = [
+  "/inscribed-logo.png",
   "/logo.png",
   "/icon.svg",
   "/mask-icon.svg",

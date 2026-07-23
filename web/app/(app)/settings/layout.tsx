@@ -11,7 +11,7 @@ export default async function SettingsLayout({ children }: { children: ReactNode
         className="justify-self-center pt-2 text-xs text-on-surface-soft"
         aria-label="Application version"
       >
-        Chuma v{packageMetadata.version}
+        Expenses v{packageMetadata.version}
       </footer>
     </main>
   );

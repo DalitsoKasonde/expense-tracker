@@ -6,7 +6,7 @@ import { SavingsGoalCard } from "./savings-goal-card";
 import { TransactionFilters } from "./transaction-filters";
 import { TransactionRow } from "./transaction-row";
 
-describe("Chuma UI primitives", () => {
+describe("Expenses UI primitives", () => {
   it("renders an account in its own currency", () => {
     render(<AccountCard name="Dollar account" type="bank" balanceMinor={12345} currency="USD" />);
     expect(screen.getByText("Dollar account")).toBeInTheDocument();

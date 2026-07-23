@@ -15,10 +15,10 @@ const quicksand = Quicksand({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXTAUTH_URL?.trim() || "http://localhost:3000"),
   title: {
-    default: "Chuma",
-    template: "%s | Chuma",
+    default: "Expenses",
+    template: "%s | Expenses",
   },
-  description: "Chuma brings accounts, daily money movement, goals, and investments into one calm financial workspace.",
+  description: "Expenses brings accounts, daily money movement, goals, and investments into one calm financial workspace.",
   icons: {
     icon: [
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
@@ -27,16 +27,16 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
-    title: "Chuma — Your money, made clear.",
+    title: "Expenses — Your money, made clear.",
     description: "Track accounts, everyday money activity, stocks, and government bonds in one clear workspace.",
     type: "website",
-    images: [{ url: "/og.png", width: 1731, height: 909, alt: "Chuma personal finance workspace" }],
+    images: [{ url: "/inscribed-logo.png", width: 2174, height: 964, alt: "Inscribed — Expenses" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Chuma — Your money, made clear.",
+    title: "Expenses — Your money, made clear.",
     description: "Track accounts, everyday money activity, stocks, and government bonds in one clear workspace.",
-    images: ["/og.png"],
+    images: ["/inscribed-logo.png"],
   },
 };
 

@@ -15,12 +15,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mocks.refresh }),
 }));
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { user: { name: "Chuma User", email: "user@example.com" } } }),
+  useSession: () => ({ data: { user: { name: "Expenses User", email: "user@example.com" } } }),
 }));
 vi.mock("@/lib/browser-auth", () => ({ signOutEverywhere: mocks.signOut }));
 vi.mock("./add-entry-dialog", () => ({ AddEntryDialog: () => null }));
 
-describe("Chuma navigation", () => {
+describe("Expenses navigation", () => {
   beforeEach(() => mocks.signOut.mockClear());
 
   it("marks the current mobile destination and exposes quick add", () => {
@@ -32,7 +32,8 @@ describe("Chuma navigation", () => {
 
   it("renders desktop destinations and signs out safely", () => {
     render(<SidebarNav />);
-    expect(screen.getByText("Chuma")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Inscribed" })).toBeInTheDocument();
+    expect(screen.getByText("Expenses")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "/investments");
     expect(screen.getByRole("link", { name: "More" })).toHaveAttribute("href", "/more");
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));

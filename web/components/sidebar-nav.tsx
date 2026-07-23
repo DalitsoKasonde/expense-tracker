@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { AddEntryButton } from "@/components/add-entry-button";
 import { signOutEverywhere } from "@/lib/browser-auth";
+import { Brand } from "@/components/brand";
 import { isNavigationItemActive, primaryNavigation } from "./app-navigation";
 
 export function SidebarNav() {
@@ -14,8 +15,8 @@ export function SidebarNav() {
 
   return (
     <aside className="sticky top-0 hidden h-screen flex-col border-r border-outline bg-surface px-5 py-7 lg:flex" aria-label="Primary navigation">
-      <div className="flex items-center gap-3 border-b border-outline px-2 pb-7">
-        <span className="font-display text-2xl font-bold tracking-tight text-primary">Chuma</span>
+      <div className="border-b border-outline px-2 pb-6">
+        <Brand compact priority />
       </div>
 
       <nav className="mt-7 grid gap-2">

@@ -133,7 +133,7 @@ export default function GoalsPage() {
       <FormDialog
         open={createOpen}
         title="Create savings goal"
-        description="Chuma will create a dedicated savings account for this target."
+        description="Expenses will create a dedicated savings account for this target."
         submitLabel="Create goal"
         pending={saving}
         error={status && !status.startsWith("Savings goal created") ? status : undefined}

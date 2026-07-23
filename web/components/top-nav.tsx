@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BellIcon, SettingsIcon } from "./nav-icons";
 import { useApiCall } from "@/lib/client-api";
 import { signOutEverywhere } from "@/lib/browser-auth";
@@ -33,10 +33,13 @@ export function TopNav({ initials, email }: TopNavProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean | null>(null);
   const [notificationItems, setNotificationItems] = useState<NotificationItem[]>([]);
   const [notificationsError, setNotificationsError] = useState("");
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const profileRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  const loadNotifications = useCallback(() => {
+    setNotificationsLoading(true);
+    setNotificationsError("");
     void apiCall<NotificationsResponse>("/v1/notifications")
       .then((result) => {
         setNotificationsEnabled(result?.notificationsEnabled ?? false);
@@ -46,9 +49,15 @@ export function TopNav({ initials, email }: TopNavProps) {
       .catch((error) => {
         setNotificationsEnabled(null);
         setNotificationItems([]);
-        setNotificationsError(error instanceof Error ? error.message : "Could not load notifications");
-      });
+        setNotificationsError("We couldn't load notifications.");
+        console.error("Notification request failed", error);
+      })
+      .finally(() => setNotificationsLoading(false));
   }, [apiCall]);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -96,8 +105,20 @@ export function TopNav({ initials, email }: TopNavProps) {
             <div className="absolute right-0 top-12 z-30 grid w-72 gap-3 rounded-lg border border-outline bg-surface p-4 shadow-lg">
               <div className="grid gap-1">
                 <strong className="text-sm text-on-surface">Notifications</strong>
-                {notificationsError ? <span className="text-sm text-negative">{notificationsError}</span> : null}
-                {!notificationsError && notificationsEnabled === null ? <span className="text-sm text-on-surface-soft">Loading notifications...</span> : null}
+                {notificationsError ? (
+                  <div className="grid gap-2">
+                    <span className="text-sm text-on-surface-soft">{notificationsError}</span>
+                    <button
+                      type="button"
+                      className="ghostButton justify-center"
+                      disabled={notificationsLoading}
+                      onClick={loadNotifications}
+                    >
+                      {notificationsLoading ? "Trying again..." : "Try again"}
+                    </button>
+                  </div>
+                ) : null}
+                {!notificationsError && notificationsLoading ? <span className="text-sm text-on-surface-soft">Loading notifications...</span> : null}
                 {!notificationsError && notificationsEnabled === false ? <span className="text-sm text-on-surface-soft">Notifications are off. Turn them on in Preferences if you want alerts here.</span> : null}
               </div>
               {notificationsEnabled ? (
