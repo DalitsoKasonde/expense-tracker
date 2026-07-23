@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { getApiBaseUrl } from "@/lib/client-api";
@@ -34,8 +34,18 @@ export function RegisterForm() {
       setIsPending(false);
       return;
     }
-    if (!passwordIsValid) {
-      setError("Use at least 8 characters with a letter and a number.");
+    if (!passwordChecks.minimumLength) {
+      setError("Password must be at least 8 characters.");
+      setIsPending(false);
+      return;
+    }
+    if (!passwordChecks.hasLetterAndNumber) {
+      setError("Password must include a letter and a number.");
+      setIsPending(false);
+      return;
+    }
+    if (!passwordChecks.maximumLength) {
+      setError("Password must be 72 bytes or fewer.");
       setIsPending(false);
       return;
     }
@@ -121,9 +131,6 @@ export function RegisterForm() {
           <PasswordRequirement met={passwordChecks.hasLetterAndNumber}>
             Includes a letter and a number
           </PasswordRequirement>
-          <PasswordRequirement met={passwordChecks.maximumLength}>
-            No more than 72 bytes
-          </PasswordRequirement>
         </ul>
       </div>
 
@@ -160,7 +167,7 @@ export function RegisterForm() {
   );
 }
 
-function PasswordRequirement({ met, children }: { met: boolean; children: React.ReactNode }) {
+function PasswordRequirement({ met, children }: { met: boolean; children: ReactNode }) {
   return (
     <li className={met ? "text-income" : undefined}>
       <span aria-hidden="true">{met ? "✓" : "○"}</span>{" "}
