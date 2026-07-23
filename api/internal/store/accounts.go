@@ -40,7 +40,7 @@ func (s *AccountStore) ListByUser(ctx context.Context, userID string) ([]Account
 	}
 	defer rows.Close()
 
-	var accounts []Account
+	accounts := make([]Account, 0)
 	for rows.Next() {
 		var a Account
 		if err := rows.Scan(&a.ID, &a.UserID, &a.Name, &a.AccountType, &a.AccountClass, &a.Currency, &a.OpeningBalanceMinor, &a.ArchivedAt, &a.CreatedAt); err != nil {

@@ -40,9 +40,6 @@ func normalizeOnboardingRequest(request completeOnboardingRequest) (completeOnbo
 	if err != nil {
 		return completeOnboardingRequest{}, err
 	}
-	if len(request.Accounts) == 0 {
-		return completeOnboardingRequest{}, errors.New("add at least one account")
-	}
 	if len(request.Accounts) > maxOnboardingAccounts {
 		return completeOnboardingRequest{}, errors.New("onboarding supports up to 12 accounts")
 	}

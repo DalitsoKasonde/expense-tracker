@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useApiCall } from "@/lib/client-api";
+import { isApiNotFound } from "@/lib/api-error";
 import { primeUserCurrency } from "@/lib/use-user-currency";
+import { Brand } from "@/components/brand";
 
 type AccountType = "cash" | "mobile_money" | "bank" | "savings" | "investment" | "other";
 
@@ -23,11 +25,21 @@ type OnboardingStatus = {
 };
 
 type OnboardingDraft = {
-  version: 1;
+  version: 2;
   step: number;
   currency: string;
   accounts: AccountDraft[];
   interests: string[];
+};
+
+type Preferences = {
+  defaultCurrency: string;
+  theme: "light" | "dark";
+  notificationsEnabled: boolean;
+};
+
+type ExistingAccount = {
+  name: string;
 };
 
 const currencies = ["ZMW", "USD", "GBP", "EUR", "ZAR"];
@@ -52,7 +64,7 @@ const interestOptions = [
   { value: "bonds", label: "Government bonds" },
 ];
 
-function emptyAccount(localId = 1): AccountDraft {
+function emptyAccount(localId = Date.now()): AccountDraft {
   return { localId, name: "", accountType: "mobile_money", openingBalance: "" };
 }
 
@@ -69,19 +81,10 @@ function parseOpeningBalance(value: string) {
   return minor;
 }
 
-function formatDraftBalance(value: string, currency: string) {
-  const amount = Number.parseFloat(value || "0");
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(amount) ? amount : 0);
-}
-
 function isSavedDraft(value: unknown): value is OnboardingDraft {
   if (!value || typeof value !== "object") return false;
   const draft = value as Partial<OnboardingDraft>;
-  return draft.version === 1
+  return draft.version === 2
     && typeof draft.step === "number"
     && typeof draft.currency === "string"
     && Array.isArray(draft.accounts)
@@ -94,7 +97,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [currency, setCurrency] = useState("ZMW");
-  const [accounts, setAccounts] = useState<AccountDraft[]>([emptyAccount()]);
+  const [accounts, setAccounts] = useState<AccountDraft[]>([]);
   const [interests, setInterests] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -113,9 +116,9 @@ export default function OnboardingPage() {
       try {
         const parsed: unknown = JSON.parse(saved);
         if (isSavedDraft(parsed)) {
-          setStep(Math.min(3, Math.max(1, parsed.step)));
+          setStep(Math.min(2, Math.max(1, parsed.step)));
           setCurrency(parsed.currency);
-          setAccounts(parsed.accounts.length ? parsed.accounts : [emptyAccount()]);
+          setAccounts(parsed.accounts);
           setInterests(parsed.interests);
         }
       } catch {
@@ -135,8 +138,24 @@ export default function OnboardingPage() {
         setHydrated(true);
         setChecking(false);
       })
-      .catch((caught) => {
+      .catch(async (caught) => {
         if (ignore) return;
+        if (isApiNotFound(caught)) {
+          try {
+            const existing = await apiCall<ExistingAccount[] | null>("/v1/accounts");
+            if (ignore) return;
+            if (Array.isArray(existing) && existing.length) {
+              window.localStorage.removeItem(draftKey);
+              router.replace("/today");
+              return;
+            }
+            setHydrated(true);
+            setChecking(false);
+            return;
+          } catch (fallbackError) {
+            caught = fallbackError;
+          }
+        }
         setError(caught instanceof Error ? caught.message : "Could not load your setup.");
         setChecking(false);
       });
@@ -147,9 +166,9 @@ export default function OnboardingPage() {
   }, [apiCall, draftKey, router, session?.accessToken, sessionStatus]);
 
   useEffect(() => {
-    if (!hydrated || !draftKey || step > 3) return;
+    if (!hydrated || !draftKey || step > 2) return;
     const draft: OnboardingDraft = {
-      version: 1,
+      version: 2,
       step,
       currency,
       accounts,
@@ -170,50 +189,23 @@ export default function OnboardingPage() {
     ));
   }
 
-  function addPreset(name: string, accountType: AccountType) {
+  function togglePreset(name: string, accountType: AccountType) {
     setError("");
     setAccounts((current) => {
-      if (current.some((account) => account.name.trim().toLowerCase() === name.toLowerCase())) {
-        return current;
+      const existing = current.find((account) => account.name.toLowerCase() === name.toLowerCase());
+      if (existing) {
+        return current.filter((account) => account.localId !== existing.localId);
       }
-      if (current.length === 1 && !current[0]?.name.trim()) {
-        return [{ ...current[0], name, accountType }];
-      }
-      if (current.length >= 12) return current;
       return [...current, { localId: Date.now(), name, accountType, openingBalance: "" }];
     });
   }
 
-  function addBlankAccount() {
+  function addCustomAccount() {
     if (accounts.length >= 12) {
       setError("You can add up to 12 accounts during setup. Add more later in Settings.");
       return;
     }
-    setAccounts((current) => [...current, emptyAccount(Date.now())]);
-  }
-
-  function continueFromAccounts() {
-    setError("");
-    if (!namedAccounts.length) {
-      setError("Add at least one place where you keep money.");
-      return;
-    }
-    if (accounts.some((account) => !account.name.trim())) {
-      setError("Name or remove each unfinished account before continuing.");
-      return;
-    }
-    const uniqueNames = new Set(namedAccounts.map((account) => account.name.trim().toLowerCase()));
-    if (uniqueNames.size !== namedAccounts.length) {
-      setError("Give each account a different name.");
-      return;
-    }
-    try {
-      namedAccounts.forEach((account) => parseOpeningBalance(account.openingBalance));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Check the opening balances.");
-      return;
-    }
-    setStep(3);
+    setAccounts((current) => [...current, emptyAccount()]);
   }
 
   function toggleInterest(interest: string) {
@@ -226,27 +218,78 @@ export default function OnboardingPage() {
     setSaving(true);
     setError("");
     try {
-      const response = await apiCall<OnboardingStatus>("/v1/onboarding/complete", {
-        method: "POST",
-        body: {
-          defaultCurrency: currency,
-          accounts: namedAccounts.map((account) => ({
-            name: account.name.trim(),
-            accountType: account.accountType,
-            openingBalanceMinor: parseOpeningBalance(account.openingBalance),
-          })),
-          interests,
-        },
-      });
+      const uniqueNames = new Set(namedAccounts.map((account) => account.name.trim().toLowerCase()));
+      if (uniqueNames.size !== namedAccounts.length) {
+        throw new Error("Give each account a different name.");
+      }
+      const completionBody = {
+        defaultCurrency: currency,
+        accounts: namedAccounts.map((account) => ({
+          name: account.name.trim(),
+          accountType: account.accountType,
+          openingBalanceMinor: parseOpeningBalance(account.openingBalance),
+        })),
+        interests,
+      };
+      let response: OnboardingStatus;
+      try {
+        response = await apiCall<OnboardingStatus>("/v1/onboarding/complete", {
+          method: "POST",
+          body: completionBody,
+        });
+      } catch (caught) {
+        if (!isApiNotFound(caught)) throw caught;
+        response = await completeWithLegacyApi(completionBody);
+      }
       setInterests(response.interests ?? interests);
       primeUserCurrency(currency);
       if (draftKey) window.localStorage.removeItem(draftKey);
-      setStep(4);
+      setStep(3);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message.trim() : "Could not finish setup.");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function completeWithLegacyApi(body: {
+    defaultCurrency: string;
+    accounts: Array<{
+      name: string;
+      accountType: AccountType;
+      openingBalanceMinor: number;
+    }>;
+    interests: string[];
+  }): Promise<OnboardingStatus> {
+    const currentPreferences = await apiCall<Preferences>("/v1/user/preferences").catch(() => ({
+      defaultCurrency: body.defaultCurrency,
+      theme: "light" as const,
+      notificationsEnabled: false,
+    }));
+    await apiCall("/v1/user/preferences", {
+      method: "PATCH",
+      body: {
+        defaultCurrency: body.defaultCurrency,
+        theme: currentPreferences.theme,
+        notificationsEnabled: currentPreferences.notificationsEnabled,
+      },
+    });
+
+    const existing = await apiCall<ExistingAccount[] | null>("/v1/accounts").catch(() => []);
+    const existingNames = new Set((existing ?? []).map((account) => account.name.trim().toLowerCase()));
+    for (const account of body.accounts) {
+      if (existingNames.has(account.name.toLowerCase())) continue;
+      await apiCall("/v1/accounts", {
+        method: "POST",
+        body: {
+          ...account,
+          accountClass: "asset",
+          currency: body.defaultCurrency,
+        },
+      });
+    }
+
+    return { completed: true, interests: body.interests, accountsCreated: body.accounts.length };
   }
 
   if (sessionStatus === "loading" || checking) {
@@ -262,7 +305,7 @@ export default function OnboardingPage() {
       <main className="grid min-h-screen place-items-center bg-background p-6">
         <section className="card grid max-w-md gap-4 text-center">
           <h1 className="text-2xl font-semibold text-on-surface">Sign in to continue</h1>
-          <p className="text-on-surface-soft">Your setup is tied to your Chuma account.</p>
+          <p className="text-on-surface-soft">Your setup is tied to your Expenses account.</p>
           <Link href="/login" className="primaryButton justify-center">Go to sign in</Link>
         </section>
       </main>
@@ -274,23 +317,23 @@ export default function OnboardingPage() {
       <section className="mx-auto grid w-full max-w-3xl gap-6 rounded-lg border border-outline bg-surface p-5 shadow-md sm:p-8">
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-4">
-            <strong className="text-2xl text-primary">Chuma</strong>
-            {step <= 3 ? (
-              <span className="text-sm font-semibold text-on-surface-soft">Step {step} of 3</span>
+            <Brand compact priority />
+            {step <= 2 ? (
+              <span className="text-sm font-semibold text-on-surface-soft">Step {step} of 2</span>
             ) : null}
           </div>
-          {step <= 3 ? (
+          {step <= 2 ? (
             <div
               className="h-1.5 overflow-hidden rounded-full bg-surface-soft"
               role="progressbar"
               aria-label="Setup progress"
               aria-valuemin={1}
-              aria-valuemax={3}
+              aria-valuemax={2}
               aria-valuenow={step}
             >
               <div
                 className="h-full rounded-full bg-accent transition-[width]"
-                style={{ width: `${(step / 3) * 100}%` }}
+                style={{ width: `${(step / 2) * 100}%` }}
               />
             </div>
           ) : null}
@@ -299,12 +342,12 @@ export default function OnboardingPage() {
         {step === 1 ? (
           <section className="grid gap-5" aria-labelledby="currency-heading">
             <div>
-              <p className="text-sm font-semibold text-accent">Welcome to Chuma</p>
+              <p className="text-sm font-semibold text-accent">Welcome to Expenses</p>
               <h1 id="currency-heading" className="mt-1 text-3xl font-semibold text-on-surface">
                 Start with your everyday currency
               </h1>
               <p className="mt-2 text-on-surface-soft">
-                Chuma uses this for your main dashboard. Individual investments can still use other currencies.
+                Expenses uses this for your main dashboard. Individual investments can still use other currencies.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Default currency">
@@ -329,155 +372,140 @@ export default function OnboardingPage() {
         {step === 2 ? (
           <section className="grid gap-5" aria-labelledby="accounts-heading">
             <div>
-              <p className="text-sm font-semibold text-accent">Your starting point</p>
+              <p className="text-sm font-semibold text-accent">Optional shortcuts</p>
               <h1 id="accounts-heading" className="mt-1 text-3xl font-semibold text-on-surface">
-                Where is your money today?
+                Make Expenses useful from day one
               </h1>
               <p className="mt-2 text-on-surface-soft">
-                Add the places you use and, optionally, their current balances. You can change everything later.
+                Tap any accounts you use, or skip this and add them later. Detailed balances can wait.
               </p>
             </div>
 
             <div className="grid gap-2">
-              <span className="text-sm font-semibold text-on-surface">Quick add</span>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-on-surface">Starting accounts</span>
+                <span className="text-xs text-on-surface-soft">
+                  {namedAccounts.length ? `${namedAccounts.length} selected` : "None selected"}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {accountPresets.map((preset) => (
                   <button
                     key={preset.name}
                     type="button"
-                    className="ghostButton"
-                    onClick={() => addPreset(preset.name, preset.accountType)}
+                    aria-pressed={namedAccounts.some((account) => account.name === preset.name)}
+                    className={namedAccounts.some((account) => account.name === preset.name)
+                      ? "entryTypeButton active"
+                      : "entryTypeButton"}
+                    onClick={() => togglePreset(preset.name, preset.accountType)}
                   >
-                    + {preset.name}
+                    {preset.name}
                   </button>
                 ))}
               </div>
+              <p className="text-xs text-on-surface-soft">
+                Each selected account starts at {currency} 0.00. Open the optional details only if you want to change that now.
+              </p>
+              <details className="mt-2 rounded-lg border border-outline bg-surface-soft">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-on-surface">
+                  Edit account details or add a custom account
+                  <span className="ml-2 font-normal text-on-surface-soft">(optional)</span>
+                </summary>
+                <div className="grid gap-4 border-t border-outline p-4">
+                  {accounts.map((account, index) => (
+                    <div
+                      key={account.localId}
+                      className="grid gap-3 rounded-lg border border-outline bg-surface p-4 md:grid-cols-[minmax(0,1fr)_170px_170px_auto]"
+                    >
+                      <div className="field">
+                        <label htmlFor={`account-name-${account.localId}`}>Account name</label>
+                        <input
+                          id={`account-name-${account.localId}`}
+                          value={account.name}
+                          placeholder={index === 0 ? "e.g. Airtel Money" : "e.g. Main bank"}
+                          onChange={(event) => updateAccount(account.localId, { name: event.target.value })}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor={`account-type-${account.localId}`}>Type</label>
+                        <select
+                          id={`account-type-${account.localId}`}
+                          value={account.accountType}
+                          onChange={(event) => updateAccount(account.localId, {
+                            accountType: event.target.value as AccountType,
+                          })}
+                        >
+                          {accountTypes.map((type) => (
+                            <option key={type.value} value={type.value}>{type.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label htmlFor={`account-balance-${account.localId}`}>Balance now</label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-on-surface-soft">{currency}</span>
+                          <input
+                            id={`account-balance-${account.localId}`}
+                            aria-label={`${account.name || "Custom account"} opening balance`}
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            value={account.openingBalance}
+                            onChange={(event) => updateAccount(account.localId, {
+                              openingBalance: event.target.value,
+                            })}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="ghostButton self-end"
+                        aria-label={`Remove ${account.name || "custom account"}`}
+                        onClick={() => setAccounts((current) => current.filter(
+                          (item) => item.localId !== account.localId,
+                        ))}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" className="ghostButton justify-self-start" onClick={addCustomAccount}>
+                    + Add custom account
+                  </button>
+                  <p className="text-xs text-on-surface-soft">
+                    Balances are optional. Use a minus sign only for an overdrawn account.
+                  </p>
+                </div>
+              </details>
             </div>
 
-            <div className="grid gap-4">
-              {accounts.map((account, index) => (
-                <div
-                  key={account.localId}
-                  className="grid gap-3 rounded-lg border border-outline bg-surface-soft p-4 md:grid-cols-[minmax(0,1fr)_170px_170px_auto]"
-                >
-                  <div className="field">
-                    <label htmlFor={`account-name-${account.localId}`}>Account name</label>
-                    <input
-                      id={`account-name-${account.localId}`}
-                      value={account.name}
-                      placeholder={index === 0 ? "e.g. Airtel Money" : "e.g. Main bank"}
-                      onChange={(event) => updateAccount(account.localId, { name: event.target.value })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor={`account-type-${account.localId}`}>Type</label>
-                    <select
-                      id={`account-type-${account.localId}`}
-                      value={account.accountType}
-                      onChange={(event) => updateAccount(account.localId, {
-                        accountType: event.target.value as AccountType,
-                      })}
+            <div className="grid gap-3 border-t border-outline pt-5">
+              <div>
+                <h2 className="text-lg font-semibold text-on-surface">What else would you like to track?</h2>
+                <p className="text-sm text-on-surface-soft">
+                  Optional—these choices only tailor your next-step suggestions.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {interestOptions.map((option) => {
+                  const selected = interests.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={selected}
+                      className={selected ? "entryTypeButton active" : "entryTypeButton"}
+                      onClick={() => toggleInterest(option.value)}
                     >
-                      {accountTypes.map((type) => (
-                        <option key={type.value} value={type.value}>{type.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label htmlFor={`account-balance-${account.localId}`}>Balance now</label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-on-surface-soft">{currency}</span>
-                      <input
-                        id={`account-balance-${account.localId}`}
-                        aria-label={`${account.name || "Account"} opening balance`}
-                        inputMode="decimal"
-                        placeholder="0.00"
-                        value={account.openingBalance}
-                        onChange={(event) => updateAccount(account.localId, {
-                          openingBalance: event.target.value,
-                        })}
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="ghostButton self-end"
-                    aria-label={`Remove ${account.name || "account"}`}
-                    onClick={() => {
-                      setAccounts((current) => current.length === 1
-                        ? [emptyAccount(current[0]?.localId)]
-                        : current.filter((item) => item.localId !== account.localId));
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <button type="button" className="ghostButton" onClick={addBlankAccount}>
-                + Add another account
-              </button>
-              <span className="text-xs text-on-surface-soft">
-                Balances are optional. Use a minus sign only for an overdrawn account.
-              </span>
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </section>
         ) : null}
 
         {step === 3 ? (
-          <section className="grid gap-6" aria-labelledby="other-heading">
-            <div>
-              <p className="text-sm font-semibold text-accent">Personalize your next steps</p>
-              <h1 id="other-heading" className="mt-1 text-3xl font-semibold text-on-surface">
-                What else would you like to track?
-              </h1>
-              <p className="mt-2 text-on-surface-soft">
-                This is optional. Your choices create a useful checklist after setup.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {interestOptions.map((option) => {
-                const selected = interests.includes(option.value);
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={selected}
-                    className={selected ? "entryTypeButton active" : "entryTypeButton"}
-                    onClick={() => toggleInterest(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="rounded-lg border border-outline bg-surface-soft p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Review</p>
-                  <h2 className="mt-1 text-lg font-semibold text-on-surface">
-                    {namedAccounts.length} {namedAccounts.length === 1 ? "account" : "accounts"} in {currency}
-                  </h2>
-                </div>
-                <button type="button" className="ghostButton" onClick={() => setStep(2)}>Edit accounts</button>
-              </div>
-              <ul className="mt-3 divide-y divide-outline">
-                {namedAccounts.map((account) => (
-                  <li key={account.localId} className="flex items-center justify-between gap-4 py-2 text-sm">
-                    <span className="font-semibold text-on-surface">{account.name}</span>
-                    <span className="text-on-surface-soft">
-                      {formatDraftBalance(account.openingBalance, currency)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        ) : null}
-
-        {step === 4 ? (
           <section className="grid gap-5" aria-labelledby="ready-heading">
             <div>
               <p className="text-sm font-semibold text-positive">Setup complete</p>
@@ -485,15 +513,26 @@ export default function OnboardingPage() {
                 Your workspace is ready
               </h1>
               <p className="mt-2 text-on-surface-soft">
-                Add one real transaction first. The other items can wait until you need them.
+                {namedAccounts.length
+                  ? "Add one real transaction first. The other items can wait until you need them."
+                  : "Add an account when you are ready. Everything else can wait until you need it."}
               </p>
             </div>
-            <Link
-              href="/add"
-              className="rounded-lg border-2 border-primary bg-primary-softer p-5 text-lg font-semibold text-primary hover:bg-primary-soft"
-            >
-              Add your first transaction
-            </Link>
+            {namedAccounts.length ? (
+              <Link
+                href="/add"
+                className="rounded-lg border-2 border-primary bg-primary-softer p-5 text-lg font-semibold text-primary hover:bg-primary-soft"
+              >
+                Add your first transaction
+              </Link>
+            ) : (
+              <Link
+                href="/settings/accounts"
+                className="rounded-lg border-2 border-primary bg-primary-softer p-5 text-lg font-semibold text-primary hover:bg-primary-soft"
+              >
+                Add your first account
+              </Link>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               {(interests.includes("stocks") || interests.includes("bonds")) ? (
                 <Link
@@ -530,7 +569,7 @@ export default function OnboardingPage() {
         {error ? (
           <div role="alert" className="rounded-md bg-negative-soft p-3 text-sm text-negative">
             <p>{error}</p>
-            {!hydrated && step <= 3 ? (
+            {!hydrated && step <= 2 ? (
               <button
                 type="button"
                 className="mt-2 font-semibold underline"
@@ -542,7 +581,7 @@ export default function OnboardingPage() {
           </div>
         ) : null}
 
-        {step <= 3 ? (
+        {step <= 2 ? (
           <div className="flex items-center justify-between gap-3 border-t border-outline pt-5">
             <button
               type="button"
@@ -561,11 +600,6 @@ export default function OnboardingPage() {
               </button>
             ) : null}
             {step === 2 ? (
-              <button type="button" className="primaryButton" onClick={continueFromAccounts}>
-                Review setup
-              </button>
-            ) : null}
-            {step === 3 ? (
               <button
                 type="button"
                 className="primaryButton"

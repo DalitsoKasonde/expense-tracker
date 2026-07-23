@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { PreferenceThemeSync } from "@/components/preference-theme-sync";
 import { TopNav } from "@/components/top-nav";
+import { isApiNotFound } from "@/lib/api-error";
 
 function initialsFor(name?: string | null, email?: string | null) {
   const source = name?.trim() || email?.trim() || "U";
@@ -44,8 +45,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   try {
     onboarding = await apiFetch<{ completed: boolean }>("/v1/onboarding/status", session.accessToken);
   } catch (err) {
-    console.error("Failed to check onboarding status", err);
-    onboardingCheckFailed = true;
+    if (isApiNotFound(err)) {
+      try {
+        const accounts = await apiFetch<Array<unknown> | null>("/v1/accounts", session.accessToken);
+        onboarding = { completed: Array.isArray(accounts) && accounts.length > 0 };
+      } catch (fallbackError) {
+        console.error("Failed to check legacy onboarding status", fallbackError);
+        onboardingCheckFailed = true;
+      }
+    } else {
+      console.error("Failed to check onboarding status", err);
+      onboardingCheckFailed = true;
+    }
   }
   if (!onboardingCheckFailed && !onboarding?.completed) {
     redirect("/onboarding");

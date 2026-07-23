@@ -35,13 +35,6 @@ func TestNormalizeOnboardingRequest(t *testing.T) {
 		want    string
 	}{
 		{
-			name: "requires an account",
-			request: completeOnboardingRequest{
-				DefaultCurrency: "ZMW",
-			},
-			want: "at least one account",
-		},
-		{
 			name: "rejects duplicate account names",
 			request: completeOnboardingRequest{
 				DefaultCurrency: "ZMW",
@@ -74,6 +67,18 @@ func TestNormalizeOnboardingRequest(t *testing.T) {
 			want: "interest is invalid",
 		},
 	}
+
+	t.Run("allows account setup to be deferred", func(t *testing.T) {
+		request, err := normalizeOnboardingRequest(completeOnboardingRequest{
+			DefaultCurrency: "ZMW",
+		})
+		if err != nil {
+			t.Fatalf("normalizeOnboardingRequest returned an error: %v", err)
+		}
+		if len(request.Accounts) != 0 {
+			t.Fatalf("account count = %d, want 0", len(request.Accounts))
+		}
+	})
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
