@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { UnifiedDashboardAsset, useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { formatMoney } from "@/lib/format-money";
 
@@ -74,6 +74,18 @@ export default function InvestmentsPage() {
           subtitle={largestHolding ? `Largest holding: ${largestHolding.name}. See what you invested, what each holding is worth now, and how your money is allocated.` : "Add your first investment to track cost, current value, and allocation."}
         />
 
+        {assets.length === 0 ? (
+          <EmptyState
+            title="No investments yet"
+            description="Add a stock, bond, or other holding and Chuma will track cost, current value, allocation, and concentration for you."
+            action={
+              <Link href="/investments/add" className="primaryButton">
+                Add investment
+              </Link>
+            }
+          />
+        ) : (
+          <>
         <div className="portfolioStage">
           <section className="heroCard performanceHero">
             <div className="portfolioSummaryTop">
@@ -143,24 +155,17 @@ export default function InvestmentsPage() {
               <h2 className="sectionHeading">Portfolio weight</h2>
             </div>
             <div className="portfolioAllocationList">
-              {allocation.length === 0 ? (
-                <div className="resourceBody">
-                  <strong>No allocation yet</strong>
-                  <span className="muted">Add an investment to begin seeing portfolio weight and balance.</span>
-                </div>
-              ) : (
-                allocation.map((asset) => (
-                  <div key={asset.assetId} className="portfolioAllocationRow">
-                    <div className="utilityRow">
-                      <span>{asset.name}</span>
-                      <strong>{asset.weight}%</strong>
-                    </div>
-                    <div className="portfolioBar" aria-hidden="true">
-                      <div className="portfolioBarFill" style={{ width: `${Math.max(8, asset.weight)}%` }} />
-                    </div>
+              {allocation.map((asset) => (
+                <div key={asset.assetId} className="portfolioAllocationRow">
+                  <div className="utilityRow">
+                    <span>{asset.name}</span>
+                    <strong>{asset.weight}%</strong>
                   </div>
-                ))
-              )}
+                  <div className="portfolioBar" aria-hidden="true">
+                    <div className="portfolioBarFill" style={{ width: `${Math.max(8, asset.weight)}%` }} />
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
@@ -184,60 +189,55 @@ export default function InvestmentsPage() {
           </section>
         </div>
 
-        {assets.length === 0 ? (
-          <div className="card resourceBody">
-            <strong>No holdings yet</strong>
-            <span className="muted">Add your first investment to start seeing allocation, valuation, and portfolio structure.</span>
+        <section className="pageSection">
+          <div className="sectionHeaderCopy">
+            <p className="sectionKicker">Holdings</p>
+            <h2 className="sectionHeading">Portfolio structure</h2>
           </div>
-        ) : (
-          <section className="pageSection">
-            <div className="sectionHeaderCopy">
-              <p className="sectionKicker">Holdings</p>
-              <h2 className="sectionHeading">Portfolio structure</h2>
-            </div>
-            <div className="portfolioHoldingList">
-              {assets.map((asset) => (
-                <Link
-                  key={asset.assetId}
-                  href={`/investments/${asset.assetId}`}
-                  className="portfolioHoldingRow"
-                >
-                  <div className="portfolioHoldingTop">
-                    <div className="resourceBody">
-                      <strong>{asset.name}</strong>
-                      <span className="muted">
-                        {asset.assetClass.replaceAll("_", " ")}
-                        {asset.symbol ? ` • ${asset.symbol}` : ""}
-                      </span>
-                    </div>
-                    <div className="ledgerAmountBlock">
-                      <span className="ledgerAmount positive">{formatMoney(asset.currentValueMinor, asset.currency)}</span>
-                      <span className="muted">Invested {formatMoney(asset.investedAmountMinor, asset.currency)}</span>
-                    </div>
+          <div className="portfolioHoldingList">
+            {assets.map((asset) => (
+              <Link
+                key={asset.assetId}
+                href={`/investments/${asset.assetId}`}
+                className="portfolioHoldingRow"
+              >
+                <div className="portfolioHoldingTop">
+                  <div className="resourceBody">
+                    <strong>{asset.name}</strong>
+                    <span className="muted">
+                      {asset.assetClass.replaceAll("_", " ")}
+                      {asset.symbol ? ` • ${asset.symbol}` : ""}
+                    </span>
                   </div>
-                  <div className="portfolioLegend">
-                    <div className="utilityRow">
-                      <span className="muted">Portfolio weight</span>
-                      <strong>{allocationById.get(asset.assetId) ?? 0}%</strong>
-                    </div>
-                    <div className="portfolioBar" aria-hidden="true">
-                      <div
-                        className="portfolioBarFill"
-                        style={{ width: `${Math.max(8, allocationById.get(asset.assetId) ?? 0)}%` }}
-                      />
-                    </div>
+                  <div className="ledgerAmountBlock">
+                    <span className="ledgerAmount positive">{formatMoney(asset.currentValueMinor, asset.currency)}</span>
+                    <span className="muted">Invested {formatMoney(asset.investedAmountMinor, asset.currency)}</span>
                   </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
+                </div>
+                <div className="portfolioLegend">
+                  <div className="utilityRow">
+                    <span className="muted">Portfolio weight</span>
+                    <strong>{allocationById.get(asset.assetId) ?? 0}%</strong>
+                  </div>
+                  <div className="portfolioBar" aria-hidden="true">
+                    <div
+                      className="portfolioBarFill"
+                      style={{ width: `${Math.max(8, allocationById.get(asset.assetId) ?? 0)}%` }}
+                    />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
 
         <div className="formActions">
           <Link href="/investments/add" className="primaryButton">
             Add investment
           </Link>
         </div>
+        </>
+        )}
       </section>
     </main>
   );
