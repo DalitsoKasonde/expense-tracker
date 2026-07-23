@@ -13,6 +13,7 @@ import (
 	"github.com/dalitsokasonde/expense-tracker/api/internal/auth"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/store"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 // Accounts
@@ -74,6 +75,10 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	account, err := s.accounts.Create(r.Context(), claims.UserID, name, accountType, accountClass, currency, req.OpeningBalanceMinor)
 	if err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			http.Error(w, "an active account with that name already exists", http.StatusConflict)
+			return
+		}
 		writeSettingsError(w, err, "failed to create account")
 		return
 	}
@@ -124,6 +129,10 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request) {
 
 	account, err := s.accounts.Update(r.Context(), id, claims.UserID, name, accountType, accountClass, currency)
 	if err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			http.Error(w, "an active account with that name already exists", http.StatusConflict)
+			return
+		}
 		writeSettingsError(w, err, "failed to update account")
 		return
 	}
@@ -567,10 +576,26 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if entryKind == "investment_buy" && req.Quantity != nil && req.UnitPrice != nil {
+	if entryKind == "investment_buy" {
+		if req.AssetID == nil || strings.TrimSpace(*req.AssetID) == "" {
+			http.Error(w, "assetId is required for investment purchases", http.StatusBadRequest)
+			return
+		}
+		if req.Quantity == nil || math.IsNaN(*req.Quantity) || math.IsInf(*req.Quantity, 0) || *req.Quantity <= 0 {
+			http.Error(w, "quantity must be greater than zero for investment purchases", http.StatusBadRequest)
+			return
+		}
+		if req.UnitPrice == nil || *req.UnitPrice <= 0 {
+			http.Error(w, "unitPrice must be greater than zero for investment purchases", http.StatusBadRequest)
+			return
+		}
 		fees := int64(0)
 		if req.Fees != nil {
 			fees = *req.Fees
+		}
+		if fees < 0 {
+			http.Error(w, "fees cannot be negative", http.StatusBadRequest)
+			return
 		}
 		req.Amount = calculateInvestmentTotal(*req.Quantity, *req.UnitPrice, fees)
 	}
@@ -592,7 +617,7 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tx := store.Transaction{
+	transaction := store.Transaction{
 		UserID:               claims.UserID,
 		TransactionDate:      req.TransactionDate,
 		EntryKind:            entryKind,
@@ -615,14 +640,67 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		OriginEventType:      req.OriginEventType,
 	}
 
-	result, err := s.transactions.Create(r.Context(), tx)
-	if err != nil {
-		http.Error(w, "failed to create transaction: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	var result store.Transaction
+	if entryKind == "investment_buy" {
+		dbTx, beginErr := s.db.Begin(r.Context())
+		if beginErr != nil {
+			writeInternalError(w, r, "transactions.investment.begin", "could not record the investment purchase", beginErr)
+			return
+		}
+		defer dbTx.Rollback(r.Context())
 
-	// If investment_buy, create asset_lot
-	if entryKind == "investment_buy" && req.AssetID != nil && req.Quantity != nil && req.UnitPrice != nil {
+		var assetCurrency string
+		assetErr := dbTx.QueryRow(r.Context(), `
+			select currency
+			from assets
+			where id = $1 and user_id = $2
+			for share
+		`, *req.AssetID, claims.UserID).Scan(&assetCurrency)
+		if errors.Is(assetErr, pgx.ErrNoRows) {
+			http.Error(w, "asset must belong to the signed-in user", http.StatusBadRequest)
+			return
+		}
+		if assetErr != nil {
+			writeInternalError(w, r, "transactions.investment.validate_asset", "could not validate the investment", assetErr)
+			return
+		}
+		if assetCurrency != currency {
+			http.Error(w, "asset and transaction must use the same currency", http.StatusBadRequest)
+			return
+		}
+
+		var accountCurrency, accountClass string
+		accountErr := dbTx.QueryRow(r.Context(), `
+			select currency, account_class
+			from accounts
+			where id = $1
+			  and user_id = $2
+			  and archived_at is null
+			for share
+		`, req.AccountID, claims.UserID).Scan(&accountCurrency, &accountClass)
+		if errors.Is(accountErr, pgx.ErrNoRows) {
+			http.Error(w, "payment account must be active and belong to the signed-in user", http.StatusBadRequest)
+			return
+		}
+		if accountErr != nil {
+			writeInternalError(w, r, "transactions.investment.validate_account", "could not validate the payment account", accountErr)
+			return
+		}
+		if accountClass != "asset" {
+			http.Error(w, "investment purchases must be paid from an asset account", http.StatusBadRequest)
+			return
+		}
+		if accountCurrency != currency {
+			http.Error(w, "payment account and investment must use the same currency", http.StatusBadRequest)
+			return
+		}
+
+		result, err = s.transactions.CreateWithTx(r.Context(), dbTx, transaction)
+		if err != nil {
+			writeInternalError(w, r, "transactions.investment.create_transaction", "could not record the investment purchase", err)
+			return
+		}
+
 		fees := int64(0)
 		if req.Fees != nil {
 			fees = *req.Fees
@@ -640,7 +718,20 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 			AcquisitionDate: req.TransactionDate,
 		}
 
-		s.assetLots.Create(r.Context(), lot)
+		if _, err = s.assetLots.CreateWithTx(r.Context(), dbTx, lot); err != nil {
+			writeInternalError(w, r, "transactions.investment.create_lot", "could not record the investment purchase", err)
+			return
+		}
+		if err = dbTx.Commit(r.Context()); err != nil {
+			writeInternalError(w, r, "transactions.investment.commit", "could not record the investment purchase", err)
+			return
+		}
+	} else {
+		result, err = s.transactions.Create(r.Context(), transaction)
+		if err != nil {
+			writeInternalError(w, r, "transactions.create", "could not record the transaction", err)
+			return
+		}
 	}
 
 	// Cache response if idempotency key provided

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -76,6 +77,18 @@ func (s *TransactionStore) ListByUser(ctx context.Context, userID string, limit,
 }
 
 func (s *TransactionStore) Create(ctx context.Context, tx Transaction) (Transaction, error) {
+	return createTransaction(ctx, s.db, tx)
+}
+
+func (s *TransactionStore) CreateWithTx(ctx context.Context, dbTx pgx.Tx, tx Transaction) (Transaction, error) {
+	return createTransaction(ctx, dbTx, tx)
+}
+
+type transactionRowQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func createTransaction(ctx context.Context, db transactionRowQuerier, tx Transaction) (Transaction, error) {
 	fees := int64(0)
 	if tx.Fees != nil {
 		fees = *tx.Fees
@@ -87,7 +100,7 @@ func (s *TransactionStore) Create(ctx context.Context, tx Transaction) (Transact
 	}
 
 	var result Transaction
-	err := s.db.QueryRow(ctx, `
+	err := db.QueryRow(ctx, `
 		insert into transactions (
 			user_id, transaction_date, entry_kind, amount, currency, account_id, destination_account_id, category_id,
 			income_source_id, business_id, asset_id, loan_id, quantity, unit_price, fees, note, source, import_id,

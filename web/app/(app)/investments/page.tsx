@@ -15,18 +15,20 @@ export default function InvestmentsPage() {
     allocationById,
     currencyTotals,
     largestHolding,
+    missingPositionCount,
     primaryCurrency,
     totalCurrentValue,
     totalInvested,
   } = useMemo(() => {
     const nextAssets = data?.assets ?? [];
+    const positionedAssets = nextAssets.filter((asset) => asset.hasPosition);
     const nextPrimaryCurrency = data?.currency ?? nextAssets[0]?.currency ?? "ZMW";
     const totals = new Map<string, { current: number; invested: number }>();
     let nextLargestHolding: UnifiedDashboardAsset | null = null;
     let nextTotalCurrentValue = 0;
     let nextTotalInvested = 0;
 
-    for (const asset of nextAssets) {
+    for (const asset of positionedAssets) {
       const total = totals.get(asset.currency) ?? { current: 0, invested: 0 };
       total.current += asset.currentValueMinor;
       total.invested += asset.investedAmountMinor;
@@ -41,7 +43,7 @@ export default function InvestmentsPage() {
       }
     }
 
-    const nextAllocation = nextAssets.map((asset) => {
+    const nextAllocation = positionedAssets.map((asset) => {
       const currencyTotal = totals.get(asset.currency)?.current ?? 0;
       return {
         ...asset,
@@ -56,6 +58,7 @@ export default function InvestmentsPage() {
       allocationById: nextAllocationById,
       currencyTotals: [...totals.entries()],
       largestHolding: nextLargestHolding,
+      missingPositionCount: nextAssets.length - positionedAssets.length,
       primaryCurrency: nextPrimaryCurrency,
       totalCurrentValue: nextTotalCurrentValue,
       totalInvested: nextTotalInvested,
@@ -77,7 +80,7 @@ export default function InvestmentsPage() {
         {assets.length === 0 ? (
           <EmptyState
             title="No investments yet"
-            description="Add a stock, bond, or other holding and Chuma will track cost, current value, allocation, and concentration for you."
+            description="Add a stock, bond, or other holding and Expenses will track cost, current value, allocation, and concentration for you."
             action={
               <Link href="/investments/add" className="primaryButton">
                 Add investment
@@ -86,6 +89,18 @@ export default function InvestmentsPage() {
           />
         ) : (
           <>
+        {missingPositionCount > 0 && (
+          <section className="card" role="status">
+            <strong>
+              {missingPositionCount === 1
+                ? "1 tracked asset has no position recorded"
+                : `${missingPositionCount} tracked assets have no positions recorded`}
+            </strong>
+            <p className="muted">
+              These assets stay visible below, but they are excluded from portfolio totals until a purchase or opening position is recorded.
+            </p>
+          </section>
+        )}
         <div className="portfolioStage">
           <section className="heroCard performanceHero">
             <div className="portfolioSummaryTop">
@@ -210,11 +225,20 @@ export default function InvestmentsPage() {
                     </span>
                   </div>
                   <div className="ledgerAmountBlock">
-                    <span className="ledgerAmount positive">{formatMoney(asset.currentValueMinor, asset.currency)}</span>
-                    <span className="muted">Invested {formatMoney(asset.investedAmountMinor, asset.currency)}</span>
+                    {asset.hasPosition ? (
+                      <>
+                        <span className="ledgerAmount positive">{formatMoney(asset.currentValueMinor, asset.currency)}</span>
+                        <span className="muted">Invested {formatMoney(asset.investedAmountMinor, asset.currency)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="metaBadge">No position recorded</span>
+                        <span className="muted">Excluded from portfolio totals</span>
+                      </>
+                    )}
                   </div>
                 </div>
-                <div className="portfolioLegend">
+                {asset.hasPosition && <div className="portfolioLegend">
                   <div className="utilityRow">
                     <span className="muted">Portfolio weight</span>
                     <strong>{allocationById.get(asset.assetId) ?? 0}%</strong>
@@ -225,7 +249,7 @@ export default function InvestmentsPage() {
                       style={{ width: `${Math.max(8, allocationById.get(asset.assetId) ?? 0)}%` }}
                     />
                   </div>
-                </div>
+                </div>}
               </Link>
             ))}
           </div>

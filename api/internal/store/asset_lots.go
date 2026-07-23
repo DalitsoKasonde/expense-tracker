@@ -71,6 +71,18 @@ func NewAssetLotStore(db *pgxpool.Pool) *AssetLotStore {
 }
 
 func (s *AssetLotStore) Create(ctx context.Context, lot AssetLot) (AssetLot, error) {
+	return createAssetLot(ctx, s.db, lot)
+}
+
+func (s *AssetLotStore) CreateWithTx(ctx context.Context, dbTx pgx.Tx, lot AssetLot) (AssetLot, error) {
+	return createAssetLot(ctx, dbTx, lot)
+}
+
+type assetLotRowQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func createAssetLot(ctx context.Context, db assetLotRowQuerier, lot AssetLot) (AssetLot, error) {
 	if lot.RemainingQuantity == 0 {
 		lot.RemainingQuantity = lot.Quantity
 	}
@@ -79,7 +91,7 @@ func (s *AssetLotStore) Create(ctx context.Context, lot AssetLot) (AssetLot, err
 	}
 
 	var result AssetLot
-	err := s.db.QueryRow(ctx, `
+	err := db.QueryRow(ctx, `
 		insert into asset_lots (
 			user_id, asset_id, transaction_id, quantity, remaining_quantity, unit_cost, unit_price,
 			fees, total_cost, acquired_at, acquisition_date

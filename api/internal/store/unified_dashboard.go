@@ -24,6 +24,7 @@ type DashboardAsset struct {
 	Currency            string  `json:"currency"`
 	InvestedAmountMinor int64   `json:"investedAmountMinor"`
 	CurrentValueMinor   int64   `json:"currentValueMinor"`
+	HasPosition         bool    `json:"hasPosition"`
 }
 
 type UnifiedDashboard struct {
@@ -204,13 +205,21 @@ func (s *UnifiedDashboardStore) Get(ctx context.Context, userID, currency string
 					when a.asset_class = 'bond' then coalesce(bp.principal_minor, 0)
 					else coalesce(lots.total_cost_minor, 0)
 				end
-			) as current_value_minor
+			) as current_value_minor,
+			case
+				when a.asset_class = 'bond' then bp.asset_id is not null
+				else coalesce(lots.lot_count, 0) > 0
+			end as has_position
 		from assets a
 		left join bond_positions bp on bp.asset_id = a.id
 		left join lateral (
-			select coalesce(sum(round(total_cost::numeric * remaining_quantity / nullif(quantity, 0))), 0)::bigint as total_cost_minor
+			select
+				coalesce(sum(round(total_cost::numeric * remaining_quantity / nullif(quantity, 0))), 0)::bigint as total_cost_minor,
+				count(*)::integer as lot_count
 			from asset_lots
-			where user_id = $1 and asset_id = a.id
+			where user_id = $1
+			  and asset_id = a.id
+			  and remaining_quantity > 0
 		) lots on true
 		left join lateral (
 			select current_value_minor
@@ -247,6 +256,7 @@ func (s *UnifiedDashboardStore) Get(ctx context.Context, userID, currency string
 			&item.Currency,
 			&item.InvestedAmountMinor,
 			&item.CurrentValueMinor,
+			&item.HasPosition,
 		); err != nil {
 			return UnifiedDashboard{}, err
 		}

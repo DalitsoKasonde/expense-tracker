@@ -22,6 +22,7 @@ export interface UnifiedDashboardAsset {
   currency: string;
   investedAmountMinor: number;
   currentValueMinor: number;
+  hasPosition: boolean;
 }
 
 export interface UnifiedDashboardData {
