@@ -1,0 +1,33 @@
+version: "3.9"
+
+# Shared edge proxy for ALL apps on this VM — lives once per host, not per
+# app. Traefik discovers routing per-app via Docker labels on each app's own
+# compose file, so adding app #2/#3 needs NO edits here — just labels on the
+# new app's services + DNS pointed at the VM.
+#
+# One-time setup on the VM:
+#   docker network create edge
+#   mkdir -p /srv/edge/letsencrypt && touch /srv/edge/letsencrypt/acme.json
+#   chmod 600 /srv/edge/letsencrypt/acme.json
+#   # copy deploy/traefik.yml to /srv/edge/traefik.yml (edit the acme email first)
+#   docker compose -f docker-compose.traefik.yml up -d
+
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: edge-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - edge
+
+networks:
+  edge:
+    external: true
+    name: edge

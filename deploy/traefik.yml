@@ -1,0 +1,30 @@
+## Static Traefik config — one copy per VM, lives at /srv/edge/traefik.yml
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false   # only route containers with traefik.enable=true
+    network: edge
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: you@example.com   # replace with a real address before first run
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+# Dashboard off by default — turn on only behind auth if you need it:
+# api:
+#   dashboard: true

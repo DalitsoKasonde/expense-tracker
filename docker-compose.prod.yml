@@ -1,0 +1,83 @@
+# Production compose for Chuma on the shared Ubuntu VM.
+# Runs alongside other apps' compose files on the same host, all joined to
+# the external "edge" network. Routing is declared per-service via Traefik
+# labels below — the shared Traefik container (deploy/docker-compose.traefik.yml)
+# auto-discovers these over the Docker socket, no central config edit needed.
+# Bring up: docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: chuma-postgres
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: chuma-api
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      APP_ENV: production
+      PORT: "8080"
+    networks:
+      - edge
+      - database
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # No ports are published to the host — Traefik reaches this container
+    # directly over the "edge" network by container name.
+    labels:
+      traefik.enable: "true"
+      # /api/* takes priority over the web catch-all rule below.
+      traefik.http.routers.chuma-api.rule: "Host(`yourdomain.com`) && PathPrefix(`/api`)"
+      traefik.http.routers.chuma-api.entrypoints: "websecure"
+      traefik.http.routers.chuma-api.tls.certresolver: "letsencrypt"
+      traefik.http.routers.chuma-api.priority: "10"
+      traefik.http.services.chuma-api.loadbalancer.server.port: "8080"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: chuma-web
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      PORT: "3000"
+    networks:
+      - edge
+    depends_on:
+      - api
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.chuma-web.rule: "Host(`yourdomain.com`)"
+      traefik.http.routers.chuma-web.entrypoints: "websecure"
+      traefik.http.routers.chuma-web.tls.certresolver: "letsencrypt"
+      traefik.http.services.chuma-web.loadbalancer.server.port: "3000"
+
+networks:
+  edge:
+    external: true
+    name: edge
+  database:
+    internal: true
+
+volumes:
+  postgres_data:
