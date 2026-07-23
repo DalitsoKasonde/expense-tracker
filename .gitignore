@@ -14,3 +14,7 @@ coverage
 api/bin
 api/.cache
 
+# personal financial workbooks used for legacy imports — never commit these
+*.xlsx
+*.xls
+
