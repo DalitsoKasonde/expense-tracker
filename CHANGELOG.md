@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 - 2026-07-24
+- Rebranded from Chuma to Expenses by Inscribed (new logo, app name, PWA manifest)
+- Investment purchases are now recorded atomically, so a failed asset-lot write can no longer leave an orphaned transaction
+- Active account names are now enforced unique per user; duplicates are repaired automatically
+- Assets with no recorded position are excluded from portfolio totals and clearly labeled instead of showing an authoritative zero
+- Reports and Notifications now log request-scoped diagnostics and show a friendly retry state instead of raw errors
+- Account selectors across the app now show account type and currency for disambiguation
+- Onboarding shortened to two screens; starter accounts are now optional
+
 ## 0.3.0 - 2026-07-23
 - Account-to-account transfers and stock purchase totals
 - Personal savings goals split into their own /goals page

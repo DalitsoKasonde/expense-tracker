@@ -1,4 +1,4 @@
-const CACHE_NAME = "expenses-v0.3";
+const CACHE_NAME = "expenses-v0.4";
 const STATIC_ASSETS = [
   "/inscribed-logo.png",
   "/logo.png",
