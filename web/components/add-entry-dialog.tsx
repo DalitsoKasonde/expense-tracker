@@ -93,12 +93,12 @@ const entryTypeGroups: Array<{ label: string; options: EntryTypeOption[] }> = [
     ],
   },
   {
-    label: "Build wealth",
+    label: "Move & grow",
     options: [
       {
         value: "saving_transfer",
-        label: "I moved money to savings",
-        description: "Transfer cash into a savings account",
+        label: "I transferred money",
+        description: "Move money between any two active accounts",
         symbol: "↔",
         tone: "bg-[#EAF2FF] text-[#264E86]",
       },
@@ -283,6 +283,12 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
         const nonLiabilityAccounts = (loadedAccounts ?? []).filter(
           (account) => account.accountClass !== "liability",
         );
+        const defaultSourceAccount = nonLiabilityAccounts[0] ?? loadedAccounts?.[0];
+        const defaultDestinationAccount = nonLiabilityAccounts.find(
+          (account) =>
+            account.id !== defaultSourceAccount?.id &&
+            account.currency === defaultSourceAccount?.currency,
+        );
 
         setAccounts(loadedAccounts ?? []);
         setCategories(loadedCategories ?? []);
@@ -295,9 +301,9 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           transactionDate: today(),
           entryKind: "",
           amount: "",
-          currency: userCurrency,
-          accountId: nonLiabilityAccounts[0]?.id ?? loadedAccounts?.[0]?.id ?? "",
-          destinationAccountId: nonLiabilityAccounts[1]?.id ?? "",
+          currency: defaultSourceAccount?.currency ?? userCurrency,
+          accountId: defaultSourceAccount?.id ?? "",
+          destinationAccountId: defaultDestinationAccount?.id ?? "",
           categoryId: "",
           incomeSourceId: "",
           businessId: "",
@@ -346,6 +352,18 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     () => accounts.filter((account) => account.accountClass !== "liability"),
     [accounts],
   );
+  const sourceAccount = useMemo(
+    () => cashAccounts.find((account) => account.id === formData.accountId),
+    [cashAccounts, formData.accountId],
+  );
+  const transferDestinationAccounts = useMemo(
+    () =>
+      cashAccounts.filter(
+        (account) =>
+          account.id !== formData.accountId && account.currency === sourceAccount?.currency,
+      ),
+    [cashAccounts, formData.accountId, sourceAccount?.currency],
+  );
   const orderedCategories = useMemo(() => buildOrderedCategories(categories), [categories]);
   const filteredCategories = useMemo(
     () =>
@@ -363,11 +381,19 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     formData.entryKind === "debt_principal_payment";
   const accountLabel = formData.entryKind === "income_earned" || formData.entryKind === "income_borrowed"
     ? "Received into"
+    : formData.entryKind === "saving_transfer"
+      ? "From account"
     : formData.entryKind === "debt_principal_payment"
       ? "Paid from"
       : formData.entryKind === "investment_buy" && investmentMode === "bond"
         ? "Coupon and maturity account"
         : "Paid from";
+  const isStockPurchase = formData.entryKind === "investment_buy" && investmentMode !== "bond";
+  const stockQuantity = Number.parseFloat(formData.quantity || "0") || 0;
+  const stockUnitPriceMinor = toMinor(formData.unitPrice);
+  const stockFeesMinor = toMinor(formData.fees);
+  const stockSubtotalMinor = Math.round(stockQuantity * stockUnitPriceMinor);
+  const stockTotalMinor = stockSubtotalMinor + stockFeesMinor;
 
   useEffect(() => {
     if (!formData.categoryId) return;
@@ -380,6 +406,26 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;
     setFormData((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleAccountChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const accountId = event.target.value;
+    const account = cashAccounts.find((item) => item.id === accountId);
+    setFormData((current) => {
+      const destination = cashAccounts.find(
+        (item) => item.id === current.destinationAccountId,
+      );
+      const keepDestination =
+        current.entryKind !== "saving_transfer" ||
+        (destination?.id !== accountId && destination?.currency === account?.currency);
+
+      return {
+        ...current,
+        accountId,
+        currency: account?.currency ?? current.currency,
+        destinationAccountId: keepDestination ? current.destinationAccountId : "",
+      };
+    });
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -397,7 +443,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     setError("");
 
     try {
-      const amountMinor = toMinor(formData.amount);
+      const amountMinor = isStockPurchase ? stockTotalMinor : toMinor(formData.amount);
       if (amountMinor <= 0) {
         throw new Error("Amount must be greater than zero");
       }
@@ -480,9 +526,9 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           throw new Error("Please select or create a stock");
         }
 
-        const quantity = parseFloat(formData.quantity || "0") || undefined;
-        const unitPrice = toMinor(formData.unitPrice);
-        const fees = toMinor(formData.fees);
+        const quantity = stockQuantity || undefined;
+        const unitPrice = stockUnitPriceMinor;
+        const fees = stockFeesMinor;
         if (formData.entryKind === "investment_buy" && (!quantity || unitPrice <= 0)) {
           throw new Error("Investment buys need quantity and unit price");
         }
@@ -658,10 +704,23 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             {formData.entryKind ? (
             <div className="formSectionCard">
               <div className="formSectionHeader">
-                <h2 className="formSectionTitle">Amount &amp; account</h2>
-                <span className="muted">Add the core details for this activity.</span>
+                <h2 className="formSectionTitle">{isStockPurchase ? "Purchase total & account" : "Amount & account"}</h2>
+                <span className="muted">{isStockPurchase ? "The total updates from shares, price, and broker fees." : "Add the core details for this activity."}</span>
               </div>
 
+              {isStockPurchase ? (
+                <div className="rounded-xl border border-investment/25 bg-investment-soft p-4" aria-live="polite" aria-label="Calculated stock purchase total">
+                  <span className="sectionKicker">Total purchase cost</span>
+                  <strong className="mt-2 block text-3xl font-bold tracking-tight text-on-surface">
+                    {formatMoney(stockTotalMinor, formData.currency)}
+                  </strong>
+                  <p className="mt-2 text-xs text-on-surface-soft">
+                    {stockQuantity > 0 && stockUnitPriceMinor > 0
+                      ? `${stockQuantity.toLocaleString()} shares × ${formatMoney(stockUnitPriceMinor, formData.currency)} + ${formatMoney(stockFeesMinor, formData.currency)} fees`
+                      : "Enter the number of shares and price per share below."}
+                  </p>
+                </div>
+              ) : (
               <div className="quickAddAmountBlock mt-1">
                 <span className="sectionKicker">{formData.entryKind === "investment_buy" && investmentMode === "bond" ? "Principal" : "Amount"}</span>
                 <label htmlFor="amount" className="srOnlyLabel">
@@ -682,6 +741,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                   autoFocus
                 />
               </div>
+              )}
 
               <div className="splitFields mt-5">
                 <div className="field">
@@ -690,7 +750,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     id="accountId"
                     name="accountId"
                     value={formData.accountId}
-                    onChange={handleChange}
+                    onChange={handleAccountChange}
                     required
                   >
                     <option value="">Select account</option>
@@ -755,11 +815,11 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             {formData.entryKind === "saving_transfer" ? (
               <div className="formSectionCard">
                 <div className="formSectionHeader">
-                  <h2 className="formSectionTitle">Destination</h2>
-                  <span className="muted">Move money into another asset account.</span>
+                  <h2 className="formSectionTitle">To account</h2>
+                  <span className="muted">Choose another active account using the same currency.</span>
                 </div>
                 <div className="field">
-                  <label htmlFor="destinationAccountId">Destination account</label>
+                  <label htmlFor="destinationAccountId">To account</label>
                   <select
                     id="destinationAccountId"
                     name="destinationAccountId"
@@ -768,9 +828,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     required
                   >
                     <option value="">Select destination</option>
-                    {cashAccounts
-                      .filter((account) => account.id !== formData.accountId)
-                      .map((account) => (
+                    {transferDestinationAccounts.map((account) => (
                         <option key={account.id} value={account.id}>
                           {account.name}
                         </option>
@@ -828,7 +886,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     <div className="field"><label htmlFor="quantity">Shares purchased</label><input id="quantity" name="quantity" type="number" min="0" step="0.000001" value={formData.quantity} onChange={handleChange} required /></div>
                     <div className="field"><label htmlFor="unitPrice">Price per share</label><input id="unitPrice" name="unitPrice" type="number" min="0" step="0.01" value={formData.unitPrice} onChange={handleChange} required /></div>
                   </div>
-                  <div className="field"><label htmlFor="fees">Broker fees</label><input id="fees" name="fees" type="number" min="0" step="0.01" value={formData.fees} onChange={handleChange} /></div>
+                  <div className="field"><label htmlFor="fees">Broker fees</label><input id="fees" name="fees" type="number" min="0" step="0.01" value={formData.fees} onChange={handleChange} /><span className="muted">Included automatically in the total purchase cost.</span></div>
                 </> : <>
                   <div className="splitFields">
                     <div className="field"><label htmlFor="couponRate">Annual coupon rate (%)</label><input id="couponRate" type="number" min="0" step="0.01" value={newInvestment.couponRate} onChange={(event) => setNewInvestment((current) => ({ ...current, couponRate: event.target.value }))} required /></div>

@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -70,7 +72,6 @@ func (s *Server) createAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	account, err := s.accounts.Create(r.Context(), claims.UserID, name, accountType, accountClass, currency, req.OpeningBalanceMinor)
 	if err != nil {
 		writeSettingsError(w, err, "failed to create account")
@@ -546,6 +547,33 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if entryKind == "saving_transfer" {
+		if req.DestinationAccountID == nil || strings.TrimSpace(*req.DestinationAccountID) == "" {
+			http.Error(w, "destinationAccountId is required for transfers", http.StatusBadRequest)
+			return
+		}
+		sourceAccount, sourceErr := s.accounts.GetActiveByID(r.Context(), req.AccountID, claims.UserID)
+		destinationAccount, destinationErr := s.accounts.GetActiveByID(r.Context(), *req.DestinationAccountID, claims.UserID)
+		if errors.Is(sourceErr, store.ErrNotFound) || errors.Is(destinationErr, store.ErrNotFound) {
+			http.Error(w, "transfer accounts must be active and belong to the signed-in user", http.StatusBadRequest)
+			return
+		}
+		if sourceErr != nil || destinationErr != nil {
+			http.Error(w, "failed to validate transfer accounts", http.StatusInternalServerError)
+			return
+		}
+		if err := validateTransferAccounts(sourceAccount, destinationAccount, currency); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if entryKind == "investment_buy" && req.Quantity != nil && req.UnitPrice != nil {
+		fees := int64(0)
+		if req.Fees != nil {
+			fees = *req.Fees
+		}
+		req.Amount = calculateInvestmentTotal(*req.Quantity, *req.UnitPrice, fees)
+	}
 
 	// Check idempotency
 	idempotencyKey := r.Header.Get("X-Idempotency-Key")
@@ -599,7 +627,7 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		if req.Fees != nil {
 			fees = *req.Fees
 		}
-		totalCost := int64(float64(*req.Quantity)*float64(*req.UnitPrice)) + fees
+		totalCost := calculateInvestmentTotal(*req.Quantity, *req.UnitPrice, fees)
 
 		lot := store.AssetLot{
 			UserID:          claims.UserID,
@@ -622,6 +650,23 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, result)
+}
+
+func validateTransferAccounts(source, destination store.Account, currency string) error {
+	if source.ID == destination.ID {
+		return errors.New("source and destination accounts must be different")
+	}
+	if source.AccountClass != "asset" || destination.AccountClass != "asset" {
+		return errors.New("transfers are only allowed between active asset accounts")
+	}
+	if source.Currency != destination.Currency || source.Currency != currency {
+		return errors.New("transfer accounts must use the same currency")
+	}
+	return nil
+}
+
+func calculateInvestmentTotal(quantity float64, unitPrice, fees int64) int64 {
+	return int64(math.Round(quantity*float64(unitPrice))) + fees
 }
 
 func (s *Server) updateTransaction(w http.ResponseWriter, r *http.Request) {
@@ -1231,14 +1276,34 @@ func (s *Server) createAsset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	symbol := normalizeOptionalSymbol(req.Symbol)
 
-	asset, err := s.assets.Create(r.Context(), claims.UserID, req.InvestmentTypeID, assetClass, name, currency, req.Symbol)
+	asset, err := s.assets.Create(r.Context(), claims.UserID, req.InvestmentTypeID, assetClass, name, currency, symbol)
 	if err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			http.Error(w, "an asset with that ticker symbol already exists", http.StatusConflict)
+			return
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "investment type not found", http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "failed to create asset", http.StatusInternalServerError)
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, asset)
+}
+
+func normalizeOptionalSymbol(symbol *string) *string {
+	if symbol == nil {
+		return nil
+	}
+	normalized := strings.ToUpper(strings.TrimSpace(*symbol))
+	if normalized == "" {
+		return nil
+	}
+	return &normalized
 }
 
 func (s *Server) updateAsset(w http.ResponseWriter, r *http.Request) {
@@ -1276,8 +1341,12 @@ func (s *Server) updateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := s.assets.Update(r.Context(), id, claims.UserID, assetClass, name, currency, req.Symbol)
+	asset, err := s.assets.Update(r.Context(), id, claims.UserID, assetClass, name, currency, normalizeOptionalSymbol(req.Symbol))
 	if err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			http.Error(w, "an asset with that ticker symbol already exists", http.StatusConflict)
+			return
+		}
 		http.Error(w, "failed to update asset", http.StatusInternalServerError)
 		return
 	}

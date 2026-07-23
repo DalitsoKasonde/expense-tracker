@@ -9,15 +9,15 @@ import (
 )
 
 type Account struct {
-	ID                 string  `json:"id"`
-	UserID             string  `json:"userId"`
-	Name               string  `json:"name"`
-	AccountType        string  `json:"accountType"`
-	AccountClass       string  `json:"accountClass"`
-	Currency           string  `json:"currency"`
-	OpeningBalanceMinor int64  `json:"openingBalanceMinor"`
-	ArchivedAt         *string `json:"archivedAt"`
-	CreatedAt          string  `json:"createdAt"`
+	ID                  string  `json:"id"`
+	UserID              string  `json:"userId"`
+	Name                string  `json:"name"`
+	AccountType         string  `json:"accountType"`
+	AccountClass        string  `json:"accountClass"`
+	Currency            string  `json:"currency"`
+	OpeningBalanceMinor int64   `json:"openingBalanceMinor"`
+	ArchivedAt          *string `json:"archivedAt"`
+	CreatedAt           string  `json:"createdAt"`
 }
 
 type AccountStore struct {
@@ -50,6 +50,26 @@ func (s *AccountStore) ListByUser(ctx context.Context, userID string) ([]Account
 	}
 
 	return accounts, rows.Err()
+}
+
+func (s *AccountStore) GetActiveByID(ctx context.Context, id, userID string) (Account, error) {
+	var account Account
+	err := s.db.QueryRow(ctx, `
+		select id, user_id, name, account_type, account_class, currency, opening_balance::bigint, archived_at::text, created_at::text
+		from accounts
+		where id = $1 and user_id = $2 and archived_at is null
+	`, id, userID).Scan(
+		&account.ID,
+		&account.UserID,
+		&account.Name,
+		&account.AccountType,
+		&account.AccountClass,
+		&account.Currency,
+		&account.OpeningBalanceMinor,
+		&account.ArchivedAt,
+		&account.CreatedAt,
+	)
+	return account, normalizeWriteError(err)
 }
 
 func (s *AccountStore) Create(ctx context.Context, userID, name, accountType, accountClass, currency string, openingBalanceMinor int64) (Account, error) {

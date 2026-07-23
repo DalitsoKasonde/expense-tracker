@@ -56,4 +56,42 @@ describe("AddEntryDialog", () => {
     expect(screen.getByLabelText("Annual coupon rate (%)")).toBeInTheDocument();
     expect(screen.queryByText("Create an asset first")).not.toBeInTheDocument();
   });
+
+  it("calculates stock purchase cost from shares, price, and broker fees", async () => {
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "I bought an investment" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "I bought an investment" }));
+
+    fireEvent.change(screen.getByLabelText("Shares purchased"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText("Price per share"), { target: { value: "250" } });
+    fireEvent.change(screen.getByLabelText("Broker fees"), { target: { value: "10" } });
+
+    expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Calculated stock purchase total")).toHaveTextContent(/2,510\.00/);
+  });
+
+  it("moves money between active same-currency asset accounts", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          { id: "account-1", name: "Mobile Money", accountClass: "asset", currency: "ZMW" },
+          { id: "account-2", name: "Bank account", accountClass: "asset", currency: "ZMW" },
+          { id: "account-3", name: "Dollar account", accountClass: "asset", currency: "USD" },
+          { id: "account-4", name: "Credit card", accountClass: "liability", currency: "ZMW" },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "I transferred money" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "I transferred money" }));
+
+    expect(screen.getByLabelText("From account")).toHaveValue("account-1");
+    const destination = screen.getByLabelText("To account");
+    expect(destination).toHaveValue("account-2");
+    expect(destination).toHaveTextContent("Bank account");
+    expect(destination).not.toHaveTextContent("Dollar account");
+    expect(destination).not.toHaveTextContent("Credit card");
+  });
 });
