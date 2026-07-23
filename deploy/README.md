@@ -1,9 +1,9 @@
 # Single-VM deployment (Chuma + other apps)
 
-One Ubuntu server hosts the web app, API, and PostgreSQL as Docker
-containers. One shared Traefik container handles TLS/routing for all apps
-via Docker labels — each app is otherwise independent (own compose file,
-own containers, own deploy).
+One Ubuntu server hosts the web app and API as Docker containers. Chuma
+connects to an existing PostgreSQL container rather than creating its own.
+One shared Traefik container handles TLS/routing for all apps via Docker
+labels — each app is otherwise independently deployed.
 
 Sizing: start at $12/mo (1 vCPU / 2GB RAM) with just Chuma running. 1GB/1vCPU
 is too small once Docker + a Next.js container are both live, and on-VM
@@ -39,22 +39,36 @@ Point each app's domain/subdomain DNS A record at the Droplet's IP before
 first request — Traefik/Let's Encrypt won't issue a cert until DNS
 resolves (it uses the HTTP-01 challenge on port 80).
 
+## Connect the existing PostgreSQL container
+
+Create the external database network once, then attach the existing
+PostgreSQL container with the hostname `postgres`:
+
+```bash
+docker network create chuma-database
+docker network connect --alias postgres chuma-database <existing-postgres-container>
+```
+
+If the network or connection already exists, do not recreate it. Create
+the Chuma database and user in that PostgreSQL instance, then put those
+credentials in `.env.prod`'s `DATABASE_URL`. PostgreSQL port 5432 does not
+need to be published to the host or internet.
+
 ## Deploying Chuma
 
 ```bash
 cd /srv
 git clone <this-repo> chuma && cd chuma
 cp .env.prod.example .env.prod
-# Set POSTGRES_PASSWORD and use the same URL-safe value in DATABASE_URL.
+# Set DATABASE_URL for the existing PostgreSQL database.
 # Also set JWT_SECRET, NEXTAUTH_SECRET, the domain values, and admin credentials.
 # edit the Host(`yourdomain.com`) rules in docker-compose.prod.yml to your real domain
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-The PostgreSQL container is only attached to an internal Docker network;
-port 5432 is not exposed to the internet. Its data persists in the
-`postgres_data` Docker volume. The API waits for PostgreSQL to be healthy
-and then runs the application's migrations during startup.
+The API reaches the existing PostgreSQL container through the external
+`chuma-database` Docker network and runs application migrations during
+startup. Compose only manages the Chuma API and web containers.
 
 Routing is declared directly on the `api`/`web` services via
 `traefik.*` labels in `docker-compose.prod.yml` — Traefik picks them up
@@ -86,11 +100,10 @@ instance.
 
 - `.env.prod` is gitignored — create it by hand on the VM (or via your
   deploy pipeline's secrets), never commit it.
-- PostgreSQL runs on the Ubuntu VM in the `chuma-postgres` container. Back
-  up the `postgres_data` volume regularly; a Docker volume survives
-  container replacement but not loss of the VM or its disk.
-- Do not expose PostgreSQL's port publicly. Use `docker compose exec
-  postgres psql -U chuma -d chuma` for administrative access on the VM.
+- The existing PostgreSQL container and its volume are not managed by
+  `docker-compose.prod.yml`. Back them up and update them separately.
+- Do not expose PostgreSQL's port publicly. Use `docker exec` against the
+  existing PostgreSQL container for administrative access on the VM.
 - `letsencrypt/acme.json` holds live TLS private keys — back it up if you
   care about avoiding Let's Encrypt rate limits on a full VM rebuild, and
   never commit it (permissions must stay `600` or Traefik refuses to use it).
