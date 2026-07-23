@@ -115,7 +115,7 @@ export default function TodayPage() {
   const liabilityAccounts = data.accountBalances.filter((account) => account.accountClass === "liability");
   const setupTasks: Array<{ label: string; href: Route }> = [];
   if (onboardingInterests.includes("loans") && liabilityAccounts.length === 0) {
-    setupTasks.push({ label: "Add the first loan you want Chuma to track", href: "/loans" });
+    setupTasks.push({ label: "Add the first loan you want Expenses to track", href: "/loans" });
   }
   if (onboardingInterests.includes("stocks") && !data.assets.some((asset) => asset.assetClass === "stock")) {
     setupTasks.push({ label: "Add your first stock holding", href: "/investments/add" });
