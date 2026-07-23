@@ -1,4 +1,4 @@
-const CACHE_NAME = "chuma-v6";
+const CACHE_NAME = "chuma-v0.2";
 const STATIC_ASSETS = [
   "/logo.png",
   "/icon.svg",
