@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeader } from "@/components/ui";
+import { AsyncErrorState, PageHeader } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
@@ -89,6 +89,7 @@ export default function ReportsPage() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [yearInitialized, setYearInitialized] = useState(false);
+  const [retryVersion, setRetryVersion] = useState(0);
 
   useEffect(() => {
     if (sessionStatus === "loading") {
@@ -101,6 +102,7 @@ export default function ReportsPage() {
 
     let ignore = false;
     const loadReports = async () => {
+      setLoading(true);
       try {
         const [annualResult, summaryResult] = await Promise.all([
           apiCallRef.current<AnnualOverall>(`/v1/dashboard/annual?year=${selectedYear}`),
@@ -128,7 +130,7 @@ export default function ReportsPage() {
     return () => {
       ignore = true;
     };
-  }, [currentYear, selectedYear, session?.accessToken, sessionStatus, yearInitialized]);
+  }, [currentYear, retryVersion, selectedYear, session?.accessToken, sessionStatus, yearInitialized]);
 
   const headlineMetrics = useMemo(
     () => [
@@ -153,16 +155,26 @@ export default function ReportsPage() {
           subtitle="Compare earned income, borrowed money, living costs, debt payments, savings, and investments."
         />
 
-        {error ? <p className="statusText">{error}</p> : null}
+        {error ? (
+          <AsyncErrorState
+            title="We couldn't load your reports"
+            description="Your financial data is safe. Try loading this report again."
+            retrying={loading}
+            onRetry={() => {
+              setError("");
+              setRetryVersion((current) => current + 1);
+            }}
+          />
+        ) : null}
 
-        <section className="statsGrid">
+        {!error ? <section className="statsGrid">
           {headlineMetrics.map((metric) => (
             <article key={metric.label} className="statCard">
               <span className="metricCardLabel">{metric.label}</span>
               <strong>{metric.value}</strong>
             </article>
           ))}
-        </section>
+        </section> : null}
 
         {summary?.alerts?.length ? (
           <section className="card resourceBody">

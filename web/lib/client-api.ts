@@ -7,6 +7,7 @@ import {
   type JsonValue,
   type PendingTransactionPayload,
 } from "./offline-db";
+import { ApiRequestError } from "./api-error";
 
 function isLoopbackHostname(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
@@ -92,8 +93,8 @@ async function performApiCall<T>(
     }
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `API error: ${response.status}`);
+      const text = (await response.text()).trim();
+      throw new ApiRequestError(text || `API error: ${response.status}`, response.status);
     }
 
     if (response.status === 204) {
@@ -142,8 +143,8 @@ async function performApiCall<T>(
 
     // Handle non-200 responses
     if (response && !response.ok) {
-      const text = await response.text();
-      throw new Error(text || `API error: ${response.status}`);
+      const text = (await response.text()).trim();
+      throw new ApiRequestError(text || `API error: ${response.status}`, response.status);
     }
 
     return undefined as T;

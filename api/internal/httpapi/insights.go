@@ -94,12 +94,12 @@ func (s *Server) annualOverall(w http.ResponseWriter, r *http.Request) {
 
 	data, ytd, err := s.monthlyInsights(r.Context(), claims.UserID, currency, year)
 	if err != nil {
-		http.Error(w, "failed to build annual overview", http.StatusInternalServerError)
+		writeInternalError(w, r, "annual_overview.monthly_insights", "reports are temporarily unavailable", err)
 		return
 	}
 	availableYears, err := s.availableInsightYears(r.Context(), claims.UserID, currency)
 	if err != nil {
-		http.Error(w, "failed to build annual overview", http.StatusInternalServerError)
+		writeInternalError(w, r, "annual_overview.available_years", "reports are temporarily unavailable", err)
 		return
 	}
 	latestDataYear := year
@@ -217,7 +217,7 @@ func (s *Server) notifications(w http.ResponseWriter, r *http.Request) {
 
 	prefs, err := s.userPreferences.GetOrCreate(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "failed to load notifications", http.StatusInternalServerError)
+		writeInternalError(w, r, "notifications.preferences", "notifications are temporarily unavailable", err)
 		return
 	}
 
@@ -233,14 +233,14 @@ func (s *Server) notifications(w http.ResponseWriter, r *http.Request) {
 	asOf := time.Now()
 	data, _, err := s.monthlyInsights(r.Context(), claims.UserID, prefs.DefaultCurrency, asOf.Year())
 	if err != nil {
-		http.Error(w, "failed to build notifications", http.StatusInternalServerError)
+		writeInternalError(w, r, "notifications.monthly_insights", "notifications are temporarily unavailable", err)
 		return
 	}
 	current := data[int(asOf.Month())-1]
 
 	loans, err := s.loans.ListByUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "failed to build notifications", http.StatusInternalServerError)
+		writeInternalError(w, r, "notifications.loans", "notifications are temporarily unavailable", err)
 		return
 	}
 
@@ -527,7 +527,7 @@ func (s *Server) accountBalanceAsOf(ctx context.Context, userID, currency string
 	var balance int64
 	err := s.db.QueryRow(ctx, `
 		select coalesce(sum(
-			case when a.account_class = 'liability' then -abs(balance_minor) else balance_minor end
+			case when balances.account_class = 'liability' then -abs(balance_minor) else balance_minor end
 		), 0)::bigint
 		from (
 			select
