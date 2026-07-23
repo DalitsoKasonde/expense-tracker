@@ -298,7 +298,7 @@ function LoanAccountFields({
             <option value="">Select account</option>
             {cashAccounts.map((account) => (
               <option key={account.id} value={account.id}>
-                {account.name}
+                {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
               </option>
             ))}
           </select>

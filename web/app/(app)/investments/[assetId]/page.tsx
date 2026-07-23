@@ -26,7 +26,9 @@ interface BondProjection {
 interface Account {
   id: string;
   name: string;
+  accountType: string;
   accountClass: string;
+  currency: string;
 }
 
 interface AssetHolding {
@@ -465,7 +467,7 @@ function ActionAccountSelect({
           .filter((account) => account.accountClass !== "liability")
           .map((account) => (
             <option key={account.id} value={account.id}>
-              {account.name}
+              {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
             </option>
           ))}
       </select>

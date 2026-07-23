@@ -10,7 +10,7 @@ export type TransactionFilterValue = {
 export function TransactionFilters({ value, onChange, accounts = [], categories = [] }: {
   value: TransactionFilterValue;
   onChange: (value: TransactionFilterValue) => void;
-  accounts?: Array<{ id: string; name: string }>;
+  accounts?: Array<{ id: string; name: string; accountType?: string; currency?: string }>;
   categories?: Array<{ id: string; name: string }>;
 }) {
   const field = "min-h-11 rounded-md border border-outline bg-surface px-3 text-sm text-on-surface outline-none focus:border-accent focus:ring-2 focus:ring-accent/20";
@@ -31,7 +31,7 @@ export function TransactionFilters({ value, onChange, accounts = [], categories 
         </select>
       </label>
       {accounts.length ? <label className="grid gap-1 text-xs font-semibold text-on-surface-soft">Account
-        <select className={field} value={value.accountId ?? ""} onChange={(event) => onChange({ ...value, accountId: event.target.value })}><option value="">All accounts</option>{accounts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+        <select className={field} value={value.accountId ?? ""} onChange={(event) => onChange({ ...value, accountId: event.target.value })}><option value="">All accounts</option>{accounts.map((item) => <option key={item.id} value={item.id}>{[item.name, item.accountType?.replaceAll("_", " "), item.currency].filter(Boolean).join(" · ")}</option>)}</select>
       </label> : null}
       {categories.length ? <label className="grid gap-1 text-xs font-semibold text-on-surface-soft">Category
         <select className={field} value={value.categoryId ?? ""} onChange={(event) => onChange({ ...value, categoryId: event.target.value })}><option value="">All categories</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>

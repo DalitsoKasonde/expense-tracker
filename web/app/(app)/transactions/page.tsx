@@ -9,7 +9,7 @@ import { EmptyState, LoadingSkeleton, PageHeader, TransactionFilters, Transactio
 import { AddEntryButton } from "@/components/add-entry-button";
 
 type Transaction = TransactionRowData & { accountId?: string; categoryId?: string };
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; accountType?: string; currency?: string };
 
 export default function TransactionsPage() {
   const { data: session } = useSession();

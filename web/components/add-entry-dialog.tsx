@@ -643,7 +643,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
               <section className="rounded-xl border border-outline bg-[linear-gradient(145deg,var(--surface-soft),var(--surface))] p-4 sm:p-5">
                 <div className="mb-5 grid gap-1">
                   <h2 className="text-xl font-semibold text-on-surface">What happened?</h2>
-                  <p className="text-sm text-on-surface-soft">Pick the closest action. Chuma will tailor the fields that follow.</p>
+                  <p className="text-sm text-on-surface-soft">Pick the closest action. Expenses will tailor the fields that follow.</p>
                 </div>
 
                 <div className="grid gap-5">
@@ -756,7 +756,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     <option value="">Select account</option>
                     {cashAccounts.map((account) => (
                       <option key={account.id} value={account.id}>
-                        {account.name}
+                        {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
                       </option>
                     ))}
                   </select>
@@ -830,7 +830,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     <option value="">Select destination</option>
                     {transferDestinationAccounts.map((account) => (
                         <option key={account.id} value={account.id}>
-                          {account.name}
+                          {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
                         </option>
                       ))}
                   </select>

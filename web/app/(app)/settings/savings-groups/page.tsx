@@ -9,6 +9,7 @@ import { FormDialog } from "@/components/ui/dialogs";
 type Account = {
   id: string;
   name: string;
+  accountType: string;
   accountClass: string;
   currency: string;
 };
@@ -260,7 +261,7 @@ export default function SavingsGroupsSettingsPage() {
               <option value="">Select account</option>
               {cashAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {account.name}
+                  {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
                 </option>
               ))}
             </select>
