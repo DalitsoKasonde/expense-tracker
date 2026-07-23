@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -41,6 +42,11 @@ type SavingsGroupResponse = {
   currentBalance?: number;
 };
 
+type OnboardingStatus = {
+  completed: boolean;
+  interests: string[];
+};
+
 export default function TodayPage() {
   const { data: session } = useSession();
   const apiCall = useApiCall();
@@ -50,6 +56,7 @@ export default function TodayPage() {
   const [transactions, setTransactions] = useState<TransactionRowData[]>([]);
   const [insights, setInsights] = useState<InsightSummary | null>(null);
   const [groups, setGroups] = useState<SavingsGroupResponse[]>([]);
+  const [onboardingInterests, setOnboardingInterests] = useState<string[]>([]);
   const [secondaryLoading, setSecondaryLoading] = useState(true);
 
   useEffect(() => {
@@ -61,10 +68,11 @@ export default function TodayPage() {
     async function loadSupportingData() {
       try {
         const api = apiCallRef.current;
-        const [recent, insightResult, groupResult, pending] = await Promise.all([
+        const [recent, insightResult, groupResult, onboarding, pending] = await Promise.all([
           api<TransactionRowData[]>("/v1/transactions?limit=5"),
           api<InsightSummary>("/v1/dashboard/insights").catch(() => null),
           api<SavingsGroupResponse[]>("/v1/savings-groups").catch(() => []),
+          api<OnboardingStatus>("/v1/onboarding/status").catch(() => null),
           getPendingTransactions(),
         ]);
         if (ignore) return;
@@ -80,6 +88,7 @@ export default function TodayPage() {
         setTransactions([...pendingRows, ...(recent ?? [])].slice(0, 5));
         setInsights(insightResult);
         setGroups(groupResult ?? []);
+        setOnboardingInterests(onboarding?.interests ?? []);
       } finally {
         if (!ignore) setSecondaryLoading(false);
       }
@@ -104,6 +113,16 @@ export default function TodayPage() {
 
   const assetAccounts = data.accountBalances.filter((account) => account.accountClass !== "liability");
   const liabilityAccounts = data.accountBalances.filter((account) => account.accountClass === "liability");
+  const setupTasks: Array<{ label: string; href: Route }> = [];
+  if (onboardingInterests.includes("loans") && liabilityAccounts.length === 0) {
+    setupTasks.push({ label: "Add the first loan you want Chuma to track", href: "/loans" });
+  }
+  if (onboardingInterests.includes("stocks") && !data.assets.some((asset) => asset.assetClass === "stock")) {
+    setupTasks.push({ label: "Add your first stock holding", href: "/investments/add" });
+  }
+  if (onboardingInterests.includes("bonds") && !data.assets.some((asset) => asset.assetClass === "bond")) {
+    setupTasks.push({ label: "Add your first government bond", href: "/investments/add" });
+  }
 
   return (
     <main className="mx-auto grid min-h-screen max-w-app gap-8 px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10">
@@ -130,9 +149,20 @@ export default function TodayPage() {
           <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Next steps</p>
           <h2 id="attention-heading" className="mt-1 text-lg font-semibold text-on-surface">Needs your attention</h2>
         </div>
-        {insights?.alerts?.length ? (
+        {(insights?.alerts?.length || setupTasks.length) ? (
           <ul className="grid gap-2">
-            {insights.alerts.map((alert) => <li key={alert} className="rounded-md bg-warning-soft px-4 py-3 text-sm text-on-surface">{alert}</li>)}
+            {(insights?.alerts ?? []).map((alert) => <li key={alert} className="rounded-md bg-warning-soft px-4 py-3 text-sm text-on-surface">{alert}</li>)}
+            {setupTasks.map((task) => (
+              <li key={task.label}>
+                <Link
+                  href={task.href}
+                  className="flex items-center justify-between gap-3 rounded-md bg-primary-softer px-4 py-3 text-sm font-semibold text-primary hover:bg-primary-soft"
+                >
+                  <span>{task.label}</span>
+                  <span aria-hidden="true">→</span>
+                </Link>
+              </li>
+            ))}
           </ul>
         ) : (
           <EmptyState title="Nothing urgent" description="Your recorded accounts and recent activity do not need attention right now." />

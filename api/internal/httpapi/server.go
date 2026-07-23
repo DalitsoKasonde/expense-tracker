@@ -91,6 +91,8 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.Get("/v1/auth/me", s.me)
 		protected.With(authLimiter.middleware).Post("/v1/auth/refresh", s.refreshToken)
 		protected.With(authLimiter.middleware).Post("/v1/auth/logout", s.logout)
+		protected.Get("/v1/onboarding/status", s.getOnboardingStatus)
+		protected.Post("/v1/onboarding/complete", s.completeOnboarding)
 		protected.Get("/v1/user/preferences", s.getUserPreferences)
 		protected.Patch("/v1/user/preferences", s.updateUserPreferences)
 

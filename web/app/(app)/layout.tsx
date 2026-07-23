@@ -37,14 +37,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/login");
   }
 
-  // Check if user has accounts; if not, show onboarding
+  // Onboarding completion is explicit so a partially saved account cannot
+  // accidentally bypass the rest of setup.
+  let onboarding: { completed: boolean } | null = null;
+  let onboardingCheckFailed = false;
   try {
-    const accounts = await apiFetch<Array<unknown>>("/v1/accounts", session.accessToken);
-    if (!accounts || accounts.length === 0) {
-      redirect("/onboarding");
-    }
+    onboarding = await apiFetch<{ completed: boolean }>("/v1/onboarding/status", session.accessToken);
   } catch (err) {
-    console.error("Failed to check accounts", err);
+    console.error("Failed to check onboarding status", err);
+    onboardingCheckFailed = true;
+  }
+  if (!onboardingCheckFailed && !onboarding?.completed) {
+    redirect("/onboarding");
   }
 
   const initials = initialsFor(session.user?.name, session.user?.email);
