@@ -66,11 +66,12 @@ export default function SavingsGroupsSettingsPage() {
       apiCall<SavingsGroup[]>("/v1/savings-groups"),
       apiCall<Account[]>("/v1/accounts"),
     ]);
-    setGroups(loadedGroups ?? []);
+    const shareoutGroups = (loadedGroups ?? []).filter((group) => group.isShareoutGroup);
+    setGroups(shareoutGroups);
     setAccounts(loadedAccounts ?? []);
     setShareout((current) => ({
       ...current,
-      groupId: current.groupId || loadedGroups?.[0]?.id || "",
+      groupId: current.groupId || shareoutGroups[0]?.id || "",
       cashAccountId: current.cashAccountId || loadedAccounts?.find((account) => account.accountClass !== "liability")?.id || "",
     }));
   }, [apiCall]);

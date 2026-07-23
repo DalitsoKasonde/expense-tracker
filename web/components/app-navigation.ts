@@ -25,7 +25,7 @@ export const primaryNavigation: NavigationItem[] = [
 
 export const moreNavigation: Array<{ href: Route; label: string; description: string }> = [
   { href: "/loans" as Route, label: "Loans", description: "Track borrowing and repayments" },
-  { href: "/settings/savings-groups" as Route, label: "Goals", description: "Follow savings targets and group cycles" },
+  { href: "/goals" as Route, label: "Goals", description: "Set personal savings targets and track progress" },
   { href: "/reports", label: "Reports", description: "Review annual and monthly movement" },
   { href: "/import", label: "Imports", description: "Bring in transactions from a spreadsheet" },
   { href: "/settings/preferences", label: "Settings", description: "Manage accounts, categories, currency, and preferences" },

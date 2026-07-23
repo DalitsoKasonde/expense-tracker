@@ -35,6 +35,7 @@ type SavingsGroupResponse = {
   id: string;
   accountId: string;
   name: string;
+  isShareoutGroup: boolean;
   targetMinor?: number | null;
   contributedMinor?: number;
   currentBalance?: number;
@@ -191,8 +192,8 @@ export default function TodayPage() {
       </div>
 
       <section>
-        <div className="mb-4 flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Goals</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Savings progress</h2></div><Link href="/settings/savings-groups" className="text-sm font-semibold text-accent hover:underline">Manage goals</Link></div>
-        {goals.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{goals.slice(0, 3).map((goal) => <SavingsGoalCard key={goal.id} {...goal} />)}</div> : <EmptyState title="No savings goals yet" description="Create a savings group with a target to track its progress here." action={<Link href="/settings/savings-groups" className="ghostButton">Create a goal</Link>} />}
+        <div className="mb-4 flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Goals</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Savings progress</h2></div><Link href="/goals" className="text-sm font-semibold text-accent hover:underline">Manage goals</Link></div>
+        {goals.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{goals.slice(0, 3).map((goal) => <SavingsGoalCard key={goal.id} {...goal} href="/goals" />)}</div> : <EmptyState title="No savings goals yet" description="Create a personal target and track its progress here." action={<Link href="/goals" className="ghostButton">Create a goal</Link>} />}
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">

@@ -44,5 +44,6 @@ describe("Chuma navigation", () => {
     for (const destination of ["Loans", "Goals", "Reports", "Imports", "Settings"]) {
       expect(screen.getByRole("link", { name: new RegExp(destination) })).toBeInTheDocument();
     }
+    expect(screen.getByRole("link", { name: /Goals/ })).toHaveAttribute("href", "/goals");
   });
 });

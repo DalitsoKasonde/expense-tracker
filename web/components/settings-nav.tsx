@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 const items: Array<{ href: Route; label: string }> = [
   { href: "/settings/preferences", label: "Preferences" },
   { href: "/settings/accounts", label: "Accounts" },
-  { href: "/settings/savings-groups" as Route, label: "Savings" },
+  { href: "/settings/savings-groups" as Route, label: "Savings groups" },
   { href: "/settings/categories", label: "Categories" },
   { href: "/settings/income-sources", label: "Income" },
   { href: "/settings/businesses", label: "Business" },

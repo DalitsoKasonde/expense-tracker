@@ -13,6 +13,7 @@ type SavingsGroupResponse = {
   id?: string;
   accountId?: string;
   name?: string;
+  isShareoutGroup?: boolean;
   targetMinor?: number | null;
   contributedMinor?: number;
   currentBalance?: number;
@@ -24,7 +25,7 @@ export function adaptSavingsGoals(
   defaultCurrency = "ZMW",
 ): SavingsGoal[] {
   return (groups ?? []).flatMap((group) => {
-    if (!group.id || !group.name || !group.targetMinor || group.targetMinor <= 0) return [];
+    if (group.isShareoutGroup || !group.id || !group.name || !group.targetMinor || group.targetMinor <= 0) return [];
     const account = accounts.find((item) => item.accountId === group.accountId);
     return [{
       id: group.id,

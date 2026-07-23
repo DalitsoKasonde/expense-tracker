@@ -10,4 +10,8 @@ describe("adaptSavingsGoals", () => {
   it("drops groups without a usable target", () => {
     expect(adaptSavingsGoals([{ id: "g1", name: "Untargeted", targetMinor: null }])).toEqual([]);
   });
+
+  it("does not present share-out groups as personal goals", () => {
+    expect(adaptSavingsGoals([{ id: "g1", name: "Village group", targetMinor: 10000, isShareoutGroup: true }])).toEqual([]);
+  });
 });
