@@ -10,13 +10,30 @@ jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
     steps:
       - name: Deploy to VM over SSH
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
           ssh -i ~/.ssh/id_ed25519 \
             "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}" \
-            '/opt/apps/expense-tracker/deploy.sh'
+            'cd /opt/apps/expense-tracker && git pull --ff-only origin main && ./deploy.sh'
+
+      - name: Verify registration page
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error \
+            --retry 6 --retry-delay 5 --retry-all-errors \
+            https://expenses.inscribed.co.zm/register)"
+          grep -q "Create your account" <<< "$response"
+          grep -q "Expenses" <<< "$response"
+          if grep -q "<title>Chuma</title>" <<< "$response"; then
+            echo "Production is still serving the stale Chuma build."
+            exit 1
+          fi
