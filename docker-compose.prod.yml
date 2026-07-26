@@ -41,8 +41,11 @@ services:
       # Traefik can pick the database network's IP, which it cannot reach, and
       # every /api request fails with "no available server".
       traefik.docker.network: "edge"
-      # /api/* takes priority over the web catch-all rule below.
-      traefik.http.routers.chuma-api.rule: "Host(`yourdomain.com`) && PathPrefix(`/api`)"
+      # Only /api/v1/* and /api/healthz are real Go API routes. NextAuth's own
+      # endpoints live at /api/auth/* (served by the web app's Next.js route
+      # handler), so a bare PathPrefix(`/api`) here would steal those requests
+      # away from web and 404 them against the Go API's chi router.
+      traefik.http.routers.chuma-api.rule: "Host(`yourdomain.com`) && (PathPrefix(`/api/v1`) || Path(`/api/healthz`))"
       traefik.http.routers.chuma-api.entrypoints: "websecure"
       traefik.http.routers.chuma-api.tls.certresolver: "letsencrypt"
       # /api/* must beat the web catch-all. Traefik's *default* priority is the
