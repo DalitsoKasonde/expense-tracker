@@ -37,6 +37,10 @@ services:
       start_period: 20s
     labels:
       traefik.enable: "true"
+      # This container sits on two networks; without naming the proxy network
+      # Traefik can pick the database network's IP, which it cannot reach, and
+      # every /api request fails with "no available server".
+      traefik.docker.network: "edge"
       # /api/* takes priority over the web catch-all rule below.
       traefik.http.routers.chuma-api.rule: "Host(`yourdomain.com`) && PathPrefix(`/api`)"
       traefik.http.routers.chuma-api.entrypoints: "websecure"
@@ -73,6 +77,7 @@ services:
       start_period: 20s
     labels:
       traefik.enable: "true"
+      traefik.docker.network: "edge"
       traefik.http.routers.chuma-web.rule: "Host(`yourdomain.com`)"
       traefik.http.routers.chuma-web.entrypoints: "websecure"
       traefik.http.routers.chuma-web.tls.certresolver: "letsencrypt"
