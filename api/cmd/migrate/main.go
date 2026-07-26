@@ -33,10 +33,11 @@ func main() {
 	defer db.Close()
 
 	dir := filepath.Join("migrations")
-	if err := migrations.Run(ctx, db, direction, dir); err != nil {
+	if err := migrations.RunWithOptions(ctx, db, direction, dir, migrations.Options{
+		SkipDevelopmentSeeds: cfg.IsProduction(),
+	}); err != nil {
 		log.Fatal(err)
 	}
 
 	log.Printf("migrations %s complete", direction)
 }
-

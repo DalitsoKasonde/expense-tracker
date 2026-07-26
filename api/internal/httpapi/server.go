@@ -183,7 +183,10 @@ func (s *Server) registerRoutes(router chi.Router) {
 }
 
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"version": s.config.AppVersion,
+	})
 }
 
 func (s *Server) setupStatus(w http.ResponseWriter, r *http.Request) {

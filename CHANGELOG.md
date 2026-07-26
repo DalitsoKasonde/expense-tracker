@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+- CI builds and pushes SHA-tagged images to GHCR; the production VM only pulls them, so a 1 vCPU / 2 GB box no longer builds Next.js and Go next to the live containers
+- Deploys pin an exact image tag, verify both containers are healthy and serving that commit, and restore the previous tag automatically when they are not
+- Manual deploy and one-click rollback via the Deploy workflow's `workflow_dispatch` inputs; `deploy/vm/rollback.sh` does the same on the VM
+- `api` and `web` both expose `/healthz` with the deployed commit; container, Traefik load balancer and pipeline checks all use it, and `web` waits for `api` to be healthy before starting
+- Production skips development-only seed migrations, so fixture accounts with published passwords can no longer be created in live data
+- Deploy tooling is version-controlled (`deploy/vm/`) and the CI deploy key is restricted to an SSH forced command instead of a full shell
+- CI only runs images on `main`, has per-job timeouts, cancels superseded PR runs, and pins the VM host key when `VM_SSH_KNOWN_HOSTS` is set
+
 ## 0.4.0 - 2026-07-24
 - Rebranded from Chuma to Expenses by Inscribed (new logo, app name, PWA manifest)
 - Investment purchases are now recorded atomically, so a failed asset-lot write can no longer leave an orphaned transaction

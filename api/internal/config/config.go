@@ -16,6 +16,7 @@ const (
 	defaultCookieName           = "chuma_auth"
 	defaultCookieSameSite       = "lax"
 	defaultMaxBodyBytes   int64 = 25 << 20
+	defaultAppVersion           = "dev"
 )
 
 type Config struct {
@@ -26,10 +27,13 @@ type Config struct {
 	AdminBootstrapPassword string
 	Port                   string
 	AppEnv                 string
-	CookieName             string
-	CookieSecure           bool
-	CookieSameSite         string
-	MaxBodyBytes           int64
+	// AppVersion identifies the running build. Deploys set it to the git
+	// commit SHA so /healthz can prove which build is live.
+	AppVersion     string
+	CookieName     string
+	CookieSecure   bool
+	CookieSameSite string
+	MaxBodyBytes   int64
 }
 
 func Load() (Config, error) {
@@ -41,6 +45,7 @@ func Load() (Config, error) {
 		AdminBootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
 		Port:                   envOrDefault("PORT", defaultPort),
 		AppEnv:                 strings.ToLower(envOrDefault("APP_ENV", "development")),
+		AppVersion:             envOrDefault("APP_VERSION", defaultAppVersion),
 		CookieName:             envOrDefault("AUTH_COOKIE_NAME", defaultCookieName),
 		CookieSameSite:         strings.ToLower(envOrDefault("AUTH_COOKIE_SAMESITE", defaultCookieSameSite)),
 	}

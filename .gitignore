@@ -11,6 +11,9 @@ coverage
 .env.test.local
 .env.production.local
 .env.prod
+# host-specific deploy override + deploy state live only on the VM
+docker-compose.deploy.yml
+.deploy-state
 api/bin
 api/.cache
 

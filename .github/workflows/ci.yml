@@ -2,11 +2,22 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+# Superseded runs on the same ref are pointless for PRs; main is left alone so
+# every commit that could be deployed is fully built and pushed.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE_PREFIX: ghcr.io/dalitsokasonde/expense-tracker
 
 jobs:
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: web
@@ -24,6 +35,7 @@ jobs:
 
   api:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: api
@@ -32,4 +44,63 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+          cache-dependency-path: api/go.sum
+      - run: go build ./...
       - run: go test ./...
+
+  # Images are built here, never on the production VM: the Droplet is
+  # 1 vCPU / 2 GB and a Next.js + Go build alongside the live containers
+  # risks an OOM kill mid-deploy. Every build is tagged with the commit SHA
+  # so a deploy pins an exact artifact and rollback is just another tag.
+  images:
+    name: build and push images
+    needs: [web, api]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push api image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}-api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=/api
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}-web:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - name: Summarise pushed tags
+        run: |
+          {
+            echo "### Images pushed"
+            echo
+            echo '```'
+            echo "${IMAGE_PREFIX}-api:${GITHUB_SHA}"
+            echo "${IMAGE_PREFIX}-web:${GITHUB_SHA}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

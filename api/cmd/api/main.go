@@ -28,7 +28,9 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := migrations.Run(ctx, db, "up", filepath.Join("migrations")); err != nil {
+	if err := migrations.RunWithOptions(ctx, db, "up", filepath.Join("migrations"), migrations.Options{
+		SkipDevelopmentSeeds: cfg.IsProduction(),
+	}); err != nil {
 		log.Fatal(err)
 	}
 

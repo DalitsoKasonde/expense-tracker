@@ -1,15 +1,21 @@
 # Production compose for Chuma on the shared Ubuntu VM.
-# Runs alongside other apps' compose files on the same host, all joined to
-# the external "edge" network. Routing is declared per-service via Traefik
-# labels below — the shared Traefik container (deploy/docker-compose.traefik.yml)
+#
+# Images are NOT built here. CI builds and pushes them to GHCR tagged with the
+# commit SHA; deploys pin IMAGE_TAG to that SHA (written to .env by
+# deploy/vm/deploy.sh), which is what makes rollback a retag instead of a
+# rebuild. There is deliberately no `build:` stanza so the 1 vCPU / 2 GB VM can
+# never be talked into building an image next to the live containers.
+#
+# Runs alongside other apps' compose files on the same host, all joined to the
+# external "edge" network. Routing is declared per-service via Traefik labels
+# below — the shared Traefik container (deploy/docker-compose.traefik.yml)
 # auto-discovers these over the Docker socket, no central config edit needed.
-# Bring up: docker compose -f docker-compose.prod.yml up -d --build
+#
+# Bring up: deploy/vm/deploy.sh <commit-sha>
 
 services:
   api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: ghcr.io/dalitsokasonde/expense-tracker-api:${IMAGE_TAG:?IMAGE_TAG must be set to the deployed commit sha}
     container_name: chuma-api
     restart: unless-stopped
     env_file:
@@ -17,11 +23,18 @@ services:
     environment:
       APP_ENV: production
       PORT: "8080"
+      APP_VERSION: ${IMAGE_TAG}
     networks:
       - edge
       - database
     # No ports are published to the host — Traefik reaches this container
     # directly over the "edge" network by container name.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
     labels:
       traefik.enable: "true"
       # /api/* takes priority over the web catch-all rule below.
@@ -30,27 +43,40 @@ services:
       traefik.http.routers.chuma-api.tls.certresolver: "letsencrypt"
       traefik.http.routers.chuma-api.priority: "10"
       traefik.http.services.chuma-api.loadbalancer.server.port: "8080"
+      # Keeps Traefik from routing to a container that is up but not ready.
+      traefik.http.services.chuma-api.loadbalancer.healthcheck.path: "/healthz"
+      traefik.http.services.chuma-api.loadbalancer.healthcheck.interval: "10s"
+      traefik.http.services.chuma-api.loadbalancer.healthcheck.timeout: "3s"
 
   web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
+    image: ghcr.io/dalitsokasonde/expense-tracker-web:${IMAGE_TAG:?IMAGE_TAG must be set to the deployed commit sha}
     container_name: chuma-web
     restart: unless-stopped
     env_file:
       - .env.prod
     environment:
       PORT: "3000"
+      APP_VERSION: ${IMAGE_TAG}
     networks:
       - edge
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
     labels:
       traefik.enable: "true"
       traefik.http.routers.chuma-web.rule: "Host(`yourdomain.com`)"
       traefik.http.routers.chuma-web.entrypoints: "websecure"
       traefik.http.routers.chuma-web.tls.certresolver: "letsencrypt"
       traefik.http.services.chuma-web.loadbalancer.server.port: "3000"
+      traefik.http.services.chuma-web.loadbalancer.healthcheck.path: "/healthz"
+      traefik.http.services.chuma-web.loadbalancer.healthcheck.interval: "10s"
+      traefik.http.services.chuma-web.loadbalancer.healthcheck.timeout: "3s"
 
 networks:
   edge:

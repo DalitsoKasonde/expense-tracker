@@ -5,35 +5,136 @@ on:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Commit SHA to deploy. Empty deploys the current main SHA."
+        required: false
+        default: ""
+      rollback:
+        description: "Roll back to the previously deployed tag instead of deploying"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  packages: read
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     concurrency:
       group: production-deploy
       cancel-in-progress: false
+    env:
+      APP_URL: https://expenses.inscribed.co.zm
+      VM_HOST: ${{ secrets.VM_HOST }}
+      VM_USER: ${{ secrets.VM_USER }}
     steps:
-      - name: Deploy to VM over SSH
+      - name: Resolve target
+        id: target
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            tag="${{ github.event.workflow_run.head_sha }}"
+            command="deploy $tag"
+          elif [[ "${{ inputs.rollback }}" == "true" ]]; then
+            tag=""
+            command="rollback"
+          else
+            tag="${{ inputs.image_tag }}"
+            [[ -n "$tag" ]] || tag="${{ github.sha }}"
+            command="deploy $tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "command=$command" >> "$GITHUB_OUTPUT"
+          echo "Remote command: $command"
+
+      - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_KNOWN_HOSTS: ${{ secrets.VM_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
-          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/id_ed25519 \
-            "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}" \
-            'cd /opt/apps/expense-tracker && git pull --ff-only origin main && ./deploy.sh'
+          if [[ -n "$VM_SSH_KNOWN_HOSTS" ]]; then
+            printf '%s\n' "$VM_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::VM_SSH_KNOWN_HOSTS is not set; falling back to ssh-keyscan (trust on first use)"
+            ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Verify registration page
+      # The deploy key is restricted to a forced command on the VM, so the
+      # string below is validated remotely rather than executed as a shell.
+      # The GHCR token is piped over stdin so the VM never stores a
+      # long-lived registry credential on disk.
+      - name: Deploy over SSH
+        id: deploy
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REMOTE_COMMAND: ${{ steps.target.outputs.command }}
         run: |
           set -euo pipefail
-          response="$(curl --fail --silent --show-error \
-            --retry 6 --retry-delay 5 --retry-all-errors \
-            https://expenses.inscribed.co.zm/register)"
-          grep -q "Create your account" <<< "$response"
-          grep -q "Expenses" <<< "$response"
-          if grep -q "<title>Chuma</title>" <<< "$response"; then
-            echo "Production is still serving the stale Chuma build."
+          printf '%s\n' "$GHCR_TOKEN" | ssh -i ~/.ssh/id_ed25519 \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            "$VM_USER@$VM_HOST" "$REMOTE_COMMAND"
+
+      - name: Verify the deployed build is serving traffic
+        id: verify
+        env:
+          EXPECTED_TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          api="$(curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "$APP_URL/api/healthz")"
+          web="$(curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "$APP_URL/healthz")"
+          api_version="$(jq -r .version <<< "$api")"
+          web_version="$(jq -r .version <<< "$web")"
+          echo "api=$api_version web=$web_version expected=${EXPECTED_TAG:-<rollback>}"
+
+          if [[ -n "$EXPECTED_TAG" ]]; then
+            if [[ "$api_version" != "$EXPECTED_TAG" ]]; then
+              echo "api is serving $api_version, expected $EXPECTED_TAG"
+              exit 1
+            fi
+            if [[ "$web_version" != "$EXPECTED_TAG" ]]; then
+              echo "web is serving $web_version, expected $EXPECTED_TAG"
+              exit 1
+            fi
+          elif [[ "$api_version" != "$web_version" ]]; then
+            echo "api ($api_version) and web ($web_version) are on different builds"
             exit 1
           fi
+
+          # Cheap end-to-end smoke test: a real page rendered by web.
+          curl -fsS --retry 6 --retry-delay 5 --retry-all-errors "$APP_URL/register" \
+            | grep -q "Create your account"
+
+      - name: Roll back after failed verification
+        if: ${{ failure() && steps.deploy.outcome == 'success' && inputs.rollback != true }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "::error::Verification failed; rolling back to the previous tag."
+          printf '%s\n' "$GHCR_TOKEN" | ssh -i ~/.ssh/id_ed25519 \
+            -o BatchMode=yes -o ConnectTimeout=15 \
+            "$VM_USER@$VM_HOST" "rollback"
+          curl -fsS --retry 12 --retry-delay 5 --retry-all-errors "$APP_URL/api/healthz"
+
+      - name: Report
+        if: ${{ always() }}
+        run: |
+          {
+            echo "### Deploy ${{ job.status }}"
+            echo
+            echo "- command: \`${{ steps.target.outputs.command }}\`"
+            echo "- target: \`${{ steps.target.outputs.tag || 'previous tag' }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
