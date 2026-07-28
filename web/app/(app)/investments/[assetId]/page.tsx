@@ -3,24 +3,39 @@
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { PageHeader } from "@/components/ui";
+import { FormDialog, PageHeader } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { formatMoney } from "@/lib/format-money";
 
+type BondCashflowProjection = {
+  id: string;
+  eventType: string;
+  disposition: string;
+  scheduledDate: string;
+  paymentDate?: string | null;
+  grossAmountMinor: number;
+  taxAmountMinor: number;
+  netAmountMinor: number;
+  status: string;
+  destinationAssetId?: string | null;
+};
+
 interface BondProjection {
+  bond: {
+    cashAccountId: string;
+    principalMinor: number;
+    purchaseFeeMinor: number;
+    issueDate: string;
+    maturityDate: string;
+  };
   totalProjectedPayoutMinor: number;
+  totalGrossCouponMinor: number;
+  totalCouponTaxMinor: number;
   totalCouponMinor: number;
   totalCashBalanceMinor: number;
   totalReinvestedMinor: number;
-  cashflows: Array<{
-    id: string;
-    eventType: string;
-    disposition: string;
-    scheduledDate: string;
-    netAmountMinor: number;
-    status: string;
-  }>;
+  cashflows: BondCashflowProjection[];
 }
 
 interface Account {
@@ -53,7 +68,7 @@ export default function AssetDetailPage() {
   const apiCall = useApiCall();
   const apiCallRef = useRef(apiCall);
   apiCallRef.current = apiCall;
-  const { data, loading } = useUnifiedDashboard();
+  const { data, loading, reload } = useUnifiedDashboard();
   const [projection, setProjection] = useState<BondProjection | null>(null);
   const [holding, setHolding] = useState<AssetHolding | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -79,7 +94,35 @@ export default function AssetDetailPage() {
     currentValue: "",
     valuationDate: today(),
   });
+  const [confirmingCashflowId, setConfirmingCashflowId] = useState("");
+  const [couponError, setCouponError] = useState("");
+  const [couponForm, setCouponForm] = useState({
+    grossAmount: "",
+    taxAmount: "0",
+    paymentDate: today(),
+    cashAccountId: "",
+    destination: "cash",
+    destinationAssetId: "",
+    unitPrice: "",
+    purchaseFee: "0",
+  });
   const asset = data?.assets.find((item) => item.assetId === assetId) ?? null;
+  const cashAccounts = accounts.filter(
+    (account) =>
+      account.accountClass !== "liability" &&
+      account.accountType !== "receivable" &&
+      account.currency === asset?.currency,
+  );
+  const destinationStocks = (data?.assets ?? []).filter(
+    (item) => item.assetClass === "stock" && item.currency === asset?.currency,
+  );
+  const couponNetMinor = toMinor(couponForm.grossAmount) - toMinor(couponForm.taxAmount);
+  const couponPurchaseFeeMinor = toMinor(couponForm.purchaseFee);
+  const couponUnitPriceMinor = toMinor(couponForm.unitPrice);
+  const couponQuantity =
+    couponForm.destination === "stock" && couponUnitPriceMinor > 0
+      ? Math.max(0, couponNetMinor - couponPurchaseFeeMinor) / couponUnitPriceMinor
+      : 0;
 
   useEffect(() => {
     if (!assetId) {
@@ -136,6 +179,84 @@ export default function AssetDetailPage() {
   async function refreshHolding() {
     const result = await apiCallRef.current<AssetHolding>(`/v1/assets/${assetId}/holding`);
     setHolding(result);
+  }
+
+  function openCouponConfirmation(cashflow: BondCashflowProjection) {
+    const defaultCashAccountId =
+      cashAccounts.find((account) => account.id === projection?.bond.cashAccountId)?.id ??
+      cashAccounts[0]?.id ??
+      "";
+    setCouponError("");
+    setConfirmingCashflowId(cashflow.id);
+    setCouponForm({
+      grossAmount: (cashflow.grossAmountMinor / 100).toFixed(2),
+      taxAmount: (cashflow.taxAmountMinor / 100).toFixed(2),
+      paymentDate: cashflow.paymentDate ?? cashflow.scheduledDate,
+      cashAccountId: defaultCashAccountId,
+      destination: "cash",
+      destinationAssetId: destinationStocks[0]?.assetId ?? "",
+      unitPrice: "",
+      purchaseFee: "0",
+    });
+  }
+
+  async function submitCouponConfirmation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!confirmingCashflowId) return;
+
+    const grossAmountMinor = toMinor(couponForm.grossAmount);
+    const taxAmountMinor = toMinor(couponForm.taxAmount);
+    const unitPriceMinor = toMinor(couponForm.unitPrice);
+    const purchaseFeeMinor = toMinor(couponForm.purchaseFee);
+    if (grossAmountMinor <= 0 || taxAmountMinor < 0 || taxAmountMinor > grossAmountMinor) {
+      setCouponError("Enter a positive gross coupon and tax between zero and the gross amount.");
+      return;
+    }
+    if (!couponForm.cashAccountId) {
+      setCouponError("Select the account that receives the coupon.");
+      return;
+    }
+    if (
+      couponForm.destination === "stock" &&
+      (!couponForm.destinationAssetId || unitPriceMinor <= 0 || purchaseFeeMinor < 0 || purchaseFeeMinor >= grossAmountMinor - taxAmountMinor)
+    ) {
+      setCouponError("Select a stock, enter its price, and keep the purchase fee below the net coupon.");
+      return;
+    }
+
+    setSavingAction(true);
+    setCouponError("");
+    try {
+      await apiCallRef.current(
+        `/v1/bonds/${assetId}/cashflows/${confirmingCashflowId}/confirm`,
+        {
+          method: "POST",
+          body: {
+            cashAccountId: couponForm.cashAccountId,
+            grossAmountMinor,
+            taxAmountMinor,
+            paymentDate: couponForm.paymentDate,
+            destination: couponForm.destination,
+            destinationAssetId:
+              couponForm.destination === "stock" ? couponForm.destinationAssetId : undefined,
+            unitPriceMinor: couponForm.destination === "stock" ? unitPriceMinor : undefined,
+            purchaseFeeMinor:
+              couponForm.destination === "stock" ? purchaseFeeMinor : undefined,
+          },
+        },
+      );
+      const nextProjection = await apiCallRef.current<BondProjection>(
+        `/v1/bonds/${assetId}/projection`,
+      );
+      setProjection(nextProjection);
+      setConfirmingCashflowId("");
+      setActionStatus("Coupon confirmed and recorded.");
+      reload();
+    } catch (error) {
+      setCouponError(error instanceof Error ? error.message : "Failed to confirm coupon");
+    } finally {
+      setSavingAction(false);
+    }
   }
 
   async function submitSell(event: React.FormEvent<HTMLFormElement>) {
@@ -270,7 +391,7 @@ export default function AssetDetailPage() {
             </h2>
             <p className="muted">
               {asset.assetClass === "bond"
-                ? "Bond coupons can now project forward and automatically move into cash once the reinvestment cutoff is reached."
+                ? "Bond coupons remain projected until you confirm the actual amount, tax, date, and destination."
                 : "This asset flows directly into portfolio value and unified net worth through the shared valuation model."}
             </p>
             <span className="pageAccent">Asset detail</span>
@@ -391,11 +512,23 @@ export default function AssetDetailPage() {
 
             <div className="statsGrid">
               <div className="statCard">
+                <p className="muted">Purchase charge / fee</p>
+                <strong>{formatMoney(projection.bond.purchaseFeeMinor, asset.currency)}</strong>
+              </div>
+              <div className="statCard">
                 <p className="muted">Projected payout</p>
                 <strong>{formatMoney(projection.totalProjectedPayoutMinor, asset.currency)}</strong>
               </div>
               <div className="statCard">
-                <p className="muted">Coupons</p>
+                <p className="muted">Gross coupons</p>
+                <strong>{formatMoney(projection.totalGrossCouponMinor, asset.currency)}</strong>
+              </div>
+              <div className="statCard">
+                <p className="muted">Withholding tax</p>
+                <strong>{formatMoney(projection.totalCouponTaxMinor, asset.currency)}</strong>
+              </div>
+              <div className="statCard">
+                <p className="muted">Net coupons</p>
                 <strong>{formatMoney(projection.totalCouponMinor, asset.currency)}</strong>
               </div>
               <div className="statCard">
@@ -409,21 +542,49 @@ export default function AssetDetailPage() {
             </div>
 
             <div className="ledgerList mt-6">
-              {projection.cashflows.map((cashflow) => (
-                <div key={cashflow.id} className="ledgerRow historyRow">
-                  <div className="ledgerPrimary">
-                    <p className="ledgerTitle">{cashflow.eventType.replaceAll("_", " ")}</p>
-                    <div className="ledgerMeta">
-                      <span className="metaBadge">{cashflow.disposition.replaceAll("_", " ")}</span>
-                      <span className="muted">{new Date(cashflow.scheduledDate).toLocaleDateString()}</span>
+              {projection.cashflows.map((cashflow) => {
+                const destinationStock = destinationStocks.find(
+                  (item) => item.assetId === cashflow.destinationAssetId,
+                );
+                return (
+                  <div key={cashflow.id} className="ledgerRow historyRow">
+                    <div className="ledgerPrimary">
+                      <p className="ledgerTitle">{cashflow.eventType.replaceAll("_", " ")}</p>
+                      <div className="ledgerMeta">
+                        <span className="metaBadge">{cashflow.disposition.replaceAll("_", " ")}</span>
+                        <span className="muted">
+                          Scheduled {new Date(`${cashflow.scheduledDate}T00:00:00`).toLocaleDateString()}
+                        </span>
+                        {cashflow.paymentDate ? (
+                          <span className="muted">
+                            Paid {new Date(`${cashflow.paymentDate}T00:00:00`).toLocaleDateString()}
+                          </span>
+                        ) : null}
+                        {destinationStock ? <span className="metaBadge">{destinationStock.name}</span> : null}
+                      </div>
+                    </div>
+                    <div className="ledgerAmountBlock gap-1">
+                      <span className="ledgerAmount positive">{formatMoney(cashflow.netAmountMinor, asset.currency)}</span>
+                      {cashflow.taxAmountMinor > 0 ? (
+                        <span className="muted">
+                          Gross {formatMoney(cashflow.grossAmountMinor, asset.currency)} · tax{" "}
+                          {formatMoney(cashflow.taxAmountMinor, asset.currency)}
+                        </span>
+                      ) : null}
+                      <span className="muted">{cashflow.status}</span>
+                      {cashflow.eventType === "coupon" && cashflow.status === "projected" ? (
+                        <button
+                          type="button"
+                          className="ghostButton mt-2"
+                          onClick={() => openCouponConfirmation(cashflow)}
+                        >
+                          Confirm coupon
+                        </button>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="ledgerAmountBlock">
-                    <span className="ledgerAmount positive">{formatMoney(cashflow.netAmountMinor, asset.currency)}</span>
-                    <span className="muted">{cashflow.status}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         ) : (
@@ -436,6 +597,170 @@ export default function AssetDetailPage() {
             </span>
           </section>
         )}
+
+        <FormDialog
+          open={Boolean(confirmingCashflowId)}
+          title="Confirm coupon payment"
+          description="Adjust the actual coupon and withholding tax, then choose where the net payment goes."
+          submitLabel="Confirm coupon"
+          pending={savingAction}
+          error={couponError || undefined}
+          onSubmit={submitCouponConfirmation}
+          onClose={() => {
+            setConfirmingCashflowId("");
+            setCouponError("");
+          }}
+        >
+          <div className="grid gap-4">
+            <div className="splitFields">
+              <div className="field">
+                <label htmlFor="coupon-gross">Gross coupon ({asset.currency})</label>
+                <input
+                  id="coupon-gross"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={couponForm.grossAmount}
+                  onChange={(event) =>
+                    setCouponForm((current) => ({ ...current, grossAmount: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="coupon-tax">Withholding tax ({asset.currency})</label>
+                <input
+                  id="coupon-tax"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={couponForm.taxAmount}
+                  onChange={(event) =>
+                    setCouponForm((current) => ({ ...current, taxAmount: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="rounded-md border border-outline bg-surface-soft p-3" role="status">
+              <span className="muted">Net coupon</span>
+              <strong className="mt-1 block text-xl text-positive">
+                {formatMoney(Math.max(0, couponNetMinor), asset.currency)}
+              </strong>
+            </div>
+
+            <div className="splitFields">
+              <div className="field">
+                <label htmlFor="coupon-payment-date">Payment date</label>
+                <input
+                  id="coupon-payment-date"
+                  type="date"
+                  value={couponForm.paymentDate}
+                  onChange={(event) =>
+                    setCouponForm((current) => ({ ...current, paymentDate: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="coupon-cash-account">Settlement account</label>
+                <select
+                  id="coupon-cash-account"
+                  value={couponForm.cashAccountId}
+                  onChange={(event) =>
+                    setCouponForm((current) => ({ ...current, cashAccountId: event.target.value }))
+                  }
+                  required
+                >
+                  <option value="">Select account</option>
+                  {cashAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name} · {account.currency}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="coupon-destination">Use net coupon for</label>
+              <select
+                id="coupon-destination"
+                value={couponForm.destination}
+                onChange={(event) =>
+                  setCouponForm((current) => ({ ...current, destination: event.target.value }))
+                }
+              >
+                <option value="cash">Keep in settlement account</option>
+                <option value="stock" disabled={destinationStocks.length === 0}>
+                  Buy an existing stock
+                </option>
+              </select>
+              {destinationStocks.length === 0 ? (
+                <span className="muted">Add a stock in {asset.currency} before choosing stock reinvestment.</span>
+              ) : null}
+            </div>
+
+            {couponForm.destination === "stock" ? (
+              <>
+                <div className="field">
+                  <label htmlFor="coupon-stock">Destination stock</label>
+                  <select
+                    id="coupon-stock"
+                    value={couponForm.destinationAssetId}
+                    onChange={(event) =>
+                      setCouponForm((current) => ({
+                        ...current,
+                        destinationAssetId: event.target.value,
+                      }))
+                    }
+                    required
+                  >
+                    <option value="">Select stock</option>
+                    {destinationStocks.map((item) => (
+                      <option key={item.assetId} value={item.assetId}>
+                        {item.name}{item.symbol ? ` (${item.symbol})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="splitFields">
+                  <div className="field">
+                    <label htmlFor="coupon-stock-price">Price per share ({asset.currency})</label>
+                    <input
+                      id="coupon-stock-price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={couponForm.unitPrice}
+                      onChange={(event) =>
+                        setCouponForm((current) => ({ ...current, unitPrice: event.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="coupon-stock-fee">Purchase fee ({asset.currency})</label>
+                    <input
+                      id="coupon-stock-fee"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={couponForm.purchaseFee}
+                      onChange={(event) =>
+                        setCouponForm((current) => ({ ...current, purchaseFee: event.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+                <span className="muted">
+                  Estimated shares: {couponQuantity > 0 ? couponQuantity.toFixed(6) : "—"}
+                </span>
+              </>
+            ) : null}
+          </div>
+        </FormDialog>
 
         <div className="mt-8">
           <Link href="/investments" className="ghostButton">

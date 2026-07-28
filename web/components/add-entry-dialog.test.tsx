@@ -54,6 +54,11 @@ describe("AddEntryDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Government bond" }));
     expect(screen.getByLabelText("Bond name")).toBeInTheDocument();
     expect(screen.getByLabelText("Annual coupon rate (%)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Purchase charge / fee")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Issue date"), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText("Term (years)"), { target: { value: "3" } });
+    expect(screen.getByLabelText("Maturity date")).toHaveValue("2029-01-01");
     expect(screen.queryByText("Create an asset first")).not.toBeInTheDocument();
   });
 
@@ -93,5 +98,102 @@ describe("AddEntryDialog", () => {
     expect(destination).toHaveTextContent("Bank account");
     expect(destination).not.toHaveTextContent("Dollar account");
     expect(destination).not.toHaveTextContent("Credit card");
+  });
+
+  it("records money lent as a transfer into a receivable asset", async () => {
+    mocks.apiCall.mockImplementation((path: string, options?: { method?: string }) => {
+      if (path === "/v1/accounts" && options?.method === "POST") {
+        return Promise.resolve({
+          id: "receivable-1",
+          name: "Loan to John — school fees",
+          accountType: "receivable",
+          accountClass: "asset",
+          currency: "ZMW",
+        });
+      }
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          {
+            id: "account-1",
+            name: "Mobile Money",
+            accountType: "mobile_money",
+            accountClass: "asset",
+            currency: "ZMW",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I lent someone money" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "250" } });
+    fireEvent.change(screen.getByLabelText("Person or loan name"), {
+      target: { value: "John — school fees" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/accounts", {
+        method: "POST",
+        body: {
+          name: "Loan to John — school fees",
+          accountType: "receivable",
+          accountClass: "asset",
+          currency: "ZMW",
+          openingBalanceMinor: 0,
+        },
+      }),
+    );
+    expect(mocks.apiCall).toHaveBeenCalledWith("/v1/transactions", {
+      method: "POST",
+      body: expect.objectContaining({
+        entryKind: "loan_receivable_advance",
+        amount: 25000,
+        accountId: "account-1",
+        destinationAccountId: "receivable-1",
+      }),
+    });
+  });
+
+  it("records repayment as a transfer from the receivable back into cash", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          {
+            id: "account-1",
+            name: "Mobile Money",
+            accountType: "mobile_money",
+            accountClass: "asset",
+            currency: "ZMW",
+          },
+          {
+            id: "receivable-1",
+            name: "Loan to John",
+            accountType: "receivable",
+            accountClass: "asset",
+            currency: "ZMW",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Someone repaid me" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/transactions", {
+        method: "POST",
+        body: expect.objectContaining({
+          entryKind: "loan_receivable_repayment",
+          amount: 10000,
+          accountId: "receivable-1",
+          destinationAccountId: "account-1",
+        }),
+      }),
+    );
   });
 });

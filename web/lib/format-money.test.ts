@@ -8,6 +8,8 @@ describe("financial formatting", () => {
 
   it("classifies inflows", () => {
     expect(isPositiveEntry("income_earned")).toBe(true);
+    expect(isPositiveEntry("loan_receivable_repayment")).toBe(true);
+    expect(isPositiveEntry("loan_receivable_advance")).toBe(false);
     expect(isPositiveEntry("expense_living")).toBe(false);
   });
 });

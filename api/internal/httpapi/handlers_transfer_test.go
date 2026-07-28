@@ -64,6 +64,24 @@ func TestCalculateInvestmentTotal(t *testing.T) {
 	}
 }
 
+func TestValidateLendingAccounts(t *testing.T) {
+	cash := store.Account{ID: "cash", AccountType: "bank", AccountClass: "asset", Currency: "ZMW"}
+	receivable := store.Account{ID: "receivable", AccountType: "receivable", AccountClass: "asset", Currency: "ZMW"}
+
+	if err := validateLendingAccounts("loan_receivable_advance", cash, receivable); err != nil {
+		t.Fatalf("valid lending advance returned an error: %v", err)
+	}
+	if err := validateLendingAccounts("loan_receivable_repayment", receivable, cash); err != nil {
+		t.Fatalf("valid lending repayment returned an error: %v", err)
+	}
+	if err := validateLendingAccounts("loan_receivable_advance", receivable, cash); err == nil {
+		t.Fatal("invalid lending advance returned no error")
+	}
+	if err := validateLendingAccounts("loan_receivable_repayment", cash, receivable); err == nil {
+		t.Fatal("invalid lending repayment returned no error")
+	}
+}
+
 func TestNormalizeOptionalSymbol(t *testing.T) {
 	blank := "  "
 	if got := normalizeOptionalSymbol(&blank); got != nil {

@@ -16,6 +16,7 @@ var (
 		"bank":         {},
 		"savings":      {},
 		"investment":   {},
+		"receivable":   {},
 		"other":        {},
 	}
 	validAccountClasses = map[string]struct{}{
@@ -49,6 +50,8 @@ var (
 		"expense_interest":          {},
 		"expense_fee":               {},
 		"debt_principal_payment":    {},
+		"loan_receivable_advance":   {},
+		"loan_receivable_repayment": {},
 		"saving_transfer":           {},
 		"investment_buy":            {},
 		"investment_sell":           {},

@@ -25,5 +25,6 @@ export function isPositiveEntry(entryKind: string) {
     "income_borrowed",
     "investment_income",
     "bond_principal_redemption",
+    "loan_receivable_repayment",
   ].includes(entryKind);
 }

@@ -32,6 +32,7 @@ const accountTypeOptions = [
   { value: "bank", label: "Bank" },
   { value: "savings", label: "Savings" },
   { value: "investment", label: "Investment" },
+  { value: "receivable", label: "Money owed to me" },
   { value: "other", label: "Other" },
 ];
 
@@ -155,7 +156,7 @@ export default function AccountsSettingsPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="resourceBody">
             <strong>Existing accounts</strong>
-            <span className="muted">Manage the accounts that hold your money here. Loan balances are shown below as read-only.</span>
+            <span className="muted">Manage accounts that hold your money or track money owed to you. Loan balances you owe are shown below as read-only.</span>
           </div>
           <button
             className="primaryButton"
@@ -266,7 +267,7 @@ export default function AccountsSettingsPage() {
       <FormDialog
         open={createOpen || editingId !== null}
         title={editingId ? "Edit account" : "Create account"}
-        description="Use this for the places where your money is kept."
+        description="Use this for places where money is kept or balances that are owed to you."
         submitLabel={editingId ? "Update account" : "Create account"}
         pending={saving}
         error={status.startsWith("Failed") ? status : undefined}

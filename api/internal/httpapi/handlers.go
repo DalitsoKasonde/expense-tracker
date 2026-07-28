@@ -556,7 +556,9 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if entryKind == "saving_transfer" {
+	if entryKind == "saving_transfer" ||
+		entryKind == "loan_receivable_advance" ||
+		entryKind == "loan_receivable_repayment" {
 		if req.DestinationAccountID == nil || strings.TrimSpace(*req.DestinationAccountID) == "" {
 			http.Error(w, "destinationAccountId is required for transfers", http.StatusBadRequest)
 			return
@@ -572,6 +574,10 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := validateTransferAccounts(sourceAccount, destinationAccount, currency); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := validateLendingAccounts(entryKind, sourceAccount, destinationAccount); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -752,6 +758,20 @@ func validateTransferAccounts(source, destination store.Account, currency string
 	}
 	if source.Currency != destination.Currency || source.Currency != currency {
 		return errors.New("transfer accounts must use the same currency")
+	}
+	return nil
+}
+
+func validateLendingAccounts(entryKind string, source, destination store.Account) error {
+	switch entryKind {
+	case "loan_receivable_advance":
+		if source.AccountType == "receivable" || destination.AccountType != "receivable" {
+			return errors.New("money lent must move from a cash account to money owed to you")
+		}
+	case "loan_receivable_repayment":
+		if source.AccountType != "receivable" || destination.AccountType == "receivable" {
+			return errors.New("a repayment must move from money owed to you into a cash account")
+		}
 	}
 	return nil
 }

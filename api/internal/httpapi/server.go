@@ -176,6 +176,7 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.Get("/v1/bonds", s.listBonds)
 		protected.Post("/v1/bonds", s.createBond)
 		protected.Get("/v1/bonds/{assetId}/projection", s.getBondProjection)
+		protected.Post("/v1/bonds/{assetId}/cashflows/{cashflowId}/confirm", s.confirmBondCoupon)
 
 		// Sync
 		protected.Get("/v1/sync/status", s.syncStatus)

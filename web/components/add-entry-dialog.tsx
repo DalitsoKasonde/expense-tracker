@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { addYearsToDate } from "@/lib/date-terms";
 import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
@@ -15,6 +16,8 @@ type EntryKind =
   | "income_earned"
   | "income_borrowed"
   | "debt_principal_payment"
+  | "loan_receivable_advance"
+  | "loan_receivable_repayment"
   | "saving_transfer"
   | "investment_buy";
 
@@ -112,6 +115,25 @@ const entryTypeGroups: Array<{ label: string; options: EntryTypeOption[] }> = [
     ],
   },
   {
+    label: "Lending",
+    options: [
+      {
+        value: "loan_receivable_advance",
+        label: "I lent someone money",
+        description: "Track money another person owes you",
+        symbol: "→",
+        tone: "bg-[#E8F6F7] text-[#216A73]",
+      },
+      {
+        value: "loan_receivable_repayment",
+        label: "Someone repaid me",
+        description: "Reduce money owed to you and add cash back",
+        symbol: "←",
+        tone: "bg-[#E9F7F0] text-[#257453]",
+      },
+    ],
+  },
+  {
     label: "Borrowing",
     options: [
       {
@@ -180,12 +202,6 @@ function today() {
   return new Date().toISOString().split("T")[0];
 }
 
-function oneYearFromToday() {
-  const date = new Date();
-  date.setFullYear(date.getFullYear() + 1);
-  return date.toISOString().split("T")[0];
-}
-
 type AddEntryDialogProps = {
   open: boolean;
   onClose: () => void;
@@ -214,9 +230,11 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     symbol: "",
     couponRate: "",
     issueDate: today(),
-    maturityDate: oneYearFromToday(),
+    termYears: "1",
+    maturityDate: addYearsToDate(today(), 1),
+    purchaseFee: "0",
     couponFrequency: "2",
-    reinvestmentCutoffDate: oneYearFromToday(),
+    reinvestmentCutoffDate: addYearsToDate(today(), 1),
   });
 
   const [formData, setFormData] = useState({
@@ -226,6 +244,8 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     currency: userCurrency,
     accountId: "",
     destinationAccountId: "",
+    receivableAccountId: "",
+    counterpartyName: "",
     categoryId: "",
     incomeSourceId: "",
     businessId: "",
@@ -280,11 +300,13 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           return;
         }
 
-        const nonLiabilityAccounts = (loadedAccounts ?? []).filter(
-          (account) => account.accountClass !== "liability",
+        const spendableLoadedAccounts = (loadedAccounts ?? []).filter(
+          (account) =>
+            account.accountClass !== "liability" &&
+            account.accountType !== "receivable",
         );
-        const defaultSourceAccount = nonLiabilityAccounts[0] ?? loadedAccounts?.[0];
-        const defaultDestinationAccount = nonLiabilityAccounts.find(
+        const defaultSourceAccount = spendableLoadedAccounts[0];
+        const defaultDestinationAccount = spendableLoadedAccounts.find(
           (account) =>
             account.id !== defaultSourceAccount?.id &&
             account.currency === defaultSourceAccount?.currency,
@@ -304,6 +326,9 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           currency: defaultSourceAccount?.currency ?? userCurrency,
           accountId: defaultSourceAccount?.id ?? "",
           destinationAccountId: defaultDestinationAccount?.id ?? "",
+          receivableAccountId:
+            (loadedAccounts ?? []).find((account) => account.accountType === "receivable")?.id ?? "",
+          counterpartyName: "",
           categoryId: "",
           incomeSourceId: "",
           businessId: "",
@@ -320,9 +345,11 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           symbol: "",
           couponRate: "",
           issueDate: today(),
-          maturityDate: oneYearFromToday(),
+          termYears: "1",
+          maturityDate: addYearsToDate(today(), 1),
+          purchaseFee: "0",
           couponFrequency: "2",
-          reinvestmentCutoffDate: oneYearFromToday(),
+          reinvestmentCutoffDate: addYearsToDate(today(), 1),
         });
       } catch (loadError) {
         if (!ignore) {
@@ -352,9 +379,17 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     () => accounts.filter((account) => account.accountClass !== "liability"),
     [accounts],
   );
+  const spendableAccounts = useMemo(
+    () => cashAccounts.filter((account) => account.accountType !== "receivable"),
+    [cashAccounts],
+  );
+  const receivableAccounts = useMemo(
+    () => cashAccounts.filter((account) => account.accountType === "receivable"),
+    [cashAccounts],
+  );
   const sourceAccount = useMemo(
-    () => cashAccounts.find((account) => account.id === formData.accountId),
-    [cashAccounts, formData.accountId],
+    () => spendableAccounts.find((account) => account.id === formData.accountId),
+    [formData.accountId, spendableAccounts],
   );
   const transferDestinationAccounts = useMemo(
     () =>
@@ -376,10 +411,13 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     formData.entryKind === "expense_living" || formData.entryKind === "income_earned";
   const showBusiness =
     formData.entryKind === "expense_living" || formData.entryKind === "income_earned";
-  const isWorkflowMode =
+  const isDebtWorkflow =
     formData.entryKind === "income_borrowed" ||
     formData.entryKind === "debt_principal_payment";
-  const accountLabel = formData.entryKind === "income_earned" || formData.entryKind === "income_borrowed"
+  const accountLabel =
+    formData.entryKind === "income_earned" ||
+    formData.entryKind === "income_borrowed" ||
+    formData.entryKind === "loan_receivable_repayment"
     ? "Received into"
     : formData.entryKind === "saving_transfer"
       ? "From account"
@@ -394,6 +432,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
   const stockFeesMinor = toMinor(formData.fees);
   const stockSubtotalMinor = Math.round(stockQuantity * stockUnitPriceMinor);
   const stockTotalMinor = stockSubtotalMinor + stockFeesMinor;
+  const bondPurchaseFeeMinor = toMinor(newInvestment.purchaseFee);
 
   useEffect(() => {
     if (!formData.categoryId) return;
@@ -410,7 +449,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
 
   const handleAccountChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const accountId = event.target.value;
-    const account = cashAccounts.find((item) => item.id === accountId);
+    const account = spendableAccounts.find((item) => item.id === accountId);
     setFormData((current) => {
       const destination = cashAccounts.find(
         (item) => item.id === current.destinationAccountId,
@@ -450,8 +489,12 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
 
       if (formData.entryKind === "investment_buy" && investmentMode === "bond") {
         const couponRate = Number.parseFloat(newInvestment.couponRate);
+        const purchaseFeeMinor = toMinor(newInvestment.purchaseFee);
+        const termYears = Number.parseInt(newInvestment.termYears, 10);
         if (!newInvestment.name.trim()) throw new Error("Enter a bond name");
         if (!Number.isFinite(couponRate) || couponRate < 0) throw new Error("Enter a valid coupon rate");
+        if (!Number.isInteger(termYears) || termYears <= 0) throw new Error("Enter a valid bond term");
+        if (purchaseFeeMinor < 0) throw new Error("Purchase fee cannot be negative");
         await apiCall("/v1/bonds", {
           method: "POST",
           body: {
@@ -460,6 +503,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             currency: formData.currency,
             cashAccountId: formData.accountId,
             principalMinor: amountMinor,
+            purchaseFeeMinor,
             couponRateBps: Math.round(couponRate * 100),
             issueDate: newInvestment.issueDate,
             maturityDate: newInvestment.maturityDate,
@@ -490,6 +534,76 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             currency: formData.currency,
             transactionDate: formData.transactionDate,
             note: formData.note || undefined,
+          },
+        });
+      } else if (formData.entryKind === "loan_receivable_advance") {
+        const counterpartyName = formData.counterpartyName.trim();
+        if (!counterpartyName) throw new Error("Enter the person or loan name");
+
+        const receivableName = `Loan to ${counterpartyName}`;
+        let receivableAccount = receivableAccounts.find(
+          (account) =>
+            account.currency === formData.currency &&
+            account.name.toLocaleLowerCase() === receivableName.toLocaleLowerCase(),
+        );
+        let createdReceivableId = "";
+
+        if (!receivableAccount) {
+          receivableAccount = await apiCall<Account>("/v1/accounts", {
+            method: "POST",
+            body: {
+              name: receivableName,
+              accountType: "receivable",
+              accountClass: "asset",
+              currency: formData.currency,
+              openingBalanceMinor: 0,
+            },
+          });
+          createdReceivableId = receivableAccount?.id ?? "";
+        }
+        if (!receivableAccount) throw new Error("Could not create the amount owed to you");
+
+        try {
+          await apiCall("/v1/transactions", {
+            method: "POST",
+            body: {
+              transactionDate: formData.transactionDate,
+              entryKind: "loan_receivable_advance",
+              amount: amountMinor,
+              currency: formData.currency,
+              accountId: formData.accountId,
+              destinationAccountId: receivableAccount.id,
+              note: formData.note || `Lent to ${counterpartyName}`,
+              source: "manual",
+            },
+          });
+        } catch (caught) {
+          if (createdReceivableId) {
+            await apiCall(`/v1/accounts/${createdReceivableId}`, { method: "DELETE" }).catch(() => undefined);
+          }
+          throw caught;
+        }
+      } else if (formData.entryKind === "loan_receivable_repayment") {
+        if (!formData.receivableAccountId) throw new Error("Select who repaid you");
+        const receivableAccount = receivableAccounts.find(
+          (account) => account.id === formData.receivableAccountId,
+        );
+        if (!receivableAccount) throw new Error("The selected amount owed to you is unavailable");
+        if (receivableAccount.currency !== formData.currency) {
+          throw new Error("The repayment account must use the same currency");
+        }
+
+        await apiCall("/v1/transactions", {
+          method: "POST",
+          body: {
+            transactionDate: formData.transactionDate,
+            entryKind: "loan_receivable_repayment",
+            amount: amountMinor,
+            currency: formData.currency,
+            accountId: receivableAccount.id,
+            destinationAccountId: formData.accountId,
+            note: formData.note || `Repayment from ${receivableAccount.name.replace(/^Loan to /, "")}`,
+            source: "manual",
           },
         });
       } else {
@@ -745,7 +859,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
 
               <div className="splitFields mt-5">
                 <div className="field">
-                  <label htmlFor="accountId">{isWorkflowMode ? "Cash account" : accountLabel}</label>
+                  <label htmlFor="accountId">{isDebtWorkflow ? "Cash account" : accountLabel}</label>
                   <select
                     id="accountId"
                     name="accountId"
@@ -754,7 +868,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     required
                   >
                     <option value="">Select account</option>
-                    {cashAccounts.map((account) => (
+                    {spendableAccounts.map((account) => (
                       <option key={account.id} value={account.id}>
                         {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
                       </option>
@@ -774,6 +888,59 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                 </div>
               </div>
             </div>
+            ) : null}
+
+            {formData.entryKind === "loan_receivable_advance" ? (
+              <div className="formSectionCard">
+                <div className="formSectionHeader">
+                  <h2 className="formSectionTitle">Who owes you?</h2>
+                  <span className="muted">
+                    Expenses will create or reuse an asset balance for this person or loan.
+                  </span>
+                </div>
+                <div className="field">
+                  <label htmlFor="counterpartyName">Person or loan name</label>
+                  <input
+                    id="counterpartyName"
+                    name="counterpartyName"
+                    value={formData.counterpartyName}
+                    onChange={handleChange}
+                    placeholder="e.g. John — school fees"
+                    required
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {formData.entryKind === "loan_receivable_repayment" ? (
+              <div className="formSectionCard">
+                <div className="formSectionHeader">
+                  <h2 className="formSectionTitle">Amount owed to you</h2>
+                  <span className="muted">Choose the person or loan whose balance should decrease.</span>
+                </div>
+                <div className="field">
+                  <label htmlFor="receivableAccountId">Who repaid you?</label>
+                  <select
+                    id="receivableAccountId"
+                    name="receivableAccountId"
+                    value={formData.receivableAccountId}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Select person or loan</option>
+                    {receivableAccounts
+                      .filter((account) => account.currency === formData.currency)
+                      .map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name.replace(/^Loan to /, "")}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                {receivableAccounts.length === 0 ? (
+                  <p className="muted">Record “I lent someone money” first.</p>
+                ) : null}
+              </div>
             ) : null}
 
             {formData.entryKind === "income_borrowed" ||
@@ -893,8 +1060,74 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     <div className="field"><label htmlFor="couponFrequency">Coupon frequency</label><select id="couponFrequency" value={newInvestment.couponFrequency} onChange={(event) => setNewInvestment((current) => ({ ...current, couponFrequency: event.target.value }))}><option value="1">Annually</option><option value="2">Semi-annually</option><option value="4">Quarterly</option><option value="12">Monthly</option></select></div>
                   </div>
                   <div className="splitFields">
-                    <div className="field"><label htmlFor="issueDate">Issue date</label><input id="issueDate" type="date" value={newInvestment.issueDate} onChange={(event) => setNewInvestment((current) => ({ ...current, issueDate: event.target.value }))} required /></div>
-                    <div className="field"><label htmlFor="maturityDate">Maturity date</label><input id="maturityDate" type="date" min={newInvestment.issueDate} value={newInvestment.maturityDate} onChange={(event) => setNewInvestment((current) => ({ ...current, maturityDate: event.target.value }))} required /></div>
+                    <div className="field">
+                      <label htmlFor="issueDate">Issue date</label>
+                      <input
+                        id="issueDate"
+                        type="date"
+                        value={newInvestment.issueDate}
+                        onChange={(event) =>
+                          setNewInvestment((current) => {
+                            const maturityDate = addYearsToDate(
+                              event.target.value,
+                              Number.parseInt(current.termYears, 10),
+                            );
+                            return {
+                              ...current,
+                              issueDate: event.target.value,
+                              maturityDate,
+                              reinvestmentCutoffDate:
+                                current.reinvestmentCutoffDate === current.maturityDate
+                                  ? maturityDate
+                                  : current.reinvestmentCutoffDate,
+                            };
+                          })
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="termYears">Term (years)</label>
+                      <input
+                        id="termYears"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={newInvestment.termYears}
+                        onChange={(event) =>
+                          setNewInvestment((current) => {
+                            const maturityDate = addYearsToDate(
+                              current.issueDate,
+                              Number.parseInt(event.target.value, 10),
+                            );
+                            return {
+                              ...current,
+                              termYears: event.target.value,
+                              maturityDate,
+                              reinvestmentCutoffDate:
+                                current.reinvestmentCutoffDate === current.maturityDate
+                                  ? maturityDate
+                                  : current.reinvestmentCutoffDate,
+                            };
+                          })
+                        }
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="splitFields">
+                    <div className="field">
+                      <label htmlFor="maturityDate">Maturity date</label>
+                      <input id="maturityDate" type="date" min={newInvestment.issueDate} value={newInvestment.maturityDate} readOnly required />
+                      <span className="muted">Calculated from the issue date and term.</span>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="purchaseFee">Purchase charge / fee</label>
+                      <input id="purchaseFee" type="number" min="0" step="0.01" value={newInvestment.purchaseFee} onChange={(event) => setNewInvestment((current) => ({ ...current, purchaseFee: event.target.value }))} />
+                      <span className="muted">
+                        Total deducted: {formatMoney(toMinor(formData.amount) + bondPurchaseFeeMinor, formData.currency)}
+                      </span>
+                    </div>
                   </div>
                   <div className="field"><label htmlFor="reinvestmentCutoffDate">Stop reinvesting coupons</label><input id="reinvestmentCutoffDate" type="date" min={newInvestment.issueDate} max={newInvestment.maturityDate} value={newInvestment.reinvestmentCutoffDate} onChange={(event) => setNewInvestment((current) => ({ ...current, reinvestmentCutoffDate: event.target.value }))} required /><span className="muted">Coupons after this date and the principal redemption go to the selected account.</span></div>
                 </>}

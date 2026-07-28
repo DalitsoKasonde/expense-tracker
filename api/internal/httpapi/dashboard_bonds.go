@@ -160,3 +160,33 @@ func (s *Server) getBondProjection(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, projection)
 }
+
+func (s *Server) confirmBondCoupon(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req store.ConfirmBondCouponInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	req.CashflowID = chi.URLParam(r, "cashflowId")
+
+	cashflow, err := s.bonds.ConfirmCoupon(r.Context(), claims.UserID, chi.URLParam(r, "assetId"), req)
+	if err != nil {
+		switch err {
+		case store.ErrNotFound:
+			http.Error(w, "bond coupon, account, or destination stock not found", http.StatusNotFound)
+		case store.ErrConflict:
+			http.Error(w, "coupon has already been confirmed", http.StatusConflict)
+		default:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, cashflow)
+}

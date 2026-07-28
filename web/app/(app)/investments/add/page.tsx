@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { PageHeader } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
+import { addYearsToDate } from "@/lib/date-terms";
+import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
 type InvestmentKind = "stock" | "bond";
@@ -28,12 +30,6 @@ type Asset = {
 
 function today() {
   return new Date().toISOString().split("T")[0];
-}
-
-function oneYearFromToday() {
-  const date = new Date();
-  date.setFullYear(date.getFullYear() + 1);
-  return date.toISOString().split("T")[0];
 }
 
 function toMinor(value: string) {
@@ -62,9 +58,11 @@ export default function AddInvestmentPage() {
     principal: "",
     couponRate: "",
     issueDate: today(),
-    maturityDate: oneYearFromToday(),
+    termYears: "1",
+    maturityDate: addYearsToDate(today(), 1),
+    bondFee: "0",
     couponFrequency: "2",
-    reinvestmentCutoffDate: oneYearFromToday(),
+    reinvestmentCutoffDate: addYearsToDate(today(), 1),
     note: "",
   });
 
@@ -119,6 +117,32 @@ export default function AddInvestmentPage() {
 
   function update(name: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateBondIssueDate(issueDate: string) {
+    setForm((current) => {
+      const maturityDate = addYearsToDate(issueDate, Number.parseInt(current.termYears, 10));
+      const cutoffFollowedMaturity = current.reinvestmentCutoffDate === current.maturityDate;
+      return {
+        ...current,
+        issueDate,
+        maturityDate,
+        reinvestmentCutoffDate: cutoffFollowedMaturity ? maturityDate : current.reinvestmentCutoffDate,
+      };
+    });
+  }
+
+  function updateBondTerm(termYears: string) {
+    setForm((current) => {
+      const maturityDate = addYearsToDate(current.issueDate, Number.parseInt(termYears, 10));
+      const cutoffFollowedMaturity = current.reinvestmentCutoffDate === current.maturityDate;
+      return {
+        ...current,
+        termYears,
+        maturityDate,
+        reinvestmentCutoffDate: cutoffFollowedMaturity ? maturityDate : current.reinvestmentCutoffDate,
+      };
+    });
   }
 
   async function ensureStockType() {
@@ -182,9 +206,14 @@ export default function AddInvestmentPage() {
 
   async function createBond() {
     const principalMinor = toMinor(form.principal);
+    const purchaseFeeMinor = toMinor(form.bondFee);
     const couponRate = Number.parseFloat(form.couponRate);
-    if (principalMinor <= 0 || !Number.isFinite(couponRate) || couponRate < 0) {
-      throw new Error("Enter a principal greater than zero and a valid coupon rate.");
+    const termYears = Number.parseInt(form.termYears, 10);
+    if (principalMinor <= 0 || purchaseFeeMinor < 0 || !Number.isFinite(couponRate) || couponRate < 0) {
+      throw new Error("Enter a principal greater than zero, a non-negative fee, and a valid coupon rate.");
+    }
+    if (!Number.isInteger(termYears) || termYears <= 0 || !form.maturityDate) {
+      throw new Error("Enter a whole-number bond term greater than zero.");
     }
 
     await apiCall("/v1/bonds", {
@@ -195,6 +224,7 @@ export default function AddInvestmentPage() {
         currency: form.currency,
         cashAccountId: form.accountId,
         principalMinor,
+        purchaseFeeMinor,
         couponRateBps: Math.round(couponRate * 100),
         issueDate: form.issueDate,
         maturityDate: form.maturityDate,
@@ -309,11 +339,25 @@ export default function AddInvestmentPage() {
               <div className="splitFields">
                 <div className="field">
                   <label htmlFor="issueDate">Issue date</label>
-                  <input id="issueDate" type="date" value={form.issueDate} onChange={(event) => update("issueDate", event.target.value)} required />
+                  <input id="issueDate" type="date" value={form.issueDate} onChange={(event) => updateBondIssueDate(event.target.value)} required />
                 </div>
                 <div className="field">
+                  <label htmlFor="termYears">Term (years)</label>
+                  <input id="termYears" type="number" min="1" step="1" value={form.termYears} onChange={(event) => updateBondTerm(event.target.value)} required />
+                </div>
+              </div>
+              <div className="splitFields">
+                <div className="field">
                   <label htmlFor="maturityDate">Maturity date</label>
-                  <input id="maturityDate" type="date" value={form.maturityDate} min={form.issueDate} onChange={(event) => update("maturityDate", event.target.value)} required />
+                  <input id="maturityDate" type="date" value={form.maturityDate} min={form.issueDate} readOnly required />
+                  <span className="muted">Calculated from the issue date and term.</span>
+                </div>
+                <div className="field">
+                  <label htmlFor="bondFee">Purchase charge / fee ({form.currency})</label>
+                  <input id="bondFee" type="number" min="0" step="0.01" value={form.bondFee} onChange={(event) => update("bondFee", event.target.value)} />
+                  <span className="muted">
+                    Total deducted: {formatMoney(toMinor(form.principal) + toMinor(form.bondFee), form.currency)}
+                  </span>
                 </div>
               </div>
               <div className="splitFields">

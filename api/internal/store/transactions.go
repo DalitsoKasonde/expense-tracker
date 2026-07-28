@@ -13,7 +13,7 @@ type Transaction struct {
 	ID                   string   `json:"id"`
 	UserID               string   `json:"userId"`
 	TransactionDate      string   `json:"transactionDate"`
-	EntryKind            string   `json:"entryKind"` // income, expense, saving_transfer, investment_buy, investment_income, bond_principal_redemption
+	EntryKind            string   `json:"entryKind"` // income, expense, transfers, lending, investments, and debt movements
 	Amount               int64    `json:"amount"`    // in cents
 	Currency             string   `json:"currency"`
 	AccountID            string   `json:"accountId"`
