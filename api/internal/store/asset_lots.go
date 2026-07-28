@@ -96,11 +96,11 @@ func createAssetLot(ctx context.Context, db assetLotRowQuerier, lot AssetLot) (A
 			user_id, asset_id, transaction_id, quantity, remaining_quantity, unit_cost, unit_price,
 			fees, total_cost, acquired_at, acquisition_date
 		)
-		values ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $9)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
 		returning id, user_id, asset_id, transaction_id, quantity, remaining_quantity,
-		          unit_price, fees, total_cost, acquisition_date, created_at
-	`, lot.UserID, lot.AssetID, lot.TransactionID, lot.Quantity, lot.RemainingQuantity, lot.UnitPrice,
-		lot.Fees, lot.TotalCost, lot.AcquisitionDate,
+		          unit_price, fees, total_cost, acquisition_date::text, created_at::text
+	`, lot.UserID, lot.AssetID, lot.TransactionID, lot.Quantity, lot.RemainingQuantity,
+		lot.UnitPrice, lot.UnitPrice, lot.Fees, lot.TotalCost, lot.AcquisitionDate,
 	).Scan(
 		&result.ID,
 		&result.UserID,
@@ -120,7 +120,7 @@ func createAssetLot(ctx context.Context, db assetLotRowQuerier, lot AssetLot) (A
 func (s *AssetLotStore) ListByAsset(ctx context.Context, userID, assetID string) ([]AssetLot, error) {
 	rows, err := s.db.Query(ctx, `
 		select id, user_id, asset_id, transaction_id, quantity, remaining_quantity,
-		       unit_price, fees, total_cost, acquisition_date, created_at
+		       unit_price, fees, total_cost, acquisition_date::text, created_at::text
 		from asset_lots
 		where user_id = $1 and asset_id = $2
 		order by acquisition_date asc, created_at asc
