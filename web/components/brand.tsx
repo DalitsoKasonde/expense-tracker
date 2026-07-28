@@ -1,13 +1,18 @@
 import Image from "next/image";
 
 type BrandProps = {
+  centered?: boolean;
   compact?: boolean;
   priority?: boolean;
 };
 
-export function Brand({ compact = false, priority = false }: BrandProps) {
+export function Brand({ centered = false, compact = false, priority = false }: BrandProps) {
   return (
-    <div className={compact ? "grid gap-1.5" : "grid justify-items-start gap-2"}>
+    <div className={[
+      compact ? "grid gap-1.5" : "grid gap-2",
+      centered ? "justify-items-center text-center" : "justify-items-start",
+    ].join(" ")}
+    >
       <span className="inline-flex overflow-hidden rounded-md bg-white">
         <Image
           src="/inscribed-logo.png"

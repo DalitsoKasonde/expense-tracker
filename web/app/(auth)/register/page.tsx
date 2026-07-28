@@ -1,4 +1,5 @@
 import { getAuthSession } from "@/lib/auth";
+import { hasVerifiedSession } from "@/lib/verified-session";
 import { redirect } from "next/navigation";
 import { RegisterForm } from "./register-form";
 import Link from "next/link";
@@ -7,7 +8,7 @@ import { Brand } from "@/components/brand";
 export default async function RegisterPage() {
   const session = await getAuthSession();
 
-  if (session?.user) {
+  if (await hasVerifiedSession(session)) {
     redirect("/today");
   }
 
