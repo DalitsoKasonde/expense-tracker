@@ -60,6 +60,9 @@ export function useUnifiedDashboard(currency?: string) {
   const [data, setData] = useState<UnifiedDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Bumping this re-runs the fetch effect so a failed load (common on a lossy
+  // link) can be retried in place without a full-page navigation.
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     if (!session?.accessToken || currencyLoading) {
@@ -69,6 +72,7 @@ export function useUnifiedDashboard(currency?: string) {
 
     let ignore = false;
     const fetchDashboard = async () => {
+      setLoading(true);
       try {
         const reportingCurrency = currency ?? userCurrency;
         const result = await apiCallRef.current<UnifiedDashboardData>(
@@ -93,7 +97,9 @@ export function useUnifiedDashboard(currency?: string) {
     return () => {
       ignore = true;
     };
-  }, [currency, currencyLoading, session?.accessToken, userCurrency]);
+  }, [currency, currencyLoading, session?.accessToken, userCurrency, reloadNonce]);
 
-  return { data, loading, error };
+  const reload = () => setReloadNonce((nonce) => nonce + 1);
+
+  return { data, loading, error, reload };
 }

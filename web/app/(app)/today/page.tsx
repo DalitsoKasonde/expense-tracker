@@ -52,12 +52,13 @@ export default function TodayPage() {
   const apiCall = useApiCall();
   const apiCallRef = useRef(apiCall);
   apiCallRef.current = apiCall;
-  const { data, loading: dashboardLoading, error: dashboardError } = useUnifiedDashboard();
+  const { data, loading: dashboardLoading, error: dashboardError, reload: reloadDashboard } = useUnifiedDashboard();
   const [transactions, setTransactions] = useState<TransactionRowData[]>([]);
   const [insights, setInsights] = useState<InsightSummary | null>(null);
   const [groups, setGroups] = useState<SavingsGroupResponse[]>([]);
   const [onboardingInterests, setOnboardingInterests] = useState<string[]>([]);
   const [secondaryLoading, setSecondaryLoading] = useState(true);
+  const [secondaryNonce, setSecondaryNonce] = useState(0);
 
   useEffect(() => {
     if (!session?.accessToken) {
@@ -66,36 +67,37 @@ export default function TodayPage() {
     }
     let ignore = false;
     async function loadSupportingData() {
-      try {
-        const api = apiCallRef.current;
-        const [recent, insightResult, groupResult, onboarding, pending] = await Promise.all([
-          api<TransactionRowData[]>("/v1/transactions?limit=5"),
-          api<InsightSummary>("/v1/dashboard/insights").catch(() => null),
-          api<SavingsGroupResponse[]>("/v1/savings-groups").catch(() => []),
-          api<OnboardingStatus>("/v1/onboarding/status").catch(() => null),
-          getPendingTransactions(),
-        ]);
-        if (ignore) return;
-        const pendingRows: TransactionRowData[] = pending.map((item) => ({
-          id: item.id,
-          transactionDate: item.payload.transactionDate,
-          entryKind: item.payload.entryKind,
-          amount: item.payload.amount,
-          currency: item.payload.currency,
-          note: item.payload.note,
-          isPending: true,
-        }));
-        setTransactions([...pendingRows, ...(recent ?? [])].slice(0, 5));
-        setInsights(insightResult);
-        setGroups(groupResult ?? []);
-        setOnboardingInterests(onboarding?.interests ?? []);
-      } finally {
-        if (!ignore) setSecondaryLoading(false);
-      }
+      setSecondaryLoading(true);
+      const api = apiCallRef.current;
+      // Each fetch degrades independently: on a lossy link one failed call must
+      // not blank out the whole page or leave an unhandled rejection. Missing
+      // data simply renders as an empty section until the next reload.
+      const [recent, insightResult, groupResult, onboarding, pending] = await Promise.all([
+        api<TransactionRowData[]>("/v1/transactions?limit=5").catch(() => null),
+        api<InsightSummary>("/v1/dashboard/insights").catch(() => null),
+        api<SavingsGroupResponse[]>("/v1/savings-groups").catch(() => []),
+        api<OnboardingStatus>("/v1/onboarding/status").catch(() => null),
+        getPendingTransactions().catch(() => []),
+      ]);
+      if (ignore) return;
+      const pendingRows: TransactionRowData[] = pending.map((item) => ({
+        id: item.id,
+        transactionDate: item.payload.transactionDate,
+        entryKind: item.payload.entryKind,
+        amount: item.payload.amount,
+        currency: item.payload.currency,
+        note: item.payload.note,
+        isPending: true,
+      }));
+      setTransactions([...pendingRows, ...(recent ?? [])].slice(0, 5));
+      setInsights(insightResult);
+      setGroups(groupResult ?? []);
+      setOnboardingInterests(onboarding?.interests ?? []);
+      setSecondaryLoading(false);
     }
     void loadSupportingData();
     return () => { ignore = true; };
-  }, [session?.accessToken]);
+  }, [session?.accessToken, secondaryNonce]);
 
   const currency = data?.currency || "ZMW";
   const goals: SavingsGoal[] = useMemo(
@@ -108,7 +110,7 @@ export default function TodayPage() {
   }
 
   if (!data) {
-    return <main className="mx-auto min-h-screen max-w-app px-4 py-8 pb-28 sm:px-8 lg:px-12"><EmptyState title="Dashboard unavailable" description={dashboardError || "We could not load your financial overview. Please check your connection and try again."} action={<button className="primaryButton" type="button" onClick={() => window.location.reload()}>Try again</button>} /></main>;
+    return <main className="mx-auto min-h-screen max-w-app px-4 py-8 pb-28 sm:px-8 lg:px-12"><EmptyState title="Dashboard unavailable" description={dashboardError || "We could not load your financial overview. Please check your connection and try again."} action={<button className="primaryButton" type="button" onClick={() => { reloadDashboard(); setSecondaryNonce((nonce) => nonce + 1); }}>Try again</button>} /></main>;
   }
 
   const assetAccounts = data.accountBalances.filter((account) => account.accountClass !== "liability");
