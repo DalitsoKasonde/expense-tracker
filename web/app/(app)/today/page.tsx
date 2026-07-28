@@ -113,16 +113,21 @@ export default function TodayPage() {
     return <main className="mx-auto min-h-screen max-w-app px-4 py-8 pb-28 sm:px-8 lg:px-12"><EmptyState title="Dashboard unavailable" description={dashboardError || "We could not load your financial overview. Please check your connection and try again."} action={<button className="primaryButton" type="button" onClick={() => { reloadDashboard(); setSecondaryNonce((nonce) => nonce + 1); }}>Try again</button>} /></main>;
   }
 
-  const assetAccounts = data.accountBalances.filter((account) => account.accountClass !== "liability");
-  const liabilityAccounts = data.accountBalances.filter((account) => account.accountClass === "liability");
+  // The API serialises empty collections as [] now, but an older build or a
+  // partial/cached payload can still surface null here; guarding keeps a single
+  // missing field from throwing during render and blanking the whole page.
+  const accountBalances = data.accountBalances ?? [];
+  const assets = data.assets ?? [];
+  const assetAccounts = accountBalances.filter((account) => account.accountClass !== "liability");
+  const liabilityAccounts = accountBalances.filter((account) => account.accountClass === "liability");
   const setupTasks: Array<{ label: string; href: Route }> = [];
   if (onboardingInterests.includes("loans") && liabilityAccounts.length === 0) {
     setupTasks.push({ label: "Add the first loan you want Expenses to track", href: "/loans" });
   }
-  if (onboardingInterests.includes("stocks") && !data.assets.some((asset) => asset.assetClass === "stock")) {
+  if (onboardingInterests.includes("stocks") && !assets.some((asset) => asset.assetClass === "stock")) {
     setupTasks.push({ label: "Add your first stock holding", href: "/investments/add" });
   }
-  if (onboardingInterests.includes("bonds") && !data.assets.some((asset) => asset.assetClass === "bond")) {
+  if (onboardingInterests.includes("bonds") && !assets.some((asset) => asset.assetClass === "bond")) {
     setupTasks.push({ label: "Add your first government bond", href: "/investments/add" });
   }
 
@@ -182,7 +187,7 @@ export default function TodayPage() {
 
         <section>
           <div className="mb-4 flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Accounts</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Your balances</h2></div><Link href="/settings/accounts" className="text-sm font-semibold text-accent hover:underline">Manage</Link></div>
-          {data.accountBalances.length ? (
+          {accountBalances.length ? (
             <div className="grid gap-5">
               <div>
                 <div className="mb-3 flex items-center justify-between gap-3">

@@ -74,9 +74,14 @@ func (s *UnifiedDashboardStore) Get(ctx context.Context, userID, currency string
 		}
 	}
 
+	// Initialise the slices so an account/asset-less user serialises as [] rather
+	// than null: the web client calls .filter()/.some() on these directly and a
+	// null would throw a client-side render error (blanking the whole page).
 	dashboard := UnifiedDashboard{
-		AsOfDate: asOf.Format(dateLayout),
-		Currency: currency,
+		AsOfDate:        asOf.Format(dateLayout),
+		Currency:        currency,
+		AccountBalances: []DashboardAccountBalance{},
+		Assets:          []DashboardAsset{},
 	}
 
 	if err := s.db.QueryRow(ctx, `
