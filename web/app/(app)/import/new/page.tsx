@@ -100,14 +100,28 @@ export default function UploadPage() {
         body: formData,
       });
 
+      // Each file becomes its own import record; the API returns the list.
+      const result = (await response.json().catch(() => null)) as
+        | Array<{ id: string; status: string }>
+        | { id: string }
+        | null;
+
       if (!response.ok) {
-        const message = await response.text();
-        setError(message || "Failed to upload files");
+        // A 400 still carries the per-file records (all failed to parse).
+        if (Array.isArray(result) && result.length > 0) {
+          router.push("/import");
+          return;
+        }
+        setError("None of the files could be imported. Check that each workbook is a supported yearly sheet.");
         return;
       }
 
-      const result = await response.json();
-      router.push(`/import/${result.id}`);
+      const imports = Array.isArray(result) ? result : result ? [result] : [];
+      if (imports.length === 1) {
+        router.push(`/import/${imports[0].id}`);
+      } else {
+        router.push("/import");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {

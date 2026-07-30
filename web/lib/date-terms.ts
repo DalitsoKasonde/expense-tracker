@@ -15,3 +15,11 @@ export function addYearsToDate(dateValue: string, years: number): string {
 
   return result.toISOString().slice(0, 10);
 }
+
+export function isPastDate(dateValue: string, todayValue: string): boolean {
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(dateValue) || !datePattern.test(todayValue)) {
+    return false;
+  }
+  return dateValue < todayValue;
+}

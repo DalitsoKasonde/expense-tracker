@@ -106,7 +106,7 @@ func normalizeAllowedValue(value string, fallback string, allowed map[string]str
 func writeSettingsError(w http.ResponseWriter, err error, genericMessage string) {
 	switch {
 	case errors.Is(err, store.ErrAccountHasBalance):
-		http.Error(w, "account still has money or debt; move the balance to zero before removing it", http.StatusBadRequest)
+		http.Error(w, "account still has money or debt; move the balance to zero before deleting it", http.StatusBadRequest)
 	case errors.Is(err, store.ErrInvalidCategoryParent):
 		http.Error(w, "category parent must exist, avoid cycles, and stay in the same category group", http.StatusBadRequest)
 	case errors.Is(err, store.ErrConflict):

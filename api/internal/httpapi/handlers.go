@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -541,6 +542,7 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		ClientID             *string  `json:"clientId"` // For offline sync
 		OriginEventID        *string  `json:"originEventId"`
 		OriginEventType      *string  `json:"originEventType"`
+		HistoricalBackfill   bool     `json:"historicalBackfill"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
@@ -556,7 +558,43 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if entryKind == "saving_transfer" ||
+	if req.HistoricalBackfill {
+		if err := validateHistoricalBackfill(entryKind, req.TransactionDate, time.Now()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		req.AccountID = ""
+		req.Source = historicalBackfillSource
+	} else {
+		if strings.TrimSpace(req.AccountID) == "" {
+			http.Error(w, "accountId is required", http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(req.Source) == "" || req.Source == historicalBackfillSource {
+			req.Source = "manual"
+		}
+	}
+	if entryKind == "saving_transfer" && req.HistoricalBackfill {
+		if req.DestinationAccountID == nil || strings.TrimSpace(*req.DestinationAccountID) == "" {
+			http.Error(w, "destinationAccountId is required for historical savings", http.StatusBadRequest)
+			return
+		}
+		destinationAccount, destinationErr := s.accounts.GetActiveByID(r.Context(), *req.DestinationAccountID, claims.UserID)
+		if errors.Is(destinationErr, store.ErrNotFound) {
+			http.Error(w, "the savings account must be active and belong to the signed-in user", http.StatusBadRequest)
+			return
+		}
+		if destinationErr != nil {
+			http.Error(w, "failed to validate the savings account", http.StatusInternalServerError)
+			return
+		}
+		if destinationAccount.AccountClass != "asset" ||
+			destinationAccount.AccountType != "savings" ||
+			destinationAccount.Currency != currency {
+			http.Error(w, "historical savings must be added to an active savings account using the same currency", http.StatusBadRequest)
+			return
+		}
+	} else if entryKind == "saving_transfer" ||
 		entryKind == "loan_receivable_advance" ||
 		entryKind == "loan_receivable_repayment" {
 		if req.DestinationAccountID == nil || strings.TrimSpace(*req.DestinationAccountID) == "" {
@@ -675,30 +713,32 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var accountCurrency, accountClass string
-		accountErr := dbTx.QueryRow(r.Context(), `
-			select currency, account_class
-			from accounts
-			where id = $1
-			  and user_id = $2
-			  and archived_at is null
-			for share
-		`, req.AccountID, claims.UserID).Scan(&accountCurrency, &accountClass)
-		if errors.Is(accountErr, pgx.ErrNoRows) {
-			http.Error(w, "payment account must be active and belong to the signed-in user", http.StatusBadRequest)
-			return
-		}
-		if accountErr != nil {
-			writeInternalError(w, r, "transactions.investment.validate_account", "could not validate the payment account", accountErr)
-			return
-		}
-		if accountClass != "asset" {
-			http.Error(w, "investment purchases must be paid from an asset account", http.StatusBadRequest)
-			return
-		}
-		if accountCurrency != currency {
-			http.Error(w, "payment account and investment must use the same currency", http.StatusBadRequest)
-			return
+		if !req.HistoricalBackfill {
+			var accountCurrency, accountClass string
+			accountErr := dbTx.QueryRow(r.Context(), `
+				select currency, account_class
+				from accounts
+				where id = $1
+				  and user_id = $2
+				  and archived_at is null
+				for share
+			`, req.AccountID, claims.UserID).Scan(&accountCurrency, &accountClass)
+			if errors.Is(accountErr, pgx.ErrNoRows) {
+				http.Error(w, "payment account must be active and belong to the signed-in user", http.StatusBadRequest)
+				return
+			}
+			if accountErr != nil {
+				writeInternalError(w, r, "transactions.investment.validate_account", "could not validate the payment account", accountErr)
+				return
+			}
+			if accountClass != "asset" {
+				http.Error(w, "investment purchases must be paid from an asset account", http.StatusBadRequest)
+				return
+			}
+			if accountCurrency != currency {
+				http.Error(w, "payment account and investment must use the same currency", http.StatusBadRequest)
+				return
+			}
 		}
 
 		result, err = s.transactions.CreateWithTx(r.Context(), dbTx, transaction)
@@ -943,75 +983,77 @@ func (s *Server) uploadExcel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	importLabel := "legacy workbook import"
-	if len(fileHeaders) == 1 {
-		importLabel = fileHeaders[0].Filename
-	}
-	imp, err := s.imports.Create(r.Context(), claims.UserID, importLabel)
-	if err != nil {
-		http.Error(w, "failed to create import", http.StatusInternalServerError)
-		return
-	}
-
-	rowCount := 0
+	// Each workbook becomes its own import record so a single bad file fails on
+	// its own without aborting the others, and every year can be reviewed,
+	// confirmed, and undone independently.
+	results := make([]store.Import, 0, len(fileHeaders))
+	succeeded := 0
 	for _, header := range fileHeaders {
-		file, err := header.Open()
+		imp, err := s.imports.Create(r.Context(), claims.UserID, header.Filename)
 		if err != nil {
-			msg := "failed to open workbook"
-			_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
-			http.Error(w, msg, http.StatusBadRequest)
+			http.Error(w, "failed to create import", http.StatusInternalServerError)
 			return
 		}
 
-		payload, err := io.ReadAll(file)
-		file.Close()
-		if err != nil {
-			msg := "failed to read workbook"
-			_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
-			http.Error(w, msg, http.StatusBadRequest)
-			return
-		}
-
-		entries, err := parseLegacyWorkbook(header.Filename, payload, selectedAccount.Currency, selectedAccount.ID)
-		if err != nil {
+		if err := s.ingestLegacyWorkbook(r, claims.UserID, imp.ID, header, selectedAccount); err != nil {
 			msg := err.Error()
 			_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
-			http.Error(w, msg, http.StatusBadRequest)
+		} else if err := s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "ready_to_confirm", nil); err != nil {
+			http.Error(w, "failed to update import status", http.StatusInternalServerError)
 			return
+		} else {
+			succeeded++
 		}
 
-		for _, entry := range entries {
-			row, err := s.imports.CreateRow(r.Context(), imp.ID, entry.Raw.SheetName, entry.Raw.EntryIndex, marshalLegacyJSON(entry.Raw))
-			if err != nil {
-				msg := "failed to save import rows"
-				_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
-				http.Error(w, msg, http.StatusInternalServerError)
-				return
-			}
-			if err := s.imports.UpdateRowMapped(r.Context(), row.ID, marshalLegacyJSON(entry.Mapped), nil); err != nil {
-				msg := "failed to map import rows"
-				_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
-				http.Error(w, msg, http.StatusInternalServerError)
-				return
-			}
-			rowCount++
+		refreshed, err := s.imports.GetByID(r.Context(), imp.ID, claims.UserID)
+		if err == nil {
+			imp = refreshed
 		}
+		results = append(results, imp)
 	}
 
-	if rowCount == 0 {
-		msg := "no importable rows were found"
-		_ = s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "failed", &msg)
-		http.Error(w, msg, http.StatusBadRequest)
+	// Only fail the whole request when nothing imported; a partial batch still
+	// returns so the UI can show which years succeeded and which failed.
+	if succeeded == 0 {
+		writeJSON(w, http.StatusBadRequest, results)
 		return
 	}
 
-	if err := s.imports.UpdateStatus(r.Context(), imp.ID, claims.UserID, "ready_to_confirm", nil); err != nil {
-		http.Error(w, "failed to update import status", http.StatusInternalServerError)
-		return
+	writeJSON(w, http.StatusCreated, results)
+}
+
+// ingestLegacyWorkbook parses one uploaded workbook into mapped import rows for
+// the given import record. It returns an error describing the first failure;
+// the caller marks the import failed and moves on to the next file.
+func (s *Server) ingestLegacyWorkbook(r *http.Request, userID, importID string, header *multipart.FileHeader, account *store.Account) error {
+	file, err := header.Open()
+	if err != nil {
+		return fmt.Errorf("failed to open workbook")
+	}
+	payload, err := io.ReadAll(file)
+	file.Close()
+	if err != nil {
+		return fmt.Errorf("failed to read workbook")
 	}
 
-	imp, _ = s.imports.GetByID(r.Context(), imp.ID, claims.UserID)
-	writeJSON(w, http.StatusCreated, imp)
+	entries, err := parseLegacyWorkbook(header.Filename, payload, account.Currency, account.ID)
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("no importable rows were found in %s", header.Filename)
+	}
+
+	for _, entry := range entries {
+		row, err := s.imports.CreateRow(r.Context(), importID, entry.Raw.SheetName, entry.Raw.EntryIndex, marshalLegacyJSON(entry.Raw))
+		if err != nil {
+			return fmt.Errorf("failed to save import rows")
+		}
+		if err := s.imports.UpdateRowMapped(r.Context(), row.ID, marshalLegacyJSON(entry.Mapped), nil); err != nil {
+			return fmt.Errorf("failed to map import rows")
+		}
+	}
+	return nil
 }
 
 func (s *Server) listImports(w http.ResponseWriter, r *http.Request) {

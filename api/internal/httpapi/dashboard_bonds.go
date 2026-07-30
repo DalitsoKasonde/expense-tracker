@@ -125,6 +125,12 @@ func (s *Server) createBond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Currency = currency
+	if req.HistoricalBackfill {
+		if err := validateHistoricalBackfill("investment_buy", req.IssueDate, time.Now()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 
 	position, err := s.bonds.Create(r.Context(), claims.UserID, req)
 	if err != nil {

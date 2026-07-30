@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addYearsToDate } from "./date-terms";
+import { addYearsToDate, isPastDate } from "./date-terms";
 
 describe("addYearsToDate", () => {
   it("calculates a maturity date from an issue date and term", () => {
@@ -14,5 +14,18 @@ describe("addYearsToDate", () => {
     expect(addYearsToDate("", 3)).toBe("");
     expect(addYearsToDate("2026-01-01", 0)).toBe("");
     expect(addYearsToDate("2026-01-01", 1.5)).toBe("");
+  });
+});
+
+describe("isPastDate", () => {
+  it("only accepts dates before today", () => {
+    expect(isPastDate("2026-07-28", "2026-07-29")).toBe(true);
+    expect(isPastDate("2026-07-29", "2026-07-29")).toBe(false);
+    expect(isPastDate("2026-07-30", "2026-07-29")).toBe(false);
+  });
+
+  it("rejects incomplete date values", () => {
+    expect(isPastDate("", "2026-07-29")).toBe(false);
+    expect(isPastDate("28/07/2026", "2026-07-29")).toBe(false);
   });
 });

@@ -16,7 +16,7 @@ type Transaction struct {
 	EntryKind            string   `json:"entryKind"` // income, expense, transfers, lending, investments, and debt movements
 	Amount               int64    `json:"amount"`    // in cents
 	Currency             string   `json:"currency"`
-	AccountID            string   `json:"accountId"`
+	AccountID            string   `json:"accountId,omitempty"`
 	DestinationAccountID *string  `json:"destinationAccountId"`
 	CategoryID           *string  `json:"categoryId"`
 	IncomeSourceID       *string  `json:"incomeSourceId"`
@@ -62,13 +62,17 @@ func (s *TransactionStore) ListByUser(ctx context.Context, userID string, limit,
 	var transactions []Transaction
 	for rows.Next() {
 		var t Transaction
+		var accountID *string
 		if err := rows.Scan(
 			&t.ID, &t.UserID, &t.TransactionDate, &t.EntryKind, &t.Amount, &t.Currency,
-			&t.AccountID, &t.DestinationAccountID, &t.CategoryID, &t.IncomeSourceID, &t.BusinessID, &t.AssetID, &t.LoanID,
+			&accountID, &t.DestinationAccountID, &t.CategoryID, &t.IncomeSourceID, &t.BusinessID, &t.AssetID, &t.LoanID,
 			&t.Quantity, &t.UnitPrice, &t.Fees, &t.Note, &t.Source, &t.ImportID,
 			&t.OriginEventID, &t.OriginEventType, &t.DeletedAt, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, err
+		}
+		if accountID != nil {
+			t.AccountID = *accountID
 		}
 		transactions = append(transactions, t)
 	}
@@ -100,6 +104,7 @@ func createTransaction(ctx context.Context, db transactionRowQuerier, tx Transac
 	}
 
 	var result Transaction
+	var accountID *string
 	err := db.QueryRow(ctx, `
 		insert into transactions (
 			user_id, transaction_date, entry_kind, amount, currency, account_id, destination_account_id, category_id,
@@ -109,16 +114,26 @@ func createTransaction(ctx context.Context, db transactionRowQuerier, tx Transac
 		returning id, user_id, transaction_date::text, entry_kind, amount::bigint, currency, account_id, destination_account_id, category_id,
 		          income_source_id, business_id, asset_id, loan_id, quantity, unit_price::bigint, fees::bigint, note, source, import_id,
 		          origin_event_id::text, origin_event_type, deleted_at::text, created_at::text, updated_at::text
-		`, tx.UserID, tx.TransactionDate, tx.EntryKind, tx.Amount, tx.Currency, tx.AccountID, tx.DestinationAccountID, tx.CategoryID,
+		`, tx.UserID, tx.TransactionDate, tx.EntryKind, tx.Amount, tx.Currency, nullableAccountID(tx.AccountID), tx.DestinationAccountID, tx.CategoryID,
 		tx.IncomeSourceID, tx.BusinessID, tx.AssetID, tx.LoanID, tx.Quantity, tx.UnitPrice, fees, note, tx.Source, tx.ImportID,
 		tx.OriginEventID, tx.OriginEventType,
 	).Scan(
 		&result.ID, &result.UserID, &result.TransactionDate, &result.EntryKind, &result.Amount, &result.Currency,
-		&result.AccountID, &result.DestinationAccountID, &result.CategoryID, &result.IncomeSourceID, &result.BusinessID, &result.AssetID, &result.LoanID,
+		&accountID, &result.DestinationAccountID, &result.CategoryID, &result.IncomeSourceID, &result.BusinessID, &result.AssetID, &result.LoanID,
 		&result.Quantity, &result.UnitPrice, &result.Fees, &result.Note, &result.Source, &result.ImportID,
 		&result.OriginEventID, &result.OriginEventType, &result.DeletedAt, &result.CreatedAt, &result.UpdatedAt,
 	)
+	if accountID != nil {
+		result.AccountID = *accountID
+	}
 	return result, err
+}
+
+func nullableAccountID(accountID string) any {
+	if accountID == "" {
+		return nil
+	}
+	return accountID
 }
 
 func (s *TransactionStore) Update(ctx context.Context, id, userID string, tx Transaction) (Transaction, error) {
@@ -128,6 +143,7 @@ func (s *TransactionStore) Update(ctx context.Context, id, userID string, tx Tra
 	}
 
 	var result Transaction
+	var accountID *string
 	err := s.db.QueryRow(ctx, `
 		update transactions
 		set entry_kind = $1, amount = $2, account_id = $3, destination_account_id = $4, category_id = $5,
@@ -136,13 +152,16 @@ func (s *TransactionStore) Update(ctx context.Context, id, userID string, tx Tra
 		returning id, user_id, transaction_date::text, entry_kind, amount::bigint, currency, account_id, destination_account_id, category_id,
 		          income_source_id, business_id, asset_id, loan_id, quantity, unit_price::bigint, fees::bigint, note, source, import_id,
 		          origin_event_id::text, origin_event_type, deleted_at::text, created_at::text, updated_at::text
-		`, tx.EntryKind, tx.Amount, tx.AccountID, tx.DestinationAccountID, tx.CategoryID, tx.IncomeSourceID, tx.BusinessID, note, id, userID,
+		`, tx.EntryKind, tx.Amount, nullableAccountID(tx.AccountID), tx.DestinationAccountID, tx.CategoryID, tx.IncomeSourceID, tx.BusinessID, note, id, userID,
 	).Scan(
 		&result.ID, &result.UserID, &result.TransactionDate, &result.EntryKind, &result.Amount, &result.Currency,
-		&result.AccountID, &result.DestinationAccountID, &result.CategoryID, &result.IncomeSourceID, &result.BusinessID, &result.AssetID, &result.LoanID,
+		&accountID, &result.DestinationAccountID, &result.CategoryID, &result.IncomeSourceID, &result.BusinessID, &result.AssetID, &result.LoanID,
 		&result.Quantity, &result.UnitPrice, &result.Fees, &result.Note, &result.Source, &result.ImportID,
 		&result.OriginEventID, &result.OriginEventType, &result.DeletedAt, &result.CreatedAt, &result.UpdatedAt,
 	)
+	if accountID != nil {
+		result.AccountID = *accountID
+	}
 	return result, err
 }
 

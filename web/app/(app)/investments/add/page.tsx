@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { PageHeader } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
-import { addYearsToDate } from "@/lib/date-terms";
+import { addYearsToDate, isPastDate } from "@/lib/date-terms";
 import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
@@ -64,12 +64,23 @@ export default function AddInvestmentPage() {
     couponFrequency: "2",
     reinvestmentCutoffDate: addYearsToDate(today(), 1),
     note: "",
+    historicalBackfill: false,
   });
 
   const usableAccounts = useMemo(
     () => accounts.filter((account) => account.accountClass !== "liability" && account.currency === form.currency),
     [accounts, form.currency]
   );
+  const historicalDate = kind === "stock" ? form.purchaseDate : form.issueDate;
+  const historicalEligible = isPastDate(historicalDate, today());
+  const historicalBackfill = historicalEligible && form.historicalBackfill;
+  const accountRequired = kind === "bond" || !historicalBackfill;
+
+  useEffect(() => {
+    if (!historicalEligible && form.historicalBackfill) {
+      setForm((current) => ({ ...current, historicalBackfill: false }));
+    }
+  }, [form.historicalBackfill, historicalEligible]);
 
   useEffect(() => {
     let ignore = false;
@@ -115,7 +126,7 @@ export default function AddInvestmentPage() {
     });
   }, [accounts, form.currency]);
 
-  function update(name: keyof typeof form, value: string) {
+  function update<K extends keyof typeof form>(name: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
@@ -189,13 +200,14 @@ export default function AddInvestmentPage() {
           entryKind: "investment_buy",
           amount: Math.round(quantity * unitPriceMinor) + feesMinor,
           currency: form.currency,
-          accountId: form.accountId,
+          accountId: historicalBackfill ? undefined : form.accountId,
           assetId: asset.id,
           quantity,
           unitPrice: unitPriceMinor,
           fees: feesMinor || undefined,
           note: form.note.trim() || undefined,
           source: "manual",
+          historicalBackfill: historicalBackfill || undefined,
         },
       });
     } catch (caught) {
@@ -230,13 +242,14 @@ export default function AddInvestmentPage() {
         maturityDate: form.maturityDate,
         couponFrequencyPerYear: Number.parseInt(form.couponFrequency, 10),
         reinvestmentCutoffDate: form.reinvestmentCutoffDate,
+        historicalBackfill: historicalBackfill || undefined,
       },
     });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.accountId) {
+    if (accountRequired && !form.accountId) {
       setError("Create a cash or bank account before adding an investment.");
       return;
     }
@@ -288,14 +301,49 @@ export default function AddInvestmentPage() {
             </div>
           </div>
 
-          <div className="field">
-            <label htmlFor="accountId">{kind === "stock" ? "Paid from account" : "Coupon and maturity account"}</label>
-            <select id="accountId" value={form.accountId} onChange={(event) => update("accountId", event.target.value)} required disabled={loadingOptions || usableAccounts.length === 0}>
-              <option value="">Select an account</option>
-              {usableAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}
-            </select>
-            {!loadingOptions && usableAccounts.length === 0 ? <span className="muted">No {form.currency} cash or bank account exists yet. <Link href="/settings/accounts">Create one in Settings</Link>.</span> : null}
-          </div>
+          {historicalBackfill && kind === "stock" ? (
+            <div className="rounded-md border border-primary/30 bg-primary-softer p-4">
+              <strong className="block text-sm text-on-surface">Funding account not required</strong>
+              <span className="mt-1 block text-xs text-on-surface-soft">
+                This historical holding will not reduce a cash-account balance.
+              </span>
+            </div>
+          ) : (
+            <div className="field">
+              <label htmlFor="accountId">
+                {kind === "stock" ? "Paid from account" : "Coupon and maturity account"}
+              </label>
+              <select id="accountId" value={form.accountId} onChange={(event) => update("accountId", event.target.value)} required={accountRequired} disabled={loadingOptions || usableAccounts.length === 0}>
+                <option value="">Select an account</option>
+                {usableAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}
+              </select>
+              {historicalBackfill && kind === "bond" ? (
+                <span className="muted">
+                  Used for coupons and maturity only; the historical purchase is not deducted.
+                </span>
+              ) : null}
+              {!loadingOptions && usableAccounts.length === 0 ? <span className="muted">No {form.currency} cash or bank account exists yet. <Link href="/settings/accounts">Create one in Settings</Link>.</span> : null}
+            </div>
+          )}
+
+          {historicalEligible ? (
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border border-outline bg-surface-soft p-4">
+              <input
+                type="checkbox"
+                className="mt-1 size-4 accent-primary"
+                checked={form.historicalBackfill}
+                onChange={(event) => update("historicalBackfill", event.target.checked)}
+              />
+              <span>
+                <strong className="block text-sm text-on-surface">
+                  Record as historical without a funding account
+                </strong>
+                <span className="mt-1 block text-xs text-on-surface-soft">
+                  Available only before today. The holding is recorded without changing the source-account balance.
+                </span>
+              </span>
+            </label>
+          ) : null}
 
           {kind === "stock" ? (
             <>
@@ -381,7 +429,7 @@ export default function AddInvestmentPage() {
 
           {error ? <p className="muted">{error}</p> : null}
 
-          <button type="submit" className="primaryButton" disabled={saving || loadingOptions || usableAccounts.length === 0}>
+          <button type="submit" className="primaryButton" disabled={saving || loadingOptions || (accountRequired && usableAccounts.length === 0)}>
             {saving ? "Saving..." : kind === "stock" ? "Add stock holding" : "Add government bond"}
           </button>
         </form>

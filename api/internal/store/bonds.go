@@ -70,6 +70,7 @@ type CreateBondInput struct {
 	MaturityDate           string  `json:"maturityDate"`
 	CouponFrequencyPerYear int     `json:"couponFrequencyPerYear"`
 	ReinvestmentCutoffDate string  `json:"reinvestmentCutoffDate"`
+	HistoricalBackfill     bool    `json:"historicalBackfill"`
 }
 
 type ConfirmBondCouponInput struct {
@@ -186,13 +187,19 @@ func (s *BondStore) Create(ctx context.Context, userID string, input CreateBondI
 	}
 
 	purchaseNote := fmt.Sprintf("Purchased government bond %s", position.Name)
+	purchaseAccountID := any(input.CashAccountID)
+	purchaseSource := "manual"
+	if input.HistoricalBackfill {
+		purchaseAccountID = nil
+		purchaseSource = "historical_backfill"
+	}
 	if _, err := tx.Exec(ctx, `
 		insert into transactions (
 			user_id, transaction_date, entry_kind, amount, currency, account_id, asset_id,
 			quantity, unit_price, fees, note, source
-		) values ($1, $2, 'investment_buy', $3, $4, $5, $6, 1, $7, $8, $9, 'manual')
+		) values ($1, $2, 'investment_buy', $3, $4, $5, $6, 1, $7, $8, $9, $10)
 	`, userID, input.IssueDate, input.PrincipalMinor+input.PurchaseFeeMinor, input.Currency,
-		input.CashAccountID, position.AssetID, input.PrincipalMinor, input.PurchaseFeeMinor, purchaseNote); err != nil {
+		purchaseAccountID, position.AssetID, input.PrincipalMinor, input.PurchaseFeeMinor, purchaseNote, purchaseSource); err != nil {
 		return BondPosition{}, err
 	}
 

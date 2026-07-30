@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useApiCall } from "@/lib/client-api";
-import { addYearsToDate } from "@/lib/date-terms";
+import { addYearsToDate, isPastDate } from "@/lib/date-terms";
 import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
@@ -255,6 +255,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     unitPrice: "",
     fees: "0",
     note: "",
+    historicalBackfill: false,
   });
 
   useEffect(() => {
@@ -338,6 +339,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           unitPrice: "",
           fees: "0",
           note: "",
+          historicalBackfill: false,
         });
         setInvestmentMode((loadedAssets ?? []).some((asset) => asset.assetClass !== "bond") ? "existing" : "stock");
         setNewInvestment({
@@ -399,6 +401,14 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
       ),
     [cashAccounts, formData.accountId, sourceAccount?.currency],
   );
+  const historicalSavingsAccounts = useMemo(
+    () =>
+      cashAccounts.filter(
+        (account) =>
+          account.accountType === "savings" && account.currency === formData.currency,
+      ),
+    [cashAccounts, formData.currency],
+  );
   const orderedCategories = useMemo(() => buildOrderedCategories(categories), [categories]);
   const filteredCategories = useMemo(
     () =>
@@ -433,6 +443,24 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
   const stockSubtotalMinor = Math.round(stockQuantity * stockUnitPriceMinor);
   const stockTotalMinor = stockSubtotalMinor + stockFeesMinor;
   const bondPurchaseFeeMinor = toMinor(newInvestment.purchaseFee);
+  const historicalDate =
+    formData.entryKind === "investment_buy" && investmentMode === "bond"
+      ? newInvestment.issueDate
+      : formData.transactionDate;
+  const historicalEligible =
+    (formData.entryKind === "saving_transfer" ||
+      formData.entryKind === "investment_buy") &&
+    isPastDate(historicalDate, today());
+  const historicalBackfill = historicalEligible && formData.historicalBackfill;
+  const sourceAccountRequired =
+    !historicalBackfill ||
+    (formData.entryKind === "investment_buy" && investmentMode === "bond");
+
+  useEffect(() => {
+    if (!historicalEligible && formData.historicalBackfill) {
+      setFormData((current) => ({ ...current, historicalBackfill: false }));
+    }
+  }, [formData.historicalBackfill, historicalEligible]);
 
   useEffect(() => {
     if (!formData.categoryId) return;
@@ -473,7 +501,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
       setError("Not authenticated");
       return;
     }
-    if (!formData.accountId) {
+    if (sourceAccountRequired && !formData.accountId) {
       setError("Please select an account");
       return;
     }
@@ -509,6 +537,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             maturityDate: newInvestment.maturityDate,
             couponFrequencyPerYear: Number.parseInt(newInvestment.couponFrequency, 10),
             reinvestmentCutoffDate: newInvestment.reinvestmentCutoffDate,
+            historicalBackfill: historicalBackfill || undefined,
           },
         });
       } else if (formData.entryKind === "income_borrowed") {
@@ -658,7 +687,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                 ? Math.round(quantity * unitPrice) + fees
                 : amountMinor,
             currency: formData.currency,
-            accountId: formData.accountId,
+            accountId: historicalBackfill ? undefined : formData.accountId,
             destinationAccountId: formData.destinationAccountId || undefined,
             categoryId: showCategories ? formData.categoryId || undefined : undefined,
             incomeSourceId:
@@ -675,6 +704,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             fees: formData.entryKind === "investment_buy" && fees > 0 ? fees : undefined,
             note: formData.note || undefined,
             source: "manual",
+            historicalBackfill: historicalBackfill || undefined,
             },
           });
         } catch (caught) {
@@ -857,36 +887,100 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
               </div>
               )}
 
-              <div className="splitFields mt-5">
-                <div className="field">
-                  <label htmlFor="accountId">{isDebtWorkflow ? "Cash account" : accountLabel}</label>
-                  <select
-                    id="accountId"
-                    name="accountId"
-                    value={formData.accountId}
-                    onChange={handleAccountChange}
-                    required
-                  >
-                    <option value="">Select account</option>
-                    {spendableAccounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className={`${investmentMode === "bond" && formData.entryKind === "investment_buy" ? "" : "splitFields"} mt-5`}>
+                {historicalBackfill &&
+                !(formData.entryKind === "investment_buy" && investmentMode === "bond") ? (
+                  <div className="rounded-md border border-primary/30 bg-primary-softer p-4">
+                    <strong className="block text-sm text-on-surface">
+                      Source account not required
+                    </strong>
+                    <span className="mt-1 block text-xs text-on-surface-soft">
+                      This past entry will not reduce any cash account.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="field">
+                    <label htmlFor="accountId">
+                      {historicalBackfill &&
+                      formData.entryKind === "investment_buy" &&
+                      investmentMode === "bond"
+                        ? "Coupon and maturity account"
+                        : isDebtWorkflow
+                          ? "Cash account"
+                          : accountLabel}
+                    </label>
+                    <select
+                      id="accountId"
+                      name="accountId"
+                      value={formData.accountId}
+                      onChange={handleAccountChange}
+                      required={sourceAccountRequired}
+                    >
+                      <option value="">Select account</option>
+                      {spendableAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
+                        </option>
+                      ))}
+                    </select>
+                    {historicalBackfill &&
+                    formData.entryKind === "investment_buy" &&
+                    investmentMode === "bond" ? (
+                      <span className="muted">
+                        Used only for future coupons and maturity; the historical purchase will not be deducted.
+                      </span>
+                    ) : null}
+                  </div>
+                )}
 
-                <div className="field">
-                  <label htmlFor="transactionDate">Date</label>
-                  <input
-                    id="transactionDate"
-                    name="transactionDate"
-                    type="date"
-                    value={formData.transactionDate}
-                    onChange={handleChange}
-                  />
-                </div>
+                {formData.entryKind === "investment_buy" && investmentMode === "bond" ? null : (
+                  <div className="field">
+                    <label htmlFor="transactionDate">Date</label>
+                    <input
+                      id="transactionDate"
+                      name="transactionDate"
+                      type="date"
+                      value={formData.transactionDate}
+                      onChange={handleChange}
+                    />
+                  </div>
+                )}
               </div>
+
+              {historicalEligible ? (
+                <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-md border border-outline bg-surface-soft p-4">
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4 accent-primary"
+                    checked={formData.historicalBackfill}
+                    onChange={(event) =>
+                      setFormData((current) => {
+                        const destinationStillValid = historicalSavingsAccounts.some(
+                          (account) => account.id === current.destinationAccountId,
+                        );
+                        return {
+                          ...current,
+                          historicalBackfill: event.target.checked,
+                          destinationAccountId:
+                            event.target.checked &&
+                            current.entryKind === "saving_transfer" &&
+                            !destinationStillValid
+                              ? historicalSavingsAccounts[0]?.id ?? ""
+                              : current.destinationAccountId,
+                        };
+                      })
+                    }
+                  />
+                  <span>
+                    <strong className="block text-sm text-on-surface">
+                      Record as historical without a funding account
+                    </strong>
+                    <span className="mt-1 block text-xs text-on-surface-soft">
+                      Available only for dates before today. This records the past saving or investment without changing a source-account balance.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
             </div>
             ) : null}
 
@@ -982,11 +1076,19 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             {formData.entryKind === "saving_transfer" ? (
               <div className="formSectionCard">
                 <div className="formSectionHeader">
-                  <h2 className="formSectionTitle">To account</h2>
-                  <span className="muted">Choose another active account using the same currency.</span>
+                  <h2 className="formSectionTitle">
+                    {historicalBackfill ? "Savings account" : "To account"}
+                  </h2>
+                  <span className="muted">
+                    {historicalBackfill
+                      ? "Choose the savings account that already held this money."
+                      : "Choose another active account using the same currency."}
+                  </span>
                 </div>
                 <div className="field">
-                  <label htmlFor="destinationAccountId">To account</label>
+                  <label htmlFor="destinationAccountId">
+                    {historicalBackfill ? "Savings account" : "To account"}
+                  </label>
                   <select
                     id="destinationAccountId"
                     name="destinationAccountId"
@@ -994,8 +1096,13 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     onChange={handleChange}
                     required
                   >
-                    <option value="">Select destination</option>
-                    {transferDestinationAccounts.map((account) => (
+                    <option value="">
+                      {historicalBackfill ? "Select savings account" : "Select destination"}
+                    </option>
+                    {(historicalBackfill
+                      ? historicalSavingsAccounts
+                      : transferDestinationAccounts
+                    ).map((account) => (
                         <option key={account.id} value={account.id}>
                           {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
                         </option>

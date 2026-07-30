@@ -100,6 +100,59 @@ describe("AddEntryDialog", () => {
     expect(destination).not.toHaveTextContent("Credit card");
   });
 
+  it("records past savings without reducing a source account", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          {
+            id: "account-1",
+            name: "Main bank",
+            accountType: "bank",
+            accountClass: "asset",
+            currency: "ZMW",
+          },
+          {
+            id: "savings-1",
+            name: "Emergency savings",
+            accountType: "savings",
+            accountClass: "asset",
+            currency: "ZMW",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I transferred money" }));
+    fireEvent.change(screen.getByLabelText("Date"), {
+      target: { value: "2020-01-10" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /record as historical without a funding account/i,
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "500" } });
+    expect(screen.queryByLabelText("From account")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Savings account")).toHaveValue("savings-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/transactions", {
+        method: "POST",
+        body: expect.objectContaining({
+          entryKind: "saving_transfer",
+          amount: 50000,
+          accountId: undefined,
+          destinationAccountId: "savings-1",
+          historicalBackfill: true,
+        }),
+      }),
+    );
+  });
+
   it("records money lent as a transfer into a receivable asset", async () => {
     mocks.apiCall.mockImplementation((path: string, options?: { method?: string }) => {
       if (path === "/v1/accounts" && options?.method === "POST") {

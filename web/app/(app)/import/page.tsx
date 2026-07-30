@@ -8,6 +8,7 @@ import { getApiBaseUrl } from "@/lib/client-api";
 
 interface Import {
   id: string;
+  fileName?: string;
   status: string;
   createdAt: string;
   error?: string;
@@ -77,13 +78,14 @@ export default function ImportPage() {
               >
                 <div>
                   <p className="font-semibold">
-                    {imp.status.toUpperCase()}
+                    {imp.fileName || "Workbook import"}
                   </p>
                   <p className="muted text-sm mt-1">
+                    {imp.status.replace(/_/g, " ").toUpperCase()} ·{" "}
                     {new Date(imp.createdAt).toLocaleDateString()}
                   </p>
                   {imp.error && (
-                    <p className="text-sm mt-1 text-red-600">
+                    <p className="text-sm mt-1 text-negative" role="alert">
                       {imp.error}
                     </p>
                   )}

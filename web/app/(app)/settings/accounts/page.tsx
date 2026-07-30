@@ -54,6 +54,7 @@ export default function AccountsSettingsPage() {
   const [form, setForm] = useState({ name: "", accountType: "cash", currency: userCurrency, openingBalance: "" });
   const assetAccounts = accounts.filter((account) => account.accountClass !== "liability");
   const liabilityAccounts = accounts.filter((account) => account.accountClass === "liability");
+  const accountPendingDeletion = accounts.find((account) => account.id === deleteId);
 
   async function loadAccounts() {
     const result = await apiCall<Account[]>("/v1/accounts");
@@ -144,7 +145,7 @@ export default function AccountsSettingsPage() {
         resetForm();
       }
       setDeleteId(null);
-      setStatus("Account removed or archived.");
+      setStatus("Account deleted from active accounts. Any transaction history was preserved.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to remove account");
     }
@@ -220,8 +221,8 @@ export default function AccountsSettingsPage() {
                           >
                             Edit
                           </button>
-                          <button className="ghostButton" type="button" onClick={() => setDeleteId(account.id)}>
-                            Remove
+                          <button className="dangerButton" type="button" onClick={() => setDeleteId(account.id)}>
+                            Delete
                           </button>
                         </div>
                       </td>
@@ -330,9 +331,16 @@ export default function AccountsSettingsPage() {
 
       <ConfirmationDialog
         open={deleteId !== null}
-        title="Remove account?"
-        description="If the account still has money or debt, removal will be blocked. If the balance is zero but history exists, it will be archived instead of permanently deleted."
-        confirmLabel="Remove"
+        title={accountPendingDeletion ? `Delete ${accountPendingDeletion.name}?` : "Delete account?"}
+        description={
+          accountPendingDeletion
+            ? `${accountPendingDeletion.name} currently shows ${formatMoney(
+                balancesByAccountId[accountPendingDeletion.id] ?? 0,
+                accountPendingDeletion.currency,
+              )}. An account with a balance cannot be deleted. If it has transaction history, it will be hidden while that history remains in reports.`
+            : "An account with a balance cannot be deleted. Historical transactions are preserved."
+        }
+        confirmLabel="Delete account"
         destructive
         onConfirm={() => void handleDelete()}
         onClose={() => setDeleteId(null)}
