@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { supportedCurrencies } from "@/lib/currencies";
 import { applyTheme } from "@/components/preference-theme-sync";
 import { primeUserCurrency } from "@/lib/use-user-currency";
 
@@ -93,10 +94,9 @@ export default function PreferencesSettingsPage() {
             onChange={(event) => setForm((current) => ({ ...current, defaultCurrency: event.target.value }))}
             disabled={loading}
           >
-            <option value="ZMW">ZMW</option>
-            <option value="USD">USD</option>
-            <option value="GBP">GBP</option>
-            <option value="EUR">EUR</option>
+            {supportedCurrencies.map((currency) => (
+              <option key={currency} value={currency}>{currency}</option>
+            ))}
           </select>
         </div>
 

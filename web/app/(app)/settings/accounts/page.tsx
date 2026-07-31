@@ -4,6 +4,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { supportedCurrencies } from "@/lib/currencies";
 import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
 import { ConfirmationDialog, FormDialog } from "@/components/ui/dialogs";
@@ -314,13 +315,16 @@ export default function AccountsSettingsPage() {
 
           <div className="field">
             <label htmlFor="currency">Currency</label>
-            <input
+            <select
               id="currency"
               value={form.currency}
-              onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
-              placeholder="ZMW"
+              onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value }))}
               required
-            />
+            >
+              {supportedCurrencies.map((currency) => (
+                <option key={currency} value={currency}>{currency}</option>
+              ))}
+            </select>
           </div>
 
           {canEditBalance ? (

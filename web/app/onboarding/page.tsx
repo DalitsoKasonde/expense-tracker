@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useApiCall } from "@/lib/client-api";
 import { isApiNotFound } from "@/lib/api-error";
+import { supportedCurrencies } from "@/lib/currencies";
 import { primeUserCurrency } from "@/lib/use-user-currency";
 import { Brand } from "@/components/brand";
 
@@ -42,7 +43,6 @@ type ExistingAccount = {
   name: string;
 };
 
-const currencies = ["ZMW", "USD", "GBP", "EUR", "ZAR"];
 const accountTypes: Array<{ value: AccountType; label: string }> = [
   { value: "cash", label: "Cash" },
   { value: "mobile_money", label: "Mobile money" },
@@ -351,7 +351,7 @@ export default function OnboardingPage() {
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Default currency">
-              {currencies.map((item) => (
+              {supportedCurrencies.map((item) => (
                 <button
                   key={item}
                   type="button"

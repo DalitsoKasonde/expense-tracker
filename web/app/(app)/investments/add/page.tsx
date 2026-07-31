@@ -8,6 +8,7 @@ import {
   PageShell,
 } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
+import { supportedCurrencies } from "@/lib/currencies";
 import { addYearsToDate, isPastDate } from "@/lib/date-terms";
 import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
@@ -299,7 +300,7 @@ export default function AddInvestmentPage() {
             <div className="field">
               <label htmlFor="currency">Currency</label>
               <select id="currency" value={form.currency} onChange={(event) => update("currency", event.target.value)}>
-                {['ZMW', 'USD', 'GBP', 'EUR', 'ZAR'].map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+                {supportedCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
               </select>
             </div>
           </div>

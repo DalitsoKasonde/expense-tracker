@@ -2,45 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { buildCategoryRows, categoryGroups, type Category } from "@/lib/category-tree";
 import { ConfirmationDialog, FormDialog } from "@/components/ui/dialogs";
-
-type Category = {
-  id: string;
-  name: string;
-  categoryGroup: string;
-  parentId: string | null;
-};
-
-const categoryGroups = [
-  { value: "expense", label: "Expense" },
-  { value: "income", label: "Income" },
-  { value: "saving", label: "Saving" },
-  { value: "investment", label: "Investment" },
-];
-
-function buildOrderedCategories(categories: Category[]) {
-  const byParent = new Map<string | null, Category[]>();
-  for (const category of categories) {
-    const key = category.parentId ?? null;
-    const bucket = byParent.get(key) ?? [];
-    bucket.push(category);
-    byParent.set(key, bucket);
-  }
-
-  for (const group of byParent.values()) {
-    group.sort((left, right) => left.name.localeCompare(right.name));
-  }
-
-  const ordered: Array<Category & { depth: number }> = [];
-  const visit = (parentId: string | null, depth: number) => {
-    for (const category of byParent.get(parentId) ?? []) {
-      ordered.push({ ...category, depth });
-      visit(category.id, depth + 1);
-    }
-  };
-  visit(null, 0);
-  return ordered;
-}
 
 export default function CategoriesSettingsPage() {
   const apiCall = useApiCall();
@@ -57,7 +20,11 @@ export default function CategoriesSettingsPage() {
     parentId: "",
   });
 
-  const orderedCategories = useMemo(() => buildOrderedCategories(categories), [categories]);
+  const orderedCategories = useMemo(() => buildCategoryRows(categories), [categories]);
+  const categoriesById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  );
   const parentOptions = useMemo(
     () =>
       orderedCategories.filter(
@@ -141,7 +108,7 @@ export default function CategoriesSettingsPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="resourceBody">
             <strong>Existing categories</strong>
-            <span className="muted">Parent-child structure is shown directly in the table for easier editing.</span>
+            <span className="muted">Categories are grouped by purpose, with parent and subcategory relationships kept visible.</span>
           </div>
           <button
             className="btn btn-primary"
@@ -157,63 +124,99 @@ export default function CategoriesSettingsPage() {
           </button>
         </div>
 
-        <div className="card settingsListPanel overflow-hidden">
-          <div className="settingsHeaderRow">
-            <strong>Categories table</strong>
-          </div>
-          <div className="overflow-x-auto">
-            {loading ? <div className="muted">Loading categories...</div> : null}
-            {!loading && orderedCategories.length === 0 ? (
-              <div className="muted">No categories yet. Create your first category.</div>
-            ) : null}
-            {orderedCategories.length ? (
-              <table className="dataTable">
-                <thead>
-                  <tr className="text-on-surface-soft">
-                    <th className="font-semibold">Name</th>
-                    <th className="font-semibold">Group</th>
-                    <th className="font-semibold">Level</th>
-                    <th className="font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orderedCategories.map((category) => (
-                    <tr key={category.id}>
-                      <td data-label="Name" className="font-semibold text-on-surface" style={{ paddingLeft: `${1 + category.depth * 1.25}rem` }}>
-                        {category.name}
-                      </td>
-                      <td data-label="Group" className="text-on-surface-soft">{category.categoryGroup}</td>
-                      <td data-label="Level" className="text-on-surface-soft">{category.parentId ? "Subcategory" : "Top level"}</td>
-                      <td data-label="Actions">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            className="btn btn-ghost"
-                            type="button"
-                            onClick={() => {
-                              setStatus("");
-                              setCreateOpen(false);
-                              setEditingId(category.id);
-                              setForm({
-                                name: category.name,
-                                categoryGroup: category.categoryGroup,
-                                parentId: category.parentId ?? "",
-                              });
-                            }}
+        {loading ? <div className="card settingsListPanel muted">Loading categories...</div> : null}
+        {!loading ? (
+          <div className="grid gap-4">
+            {categoryGroups.map((group) => {
+              const groupCategories = orderedCategories.filter(
+                (category) => category.categoryGroup === group.value,
+              );
+              return (
+                <section key={group.value} className="card overflow-hidden p-0" aria-labelledby={`category-group-${group.value}`}>
+                  <div className="flex items-center justify-between gap-3 border-b border-outline bg-surface-soft p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary-softer text-lg font-bold text-primary" aria-hidden="true">
+                        {group.symbol}
+                      </span>
+                      <div className="resourceBody">
+                        <h2 id={`category-group-${group.value}`} className="text-[15px] font-bold text-on-surface">
+                          {group.label}
+                        </h2>
+                        <span className="muted">
+                          {groupCategories.length === 1 ? "1 category" : `${groupCategories.length} categories`}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      onClick={() => {
+                        setStatus("");
+                        setEditingId(null);
+                        setCreateOpen(true);
+                        setForm({ name: "", categoryGroup: group.value, parentId: "" });
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  {groupCategories.length ? (
+                    <div className="grid gap-2 p-3 sm:p-4">
+                      {groupCategories.map((category) => {
+                        const parent = category.parentId ? categoriesById.get(category.parentId) : undefined;
+                        return (
+                          <div
+                            key={category.id}
+                            className="grid gap-3 rounded-lg border border-outline bg-surface p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                            style={{ marginLeft: `${Math.min(category.depth, 3) * 1.25}rem` }}
                           >
-                            Edit
-                          </button>
-                          <button className="btn btn-ghost" type="button" onClick={() => setDeleteId(category.id)}>
-                            Remove
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
+                            <div className="flex min-w-0 items-start gap-3">
+                              <span className="mt-1 text-primary" aria-hidden="true">{category.depth ? "└" : "●"}</span>
+                              <div className="resourceBody min-w-0">
+                                <strong>{category.name}</strong>
+                                <span className="muted">
+                                  {parent
+                                    ? `Subcategory of ${parent.name}`
+                                    : category.childCount
+                                      ? `${category.childCount} direct ${category.childCount === 1 ? "subcategory" : "subcategories"}`
+                                      : "Top-level category"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                className="btn btn-ghost"
+                                type="button"
+                                onClick={() => {
+                                  setStatus("");
+                                  setCreateOpen(false);
+                                  setEditingId(category.id);
+                                  setForm({
+                                    name: category.name,
+                                    categoryGroup: category.categoryGroup,
+                                    parentId: category.parentId ?? "",
+                                  });
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button className="btn btn-ghost" type="button" onClick={() => setDeleteId(category.id)}>
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-sm text-on-surface-soft">No {group.label.toLowerCase()} categories yet.</div>
+                  )}
+                </section>
+              );
+            })}
           </div>
-        </div>
+        ) : null}
       </div>
 
       {status ? <p className="statusText">{status}</p> : null}
@@ -267,7 +270,7 @@ export default function CategoriesSettingsPage() {
               <option value="">No parent</option>
               {parentOptions.map((category) => (
                 <option key={category.id} value={category.id}>
-                  {`${"  ".repeat(category.depth)}${category.name}`}
+                  {category.path}
                 </option>
               ))}
             </select>
