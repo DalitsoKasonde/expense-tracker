@@ -25,6 +25,14 @@ const config: Config = {
           soft: "var(--primary-soft)",
           softer: "var(--primary-softer)",
         },
+        // Filled controls. `action.contrast` exists because the fill inverts in
+        // dark mode, so a hard-coded text-white label would be unreadable.
+        action: {
+          DEFAULT: "var(--action)",
+          hover: "var(--action-hover)",
+          contrast: "var(--action-contrast)",
+        },
+        focus: "var(--focus)",
         accent: "var(--accent)",
         outline: {
           DEFAULT: "var(--outline)",
@@ -64,8 +72,14 @@ const config: Config = {
         pill: "var(--radius-pill)",
       },
       boxShadow: {
+        // Utility shadows resolve to the same tokens the CSS layer uses, so a
+        // card styled with utilities cannot pick up a different elevation.
         sm: "var(--shadow-sm)",
         md: "var(--shadow-md)",
+        lg: "var(--shadow-raised)",
+      },
+      minHeight: {
+        control: "var(--control-h)",
       },
       maxWidth: {
         app: "1280px",

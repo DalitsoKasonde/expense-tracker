@@ -2,7 +2,11 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { EmptyState, PageHeader } from "@/components/ui";
+import {
+  EmptyState,
+  PageHeader,
+  PageShell,
+} from "@/components/ui";
 import { UnifiedDashboardAsset, useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { formatMoney } from "@/lib/format-money";
 
@@ -66,11 +70,11 @@ export default function InvestmentsPage() {
   }, [data?.assets, data?.currency]);
   const performanceDifference = totalCurrentValue - totalInvested;
 
-  if (loading) return <div className="shell">Loading...</div>;
+  if (loading) return <div className="page-shell">Loading...</div>;
 
   return (
-    <main className="shell">
-      <section className="appChrome workspaceStack">
+    <PageShell>
+      <section className="workspaceStack">
         <PageHeader
           eyebrow="Portfolio"
           title="Portfolio"
@@ -82,7 +86,7 @@ export default function InvestmentsPage() {
             title="No investments yet"
             description="Add a stock, bond, or other holding and Expenses will track cost, current value, allocation, and concentration for you."
             action={
-              <Link href="/investments/add" className="primaryButton">
+              <Link href="/investments/add" className="btn btn-primary">
                 Add investment
               </Link>
             }
@@ -157,7 +161,7 @@ export default function InvestmentsPage() {
                 ? `${largestHolding.name} represents ${Math.round((largestHolding.currentValueMinor / Math.max(totalCurrentValue, 1)) * 100)}% of ${primaryCurrency} portfolio value. Review its latest value and concentration.`
                 : "Record what you paid and the app will track cost, current value, allocation, dividends, and bond payments."}
             </p>
-            <Link href={largestHolding ? `/investments/${largestHolding.assetId}` : "/investments/add"} className="ghostButton">
+            <Link href={largestHolding ? `/investments/${largestHolding.assetId}` : "/investments/add"} className="btn btn-ghost">
               {largestHolding ? "Review holding" : "Add investment"}
             </Link>
           </aside>
@@ -198,7 +202,7 @@ export default function InvestmentsPage() {
                 Review the position carrying the most value first, then compare invested amount against current value to see where performance or concentration deserves attention.
               </span>
             </div>
-            <Link href="/transactions" className="ghostButton">
+            <Link href="/transactions" className="btn btn-ghost">
               Open history
             </Link>
           </section>
@@ -256,13 +260,13 @@ export default function InvestmentsPage() {
         </section>
 
         <div className="formActions">
-          <Link href="/investments/add" className="primaryButton">
+          <Link href="/investments/add" className="btn btn-primary">
             Add investment
           </Link>
         </div>
         </>
         )}
       </section>
-    </main>
+    </PageShell>
   );
 }

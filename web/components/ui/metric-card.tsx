@@ -13,7 +13,7 @@ export function MetricCard({ label, value, detail, delta, tone = "default", char
   label: string; value: string; detail?: string; delta?: number | null; tone?: Tone; chart?: ReactNode;
 }) {
   return (
-    <article className="rounded-lg border border-outline bg-surface p-5 shadow-sm">
+    <article className="card">
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">{label}</p>
         <span className={`size-2 rounded-full ${tones[tone]}`} aria-hidden="true" />

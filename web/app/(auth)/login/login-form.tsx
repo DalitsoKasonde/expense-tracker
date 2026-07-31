@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { establishApiSession } from "@/lib/browser-auth";
@@ -10,7 +10,14 @@ export function LoginForm() {
   const [error, setError] = useState("");
   const [isPending, setIsPending] = useState(false);
 
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (isPending) {
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
     setIsPending(true);
     setError("");
 
@@ -26,9 +33,8 @@ export function LoginForm() {
         redirect: false,
       });
 
-      setIsPending(false);
-
       if (result?.error) {
+        setIsPending(false);
         setError("Login failed. Check your email, password, bootstrap env vars, and database connection.");
         return;
       }
@@ -43,26 +49,51 @@ export function LoginForm() {
 
   return (
     <form
-      className="grid gap-4 mt-6"
-      action={(formData) => {
-        void handleSubmit(formData);
-      }}
+      className={`loginForm mt-6 ${isPending ? "loginFormPending" : ""}`}
+      onSubmit={(event) => void handleSubmit(event)}
+      aria-busy={isPending}
     >
       <div className="field">
         <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" autoComplete="email" required />
+        <input id="email" name="email" type="email" autoComplete="email" required disabled={isPending} />
       </div>
 
       <div className="field">
         <label htmlFor="password">Password</label>
-        <input id="password" name="password" type="password" autoComplete="current-password" required />
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+          disabled={isPending}
+        />
       </div>
 
-      {error ? <p className="muted">{error}</p> : null}
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
 
-      <button type="submit" className="primaryButton" disabled={isPending}>
-        {isPending ? "Signing in..." : "Sign in"}
+      <button type="submit" className="btn btn-primary" disabled={isPending}>
+        {isPending ? (
+          <>
+            <span className="loginSpinner" aria-hidden="true" />
+            <span>Signing you in</span>
+            <span className="loginProgressDots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+          </>
+        ) : (
+          "Sign in"
+        )}
       </button>
+
+      {isPending ? (
+        <p className="loginStatus" role="status">
+          <span className="loginStatusPulse" aria-hidden="true" />
+          Securing your session…
+        </p>
+      ) : null}
     </form>
   );
 }

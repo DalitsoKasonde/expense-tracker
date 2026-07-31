@@ -100,7 +100,7 @@ export default function BusinessesSettingsPage() {
             <span className="muted">Use short, stable names that will remain clear inside history and reports.</span>
           </div>
           <button
-            className="primaryButton"
+            className="btn btn-primary"
             type="button"
             onClick={() => {
               setStatus("");
@@ -123,21 +123,21 @@ export default function BusinessesSettingsPage() {
               <div className="muted">No businesses yet. Add one if you want separate business-linked reporting.</div>
             ) : null}
             {businesses.length ? (
-              <table className="min-w-full border-collapse text-sm">
+              <table className="dataTable">
                 <thead>
-                  <tr className="border-b border-outline text-left text-on-surface-soft">
-                    <th className="px-4 py-3 font-semibold">Name</th>
-                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  <tr className="text-on-surface-soft">
+                    <th className="font-semibold">Name</th>
+                    <th className="font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {businesses.map((business) => (
-                    <tr key={business.id} className="border-b border-outline/70 last:border-b-0">
-                      <td className="px-4 py-3 font-semibold text-on-surface">{business.name}</td>
-                      <td className="px-4 py-3">
+                    <tr key={business.id}>
+                      <td data-label="Name" className="font-semibold text-on-surface">{business.name}</td>
+                      <td data-label="Actions">
                         <div className="flex flex-wrap gap-2">
                           <button
-                            className="ghostButton"
+                            className="btn btn-ghost"
                             type="button"
                             onClick={() => {
                               setStatus("");
@@ -148,7 +148,7 @@ export default function BusinessesSettingsPage() {
                           >
                             Edit
                           </button>
-                          <button className="ghostButton" type="button" onClick={() => setDeleteId(business.id)}>
+                          <button className="btn btn-ghost" type="button" onClick={() => setDeleteId(business.id)}>
                             Remove
                           </button>
                         </div>

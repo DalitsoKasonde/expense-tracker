@@ -15,6 +15,7 @@ type Account = {
   accountClass: string;
   currency: string;
   openingBalanceMinor: number;
+  hasTransactions: boolean;
 };
 
 type DashboardAccountBalance = {
@@ -40,6 +41,10 @@ function toMinor(value: string) {
   return Math.round((parseFloat(value || "0") || 0) * 100);
 }
 
+function fromMinor(amountMinor: number) {
+  return (amountMinor / 100).toFixed(2);
+}
+
 export default function AccountsSettingsPage() {
   const apiCall = useApiCall();
   const { currency: userCurrency } = useUserCurrency();
@@ -55,6 +60,10 @@ export default function AccountsSettingsPage() {
   const assetAccounts = accounts.filter((account) => account.accountClass !== "liability");
   const liabilityAccounts = accounts.filter((account) => account.accountClass === "liability");
   const accountPendingDeletion = accounts.find((account) => account.id === deleteId);
+  const editingAccount = accounts.find((account) => account.id === editingId);
+  // The balance only stays editable while nothing has moved through the account;
+  // after that it is derived from transactions.
+  const canEditBalance = !editingId || (editingAccount !== undefined && !editingAccount.hasTransactions);
 
   async function loadAccounts() {
     const result = await apiCall<Account[]>("/v1/accounts");
@@ -110,6 +119,7 @@ export default function AccountsSettingsPage() {
             name: form.name,
             accountType: form.accountType,
             currency: form.currency,
+            ...(canEditBalance ? { openingBalanceMinor: toMinor(form.openingBalance) } : {}),
           },
         });
       } else {
@@ -160,7 +170,7 @@ export default function AccountsSettingsPage() {
             <span className="muted">Manage accounts that hold your money or track money owed to you. Loan balances you owe are shown below as read-only.</span>
           </div>
           <button
-            className="primaryButton"
+            className="btn btn-primary"
             type="button"
             onClick={() => {
               setStatus("");
@@ -183,29 +193,29 @@ export default function AccountsSettingsPage() {
               <div className="muted">No accounts yet. Create one to start tracking balances.</div>
             ) : null}
             {assetAccounts.length ? (
-              <table className="min-w-full border-collapse text-sm">
+              <table className="dataTable">
                 <thead>
-                  <tr className="border-b border-outline text-left text-on-surface-soft">
-                    <th className="px-4 py-3 font-semibold">Name</th>
-                    <th className="px-4 py-3 font-semibold">Type</th>
-                    <th className="px-4 py-3 font-semibold">Balance</th>
-                    <th className="px-4 py-3 font-semibold">Currency</th>
-                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  <tr className="text-on-surface-soft">
+                    <th className="font-semibold">Name</th>
+                    <th className="font-semibold">Type</th>
+                    <th className="font-semibold">Balance</th>
+                    <th className="font-semibold">Currency</th>
+                    <th className="font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {assetAccounts.map((account) => (
-                    <tr key={account.id} className="border-b border-outline/70 last:border-b-0">
-                      <td className="px-4 py-3 font-semibold text-on-surface">{account.name}</td>
-                      <td className="px-4 py-3 text-on-surface-soft">{account.accountType.replaceAll("_", " ")}</td>
-                      <td className="px-4 py-3 text-on-surface">
+                    <tr key={account.id}>
+                      <td data-label="Name" className="font-semibold text-on-surface">{account.name}</td>
+                      <td data-label="Type" className="text-on-surface-soft">{account.accountType.replaceAll("_", " ")}</td>
+                      <td data-label="Balance" className="text-on-surface">
                         {formatMoney(balancesByAccountId[account.id] ?? 0, account.currency)}
                       </td>
-                      <td className="px-4 py-3 text-on-surface-soft">{account.currency}</td>
-                      <td className="px-4 py-3">
+                      <td data-label="Currency" className="text-on-surface-soft">{account.currency}</td>
+                      <td data-label="Actions">
                         <div className="flex flex-wrap gap-2">
                           <button
-                            className="ghostButton"
+                            className="btn btn-ghost"
                             type="button"
                             onClick={() => {
                               setStatus("");
@@ -215,13 +225,13 @@ export default function AccountsSettingsPage() {
                                 name: account.name,
                                 accountType: account.accountType,
                                 currency: account.currency,
-                                openingBalance: "",
+                                openingBalance: account.hasTransactions ? "" : fromMinor(account.openingBalanceMinor),
                               });
                             }}
                           >
                             Edit
                           </button>
-                          <button className="dangerButton" type="button" onClick={() => setDeleteId(account.id)}>
+                          <button className="btn btn-danger" type="button" onClick={() => setDeleteId(account.id)}>
                             Delete
                           </button>
                         </div>
@@ -252,7 +262,7 @@ export default function AccountsSettingsPage() {
                     </div>
                   </div>
                   <div className="formActions">
-                    <Link className="ghostButton" href={"/loans" as Route}>
+                    <Link className="btn btn-ghost" href={"/loans" as Route}>
                       Manage in loans
                     </Link>
                   </div>
@@ -313,7 +323,7 @@ export default function AccountsSettingsPage() {
             />
           </div>
 
-          {!editingId ? (
+          {canEditBalance ? (
             <div className="field">
               <label htmlFor="openingBalance">Current balance</label>
               <input
@@ -323,9 +333,21 @@ export default function AccountsSettingsPage() {
                 value={form.openingBalance}
                 onChange={(event) => setForm((current) => ({ ...current, openingBalance: event.target.value }))}
                 placeholder="0.00"
+                aria-describedby={editingId ? "openingBalanceHint" : undefined}
               />
+              {editingId ? (
+                <span className="muted" id="openingBalanceHint">
+                  This account has no transactions yet, so you can correct its starting balance here. Once you record a
+                  transaction, the balance changes through transactions instead.
+                </span>
+              ) : null}
             </div>
-          ) : null}
+          ) : (
+            <p className="muted">
+              This account already has transactions, so its balance is calculated from them. Add a transaction to adjust
+              it.
+            </p>
+          )}
         </div>
       </FormDialog>
 

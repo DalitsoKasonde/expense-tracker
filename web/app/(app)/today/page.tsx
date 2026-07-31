@@ -11,11 +11,14 @@ import { adaptSavingsGoals, type SavingsGoal } from "@/lib/dashboard-adapters";
 import { formatMoney } from "@/lib/format-money";
 import {
   AccountCard,
+  Button,
+  buttonClass,
   ChartCard,
   EmptyState,
   LoadingSkeleton,
   MetricCard,
   PageHeader,
+  PageShell,
   SavingsGoalCard,
   TransactionRow,
   type TransactionRowData,
@@ -106,11 +109,11 @@ export default function TodayPage() {
   );
 
   if (dashboardLoading || secondaryLoading) {
-    return <main className="mx-auto grid min-h-screen max-w-app gap-6 px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10"><LoadingSkeleton className="h-24" /><div className="grid gap-6 md:grid-cols-3"><LoadingSkeleton className="h-40" /><LoadingSkeleton className="h-40" /><LoadingSkeleton className="h-40" /></div><LoadingSkeleton className="h-80" /></main>;
+    return <PageShell><LoadingSkeleton className="h-24" /><div className="grid gap-6 md:grid-cols-3"><LoadingSkeleton className="h-40" /><LoadingSkeleton className="h-40" /><LoadingSkeleton className="h-40" /></div><LoadingSkeleton className="h-80" /></PageShell>;
   }
 
   if (!data) {
-    return <main className="mx-auto min-h-screen max-w-app px-4 py-8 pb-28 sm:px-8 lg:px-12"><EmptyState title="Dashboard unavailable" description={dashboardError || "We could not load your financial overview. Please check your connection and try again."} action={<button className="primaryButton" type="button" onClick={() => { reloadDashboard(); setSecondaryNonce((nonce) => nonce + 1); }}>Try again</button>} /></main>;
+    return <PageShell><EmptyState title="Dashboard unavailable" description={dashboardError || "We could not load your financial overview. Please check your connection and try again."} action={<Button onClick={() => { reloadDashboard(); setSecondaryNonce((nonce) => nonce + 1); }}>Try again</Button>} /></PageShell>;
   }
 
   // The API serialises empty collections as [] now, but an older build or a
@@ -132,12 +135,12 @@ export default function TodayPage() {
   }
 
   return (
-    <main className="mx-auto grid min-h-screen max-w-app gap-8 px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10">
+    <PageShell>
       <PageHeader
         eyebrow="Home"
         title="Your money today"
         subtitle="See what is available, what changed this month, and what needs your attention."
-        actions={<Link href="/reports" className="ghostButton">View reports</Link>}
+        actions={<Link href="/reports" className="btn btn-ghost">View reports</Link>}
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Financial summary">
@@ -147,11 +150,11 @@ export default function TodayPage() {
         <MetricCard label="Expenses" value={formatMoney(data.expense, currency)} tone="expense" detail="Spent this month" />
       </section>
 
-      <AddEntryButton className="flex min-h-14 items-center justify-center rounded-md bg-primary px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:justify-self-start">
+      <AddEntryButton className={buttonClass({ className: "sm:justify-self-start" })}>
         <span className="mr-2 text-xl" aria-hidden="true">+</span> Add entry
       </AddEntryButton>
 
-      <section className="rounded-lg border border-outline bg-surface p-5 shadow-sm" aria-labelledby="attention-heading">
+      <section className="card" aria-labelledby="attention-heading">
         <div className="mb-3">
           <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Next steps</p>
           <h2 id="attention-heading" className="mt-1 text-lg font-semibold text-on-surface">Needs your attention</h2>
@@ -177,7 +180,7 @@ export default function TodayPage() {
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-        <section className="rounded-lg border border-outline bg-surface p-5 shadow-sm">
+        <section className="card">
           <div className="flex items-center justify-between gap-4 border-b border-outline pb-4">
             <div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Activity</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Recent transactions</h2></div>
             <Link href="/transactions" className="text-sm font-semibold text-accent hover:underline">View history</Link>
@@ -230,7 +233,7 @@ export default function TodayPage() {
 
       <section>
         <div className="mb-4 flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Goals</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Savings progress</h2></div><Link href="/goals" className="text-sm font-semibold text-accent hover:underline">Manage goals</Link></div>
-        {goals.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{goals.slice(0, 3).map((goal) => <SavingsGoalCard key={goal.id} {...goal} href="/goals" />)}</div> : <EmptyState title="No savings goals yet" description="Create a personal target and track its progress here." action={<Link href="/goals" className="ghostButton">Create a goal</Link>} />}
+        {goals.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{goals.slice(0, 3).map((goal) => <SavingsGoalCard key={goal.id} {...goal} href="/goals" />)}</div> : <EmptyState title="No savings goals yet" description="Create a personal target and track its progress here." action={<Link href="/goals" className="btn btn-ghost">Create a goal</Link>} />}
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
@@ -242,7 +245,7 @@ export default function TodayPage() {
           <MetricCard label="Free cash flow" value={formatMoney(insights?.freeCashFlow ?? data.freeCashFlow, currency)} tone={(insights?.freeCashFlow ?? data.freeCashFlow) >= 0 ? "savings" : "expense"} />
         </section>
       </div>
-    </main>
+    </PageShell>
   );
 }
 

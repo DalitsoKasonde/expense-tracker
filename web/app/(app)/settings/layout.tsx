@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { SettingsNav } from "@/components/settings-nav";
 import packageMetadata from "../../../package.json";
+import { PageShell } from "@/components/ui";
 
 export default async function SettingsLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="mx-auto grid min-h-screen content-start items-start max-w-app gap-4 px-4 py-4 pb-28 sm:px-8 lg:px-12 lg:py-5">
+    <PageShell>
       <SettingsNav />
       <div className="grid min-w-0 gap-4">{children}</div>
       <footer
@@ -13,6 +14,6 @@ export default async function SettingsLayout({ children }: { children: ReactNode
       >
         Expenses v{packageMetadata.version}
       </footer>
-    </main>
+    </PageShell>
   );
 }

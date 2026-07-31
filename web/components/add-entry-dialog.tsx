@@ -774,7 +774,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
               </p>
             </div>
             <div className="flex justify-end gap-2">
-              <Link href="/settings/accounts" className="primaryButton" onClick={onClose}>
+              <Link href="/settings/accounts" className="btn btn-primary" onClick={onClose}>
                 Go to Accounts
               </Link>
             </div>
@@ -802,7 +802,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                             key={item.value}
                             type="button"
                             aria-label={item.label}
-                            className="group flex min-h-[76px] items-center gap-3 rounded-lg border border-outline bg-surface p-3 text-left shadow-xs transition hover:-translate-y-0.5 hover:border-primary hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                            className="group flex min-h-[76px] items-center gap-3 rounded-lg border border-outline bg-surface p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md"
                             onClick={() =>
                               setFormData((current) => ({
                                 ...current,
@@ -1066,7 +1066,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                 </div>
 
                 {loans.length === 0 ? (
-                  <Link href={"/loans" as Route} className="ghostButton" onClick={onClose}>
+                  <Link href={"/loans" as Route} className="btn btn-ghost" onClick={onClose}>
                     Create a loan first
                   </Link>
                 ) : null}
@@ -1342,10 +1342,10 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             {error ? <p className="statusText">{error}</p> : null}
 
             {formData.entryKind ? <div className="flex flex-wrap justify-end gap-2 border-t border-outline pt-4">
-              <button type="button" className="ghostButton" onClick={onClose}>
+              <button type="button" className="btn btn-ghost" onClick={onClose}>
                 Cancel
               </button>
-              <button type="submit" className="primaryButton" disabled={loading}>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
                 {loading ? "Saving..." : "Save entry"}
               </button>
             </div> : null}

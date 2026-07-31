@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getApiBaseUrl } from "@/lib/client-api";
+import { PageShell } from "@/components/ui";
 
 interface ImportRow {
   id: string;
@@ -101,12 +102,12 @@ export default function PreviewPage() {
     }
   };
 
-  if (loading) return <div className="shell">Loading...</div>;
-  if (!imp) return <div className="shell">Import not found</div>;
+  if (loading) return <div className="page-shell">Loading...</div>;
+  if (!imp) return <div className="page-shell">Import not found</div>;
 
   return (
-    <main className="shell">
-      <section className="appChrome">
+    <PageShell>
+      <section className="workspaceStack">
         <h1 className="pageTitle">Preview Import</h1>
 
         <p className="muted">Status: {imp.status}</p>
@@ -114,28 +115,28 @@ export default function PreviewPage() {
 
         {imp.rows && imp.rows.length > 0 && (
           <div className="mt-4 overflow-x-auto rounded-lg border border-outline bg-surface shadow-sm">
-            <table className="min-w-full border-collapse text-sm">
+            <table className="dataTable">
               <thead>
-                <tr className="border-b border-outline text-left text-on-surface-soft">
-                  <th className="px-4 py-3 font-semibold">File</th>
-                  <th className="px-4 py-3 font-semibold">Month</th>
-                  <th className="px-4 py-3 font-semibold">Label</th>
-                  <th className="px-4 py-3 font-semibold">Type</th>
-                  <th className="px-4 py-3 font-semibold">Approx. date</th>
-                  <th className="px-4 py-3 font-semibold">Amount</th>
+                <tr className="text-on-surface-soft">
+                  <th className="font-semibold">File</th>
+                  <th className="font-semibold">Month</th>
+                  <th className="font-semibold">Label</th>
+                  <th className="font-semibold">Type</th>
+                  <th className="font-semibold">Approx. date</th>
+                  <th className="font-semibold">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {imp.rows.map((row) => (
-                  <tr key={row.id} className="border-b border-outline/70 last:border-b-0">
-                    <td className="px-4 py-3 text-on-surface-soft">{row.rawData.fileName ?? "-"}</td>
-                    <td className="px-4 py-3 text-on-surface-soft">{row.rawData.sheetName ?? "-"}</td>
-                    <td className="px-4 py-3 font-semibold text-on-surface">{row.rawData.label ?? "-"}</td>
-                    <td className="px-4 py-3 text-on-surface-soft">
+                  <tr key={row.id}>
+                    <td data-label="File" className="text-on-surface-soft">{row.rawData.fileName ?? "-"}</td>
+                    <td data-label="Month" className="text-on-surface-soft">{row.rawData.sheetName ?? "-"}</td>
+                    <td data-label="Label" className="font-semibold text-on-surface">{row.rawData.label ?? "-"}</td>
+                    <td data-label="Type" className="text-on-surface-soft">
                       {row.mapped?.entryKind === "income_earned" ? "Income" : "Expense"}
                     </td>
-                    <td className="px-4 py-3 text-on-surface-soft">{row.rawData.approximateDate ?? row.mapped?.transactionDate ?? "-"}</td>
-                    <td className="px-4 py-3 text-on-surface-soft">
+                    <td data-label="Approx. date" className="text-on-surface-soft">{row.rawData.approximateDate ?? row.mapped?.transactionDate ?? "-"}</td>
+                    <td data-label="Amount" className="text-on-surface-soft">
                       {typeof row.rawData.amountDisplay === "number" ? row.rawData.amountDisplay.toFixed(2) : "-"}
                     </td>
                   </tr>
@@ -150,18 +151,18 @@ export default function PreviewPage() {
         <div className="mt-8 flex gap-4">
           {imp.status === "ready_to_confirm" && (
             <button
-              className="primaryButton"
+              className="btn btn-primary"
               onClick={handleConfirm}
               disabled={confirming}
             >
               {confirming ? "Confirming..." : "Confirm Import"}
             </button>
           )}
-          <Link href="/import" className="ghostButton">
+          <Link href="/import" className="btn btn-ghost">
             Back
           </Link>
         </div>
       </section>
-    </main>
+    </PageShell>
   );
 }

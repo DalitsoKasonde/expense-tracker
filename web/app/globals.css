@@ -3,13 +3,21 @@
 @tailwind utilities;
 
 /* ============================================================================
-   CHUMA DESIGN SYSTEM
+   EXPENSES DESIGN SYSTEM
    ----------------------------------------------------------------------------
-   One in-project system that governs every page. Pages should compose these
-   primitives instead of inventing one-off styles. Layers, in order:
+   One system governs every page. Layers, in order:
      1. Tokens      — spacing, radius, surface, color, type, elevation
-     2. Primitives  — card variants, buttons, fields, chips, list rows
+     2. Primitives  — card variants, buttons, fields, badges, list rows
      3. Regions     — header, navigation, page scaffolds
+
+   How to use it (the rule that keeps this file from growing a second system):
+     - Recurring visual objects (cards, buttons, fields, badges, tables) are
+       defined here once and consumed through the React primitives in
+       components/ui. Do not re-create them from utilities.
+     - Tailwind utilities are for layout: grid, flex, spacing, order.
+     - Utility colour/elevation names are aliases of these tokens
+       (outline -> --border, shadow-sm -> --shadow-card), so a surface styled
+       with utilities and one styled with .card render identically.
    Brand: blue-led, Quicksand-first, calm/architectural, controlled softness.
    ========================================================================== */
 
@@ -37,6 +45,16 @@
   --highlight-soft: #3d91ea;
   --accent: #0074e4;
 
+  /* --- Action: the single fill used by every primary control ---------------
+     Buttons, active nav, and key CTAs all read these three tokens so a filled
+     control can never disagree with itself between CSS and utilities.
+     --action-contrast is required: in dark mode the fill is light, so a
+     hard-coded white label would be unreadable. --------------------------- */
+  --action: #264e86;
+  --action-hover: #183b69;
+  --action-contrast: #ffffff;
+  --focus: #0074e4;
+
   /* --- Color: lines + text --- */
   --border: #e4e9f1;
   --border-strong: #d3dded;
@@ -45,8 +63,10 @@
   --text-muted: #5d6a85;       /* Warm Gray */
   --on-surface: #181a2a;
   --on-surface-soft: #5d6a85;
-  --outline: #e2e8f0;
-  --outline-strong: #cbd7e5;
+  /* Aliases: `outline` is the Tailwind-facing name for the same edge colour the
+     CSS layer calls `border`. One value, two vocabularies. */
+  --outline: var(--border);
+  --outline-strong: var(--border-strong);
   --income: #087a55;
   --income-soft: #e4f5ee;
   --expense: #b4233f;
@@ -93,16 +113,29 @@
   --card-pad: var(--space-lg);
   --card-pad-lg: var(--space-xl);
 
+  /* --- Controls: one height for every interactive control ---------------
+     44px is the minimum comfortable touch target; sm is for dense desktop
+     toolbars only. --- */
+  --control-h: 44px;
+  --control-h-sm: 36px;
+
   /* --- Elevation: subtle, tactile micro-shadows --- */
   --shadow-card: 0 1px 2px rgba(17, 37, 69, 0.04), 0 12px 28px -24px rgba(17, 37, 69, 0.20);
   --shadow-soft: 0 1px 2px rgba(17, 37, 69, 0.04);
   --shadow-raised: 0 1px 2px rgba(17, 37, 69, 0.05), 0 18px 40px -30px rgba(17, 37, 69, 0.30);
   --focus-ring: 0 0 0 3px rgba(31, 111, 224, 0.18);
 
+  /* Card edge + resting elevation. Every card-like surface reads these, in CSS
+     and through the Tailwind `outline` / `shadow-sm` aliases below, so `.card`
+     and `border-outline shadow-sm` render the same edge. */
+  --card-border: var(--border);
+
   /* --- Type --- */
   --font-body: var(--font-quicksand), sans-serif;
   --font-display: var(--font-quicksand), sans-serif;
-  --shadow-sm: var(--shadow-soft);
+  /* Tailwind aliases: shadow-sm is the card resting elevation, shadow-md the
+     overlay elevation. They must not drift from --shadow-card/--shadow-raised. */
+  --shadow-sm: var(--shadow-card);
   --shadow-md: var(--shadow-raised);
 }
 
@@ -127,6 +160,12 @@ html[data-theme="dark"] {
   --primary-soft: #253c65;
   --primary-softer: #1b2b4c;
 
+  /* Dark mode inverts the action fill, so the label colour inverts with it. */
+  --action: #5aa2ff;
+  --action-hover: #82bbff;
+  --action-contrast: #0b1226;
+  --focus: #82bbff;
+
   --border: #24365f;
   --border-strong: #314c7f;
   --text: #e7edf6;
@@ -134,8 +173,8 @@ html[data-theme="dark"] {
   --text-muted: #a7b6d0;
   --on-surface: #e7edf6;
   --on-surface-soft: #a7b6d0;
-  --outline: #24365f;
-  --outline-strong: #314c7f;
+  --outline: var(--border);
+  --outline-strong: var(--border-strong);
   --income: #74d6a4;
   --income-soft: #173d35;
   --expense: #f29ec0;
@@ -158,6 +197,7 @@ html[data-theme="dark"] {
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 36px -26px rgba(0, 0, 0, 0.55);
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-raised: 0 20px 44px -28px rgba(0, 0, 0, 0.6);
+  --focus-ring: 0 0 0 3px rgba(130, 187, 255, 0.28);
 }
 
 * {
@@ -211,6 +251,15 @@ button {
   cursor: pointer;
 }
 
+/* One rule gives every interactive element a visible keyboard focus state.
+   Components may restyle it, but none can silently ship without one.
+   :where() keeps specificity at zero so component styles always win. */
+:where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
 img,
 svg {
   display: block;
@@ -220,22 +269,29 @@ svg {
    LAYOUT / SCAFFOLD
    ========================================================================== */
 
-.shell {
-  min-height: 100vh;
-  padding: var(--space-xl) var(--gutter) 112px;
-}
-
-.appLayoutContainer {
-  display: block;
-}
-
-.mainContentContainer {
-  min-width: 0;
-}
-
-.appChrome {
-  width: min(100%, 1200px);
+/* The one page scaffold. Width, gutters, rhythm and bottom-nav clearance live
+   here so every route lines up, and so the safe-area inset is applied once. */
+.page-shell {
+  display: grid;
+  align-content: start;
+  gap: var(--section-gap);
+  width: 100%;
+  max-width: var(--page-max, 1280px);
   margin: 0 auto;
+  padding: var(--space-xl) var(--gutter);
+  /* Clears the fixed bottom nav plus the iOS home indicator. */
+  padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+.page-shell-narrow {
+  --page-max: 768px;
+}
+
+@media (min-width: 1024px) {
+  /* Bottom nav is hidden from lg up, so the extra clearance is not needed. */
+  .page-shell {
+    padding: var(--space-2xl) var(--space-3xl) var(--space-3xl);
+  }
 }
 
 .workspaceStack {
@@ -252,55 +308,7 @@ svg {
    PAGE HEADER
    ========================================================================== */
 
-.pageHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding-bottom: var(--space-xs);
-}
-
-.pageHeaderMain {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  min-width: 0;
-}
-
-.headerBadge {
-  width: 42px;
-  height: 42px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
-  color: var(--primary);
-}
-
-.headerBadge svg {
-  width: 20px;
-  height: 20px;
-}
-
-.titleCluster {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.pageEyebrow {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.pageTitle,
-.settingsPageTitle {
+.pageTitle{
   margin: 0;
   color: var(--text-strong);
   font-size: clamp(1.6rem, 3.4vw, 2.2rem);
@@ -310,65 +318,63 @@ svg {
 }
 
 /* The header "accent" line is calm supporting copy (NOT script). */
-.pageAccent,
-.settingsHeroScript {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.pageLead,
-.lede {
-  margin: 6px 0 0;
-  max-width: 64ch;
-  color: var(--text-muted);
-  font-size: 15px;
-}
-
-.headerAction {
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--primary);
-  box-shadow: var(--shadow-soft);
-  transition: border-color 0.18s ease, background-color 0.18s ease;
-}
-
-.headerAction:hover {
-  border-color: var(--primary);
-  background: var(--surface-soft);
-}
 
 /* ============================================================================
    CARD SYSTEM (variants)
-     .card           primary / generic surface
-     .heroCard       primary summary (flat, refined)
-     .spotlightCard  insight (tonal wash)
-     .panel          neutral container
-     .metricCard     metric block
-     .statCard       compact stat
+     .card             primary / generic surface (React: <Card>)
+     .card-pad-lg      roomier padding for forms and hero panels
+     .card-flush       no padding, for tables and dialogs that pad internally
+     .card-raised      overlay elevation
+     .card-interactive links/buttons shaped like cards
+     .heroCard         primary summary
+     .spotlightCard    insight (tonal wash)
+     .metricCard       metric block
+     .statCard         compact stat
+   All variants read --card-border and --shadow-card, which the Tailwind
+   `border-outline` / `shadow-sm` aliases also resolve to.
    ========================================================================== */
 
 .card,
 .heroCard,
 .spotlightCard,
-.panel,
 .metricCard {
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--card-border);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
 
-.card,
-.panel {
+.card {
   padding: var(--card-pad);
+}
+
+.card-pad-lg {
+  padding: var(--card-pad-lg);
+}
+
+.card-flush {
+  padding: 0;
+}
+
+/* Overlay elevation. A variant rather than a utility because `.card` sets
+   box-shadow itself and wins against a utility of equal specificity. */
+.card-raised {
+  box-shadow: var(--shadow-raised);
+}
+
+/* Cards that are also links/buttons get a restrained lift, never a new colour.
+   Deliberately does not set `display`: component classes are declared after the
+   utilities layer, so a `display` here would silently beat a `grid`/`flex`
+   utility on the same element. Callers keep control of their own layout. */
+.card-interactive {
+  width: 100%;
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.card-interactive:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-raised);
 }
 
 .heroCard,
@@ -390,12 +396,13 @@ svg {
 
 /* ============================================================================
    BUTTONS
+   `.btn` is the only button recipe in the app. Variants change colour only;
+   geometry (height, padding, radius, type) is shared so controls line up in
+   any row. React callers should use <Button>, which renders these classes.
    ========================================================================== */
 
-.primaryButton,
-.ghostButton,
-.dangerButton {
-  min-height: 42px;
+.btn {
+  min-height: var(--control-h);
   padding: 0 18px;
   display: inline-flex;
   align-items: center;
@@ -405,44 +412,152 @@ svg {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.01em;
+  text-align: center;
   transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.primaryButton {
-  background: var(--highlight);
-  color: #fff;
+.btn-sm {
+  min-height: var(--control-h-sm);
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-primary {
+  background: var(--action);
+  color: var(--action-contrast);
   box-shadow: var(--shadow-soft);
 }
 
-.primaryButton:hover {
-  background: var(--highlight-soft);
+.btn-primary:hover {
+  background: var(--action-hover);
 }
 
-.primaryButton:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.ghostButton {
-  border: 1px solid var(--border-strong);
+.btn-ghost {
+  border: 1px solid var(--card-border);
   background: var(--surface);
   color: var(--primary-strong);
 }
 
-.ghostButton:hover {
-  border-color: var(--primary);
+.btn-ghost:hover {
+  border-color: var(--action);
   background: var(--surface-soft);
 }
 
-.dangerButton {
+.btn-danger {
   background: var(--negative);
-  color: #fff;
+  color: var(--action-contrast);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .formActions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-sm);
+}
+
+/* ============================================================================
+   DATA TABLE
+   Wide screens get a real table. Below sm the same markup stacks into labelled
+   rows, so a phone never has to scroll a table sideways to read a record.
+   Each <td> needs data-label="<column heading>" for the stacked view.
+   ========================================================================== */
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.dataTable th,
+.dataTable td {
+  padding: 12px var(--space-md);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.dataTable thead tr {
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.dataTable tbody tr {
+  border-bottom: 1px solid var(--border);
+}
+
+.dataTable tbody tr:last-child {
+  border-bottom: 0;
+}
+
+.dataTable .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 639px) {
+  /* Headings stay in the accessibility tree; each cell shows its own label. */
+  .dataTable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .dataTable,
+  .dataTable tbody,
+  .dataTable tr,
+  .dataTable td {
+    display: block;
+    width: 100%;
+  }
+
+  .dataTable tbody tr {
+    padding: var(--space-sm) 0;
+  }
+
+  .dataTable td {
+    /* Block, not grid: cells can contain several children (an amount plus a
+       percentage, a row of buttons) and a grid would scatter them into
+       separate tracks. The label sits above the value instead. */
+    display: block;
+    padding: 5px var(--space-md);
+  }
+
+  .dataTable td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 1px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* A row header becomes the record's title in the stacked view. */
+  .dataTable tbody th {
+    display: block;
+    padding: 4px var(--space-md) 8px;
+    color: var(--text-strong);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .dataTable td.numeric {
+    text-align: left;
+  }
 }
 
 /* ============================================================================
@@ -454,6 +569,7 @@ svg {
   gap: var(--space-xs);
 }
 
+.field-label,
 .field label {
   font-size: 11px;
   font-weight: 700;
@@ -462,31 +578,47 @@ svg {
   text-transform: uppercase;
 }
 
+.control,
 .field input,
 .field select,
 .field textarea {
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-h);
   padding: 11px 14px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--card-border);
   background: var(--surface-soft);
   color: var(--text);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
-.field textarea {
+.field textarea,
+textarea.control {
   min-height: 104px;
   resize: vertical;
 }
 
+.control:focus,
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
   outline: none;
   background: var(--surface);
-  border-color: var(--highlight);
+  border-color: var(--focus);
   box-shadow: var(--focus-ring);
+}
+
+.field-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.field-error {
+  margin: 0;
+  color: var(--negative);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .splitFields {
@@ -495,8 +627,7 @@ svg {
 }
 
 .settingsGrid,
-.settingsFormPanel,
-.quickAddForm {
+.settingsFormPanel{
   display: grid;
   gap: var(--space-md);
 }
@@ -508,6 +639,159 @@ svg {
   font-weight: 600;
 }
 
+/* Login progress keeps credentials visible while the session is established. */
+.loginForm {
+  position: relative;
+  display: grid;
+  gap: var(--space-md);
+}
+
+.loginForm::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(110deg, transparent 20%, var(--tint-highlight) 50%, transparent 80%);
+  opacity: 0;
+  transform: translateX(-12%);
+  pointer-events: none;
+}
+
+.loginFormPending::before {
+  animation: login-form-glow 1.8s ease-in-out infinite;
+}
+
+.loginFormPending .field {
+  opacity: 0.72;
+  transform: translateY(-1px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.loginFormPending .field input:disabled {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  cursor: wait;
+}
+
+.loginFormPending .btn-primary:disabled {
+  opacity: 1;
+  cursor: wait;
+}
+
+.loginSpinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  /* Inherits the button label colour: the action fill (and therefore its
+     contrast colour) inverts in dark mode. */
+  border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-top-color: currentColor;
+  border-radius: var(--radius-full);
+  animation: login-spinner 0.75s linear infinite;
+}
+
+.loginProgressDots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 21px;
+}
+
+.loginProgressDots i {
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  animation: login-dot 1.1s ease-in-out infinite;
+}
+
+.loginProgressDots i:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.loginProgressDots i:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+.loginStatus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  min-height: 18px;
+  margin: -4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  animation: login-status-enter 0.22s ease-out both;
+}
+
+.loginStatusPulse {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--highlight);
+  box-shadow: 0 0 0 0 var(--tint-highlight);
+  animation: login-status-pulse 1.4s ease-out infinite;
+}
+
+@keyframes login-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes login-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.42;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes login-form-glow {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateX(-12%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(12%);
+  }
+}
+
+@keyframes login-status-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes login-status-pulse {
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loginFormPending::before,
+  .loginSpinner,
+  .loginProgressDots i,
+  .loginStatus,
+  .loginStatusPulse {
+    animation: none;
+  }
+}
+
 .muted {
   color: var(--text-muted);
 }
@@ -515,23 +799,13 @@ svg {
 /* ============================================================================
    TYPOGRAPHY HELPERS / LABELS
    ========================================================================== */
-
-.heroMeta,
 .sectionKicker,
-.metricCardLabel,
-.settingsNavLabel,
-.settingsSessionLabel,
-.settingsHeroNoteLabel {
+.metricCardLabel{
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-}
-
-.heroSubline {
-  margin: 4px 0 0;
-  color: var(--text-muted);
 }
 
 .sectionHeading,
@@ -543,8 +817,6 @@ svg {
   line-height: 1.2;
   letter-spacing: -0.01em;
 }
-
-.sectionHeader,
 .settingsHeaderRow,
 .formSectionHeader,
 .settingsOverviewCardHeader,
@@ -610,6 +882,7 @@ svg {
 
 .metaBadge,
 .pill,
+.badge,
 .choiceChip,
 .rangeChip {
   display: inline-flex;
@@ -618,11 +891,37 @@ svg {
   min-height: 30px;
   padding: 0 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--card-border);
   background: var(--surface-soft);
   color: var(--primary-strong);
   font-size: 12px;
   font-weight: 600;
+}
+
+/* Tonal badges: colour carries meaning, so the tone comes from the same
+   income/expense/warning tokens the amounts use. */
+.badge-income {
+  border-color: transparent;
+  background: var(--income-soft);
+  color: var(--income);
+}
+
+.badge-expense {
+  border-color: transparent;
+  background: var(--expense-soft);
+  color: var(--expense);
+}
+
+.badge-warning {
+  border-color: transparent;
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.badge-info {
+  border-color: transparent;
+  background: var(--primary-softer);
+  color: var(--primary-strong);
 }
 
 .choiceChip,
@@ -631,11 +930,13 @@ svg {
   transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
+/* Selected chips are filled controls, so they read the action tokens: in dark
+   mode the fill is light and needs the inverted label colour. */
 .choiceChip.active,
 .rangeChip.active {
-  background: var(--primary-strong);
-  border-color: var(--primary-strong);
-  color: #fff;
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--action-contrast);
 }
 
 .choiceChip:hover,
@@ -645,8 +946,9 @@ svg {
 
 .choiceChip.active:hover,
 .rangeChip.active:hover {
-  color: #fff;
-  border-color: var(--primary-strong);
+  color: var(--action-contrast);
+  background: var(--action-hover);
+  border-color: var(--action-hover);
 }
 
 .chipScrollerContainer {
@@ -665,9 +967,7 @@ svg {
    ========================================================================== */
 
 .metricCardValue,
-.summaryMetricValue,
-.portfolioValue,
-.dashboardHeroAmount {
+.portfolioValue{
   color: var(--text-strong);
   font-size: clamp(1.7rem, 3.6vw, 2.6rem);
   font-weight: 700;
@@ -681,8 +981,6 @@ svg {
   gap: var(--space-2xs);
   padding: var(--space-md);
 }
-
-.metricGrid,
 .statsGrid {
   display: grid;
   gap: var(--space-sm);
@@ -693,54 +991,8 @@ svg {
   gap: var(--space-2xs);
   padding: var(--space-md);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--card-border);
   background: var(--surface);
-}
-
-.annualPanel {
-  display: grid;
-  gap: var(--space-md);
-}
-
-.annualTableScroll {
-  width: 100%;
-  overflow-x: auto;
-}
-
-.annualTable {
-  width: max-content;
-  min-width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.annualTable th,
-.annualTable td {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.annualTable th:first-child,
-.annualTable td:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  min-width: 190px;
-  text-align: left;
-  background: var(--surface);
-}
-
-.annualTable thead th {
-  color: var(--text-strong);
-  font-weight: 700;
-}
-
-.annualTable tbody th {
-  color: var(--text-strong);
-  font-weight: 600;
 }
 
 .checkboxRow {
@@ -769,297 +1021,42 @@ svg {
    SIDEBAR NAV (desktop)
    ========================================================================== */
 
-.sidebarNav {
-  display: none;
-}
-
-.sidebarBrand,
-.sidebarUser {
-  display: grid;
-  gap: var(--space-sm);
-}
-
-.sidebarBrand {
-  padding-bottom: var(--space-sm);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.sidebarBrandMark {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.sidebarTitleGroup {
-  display: grid;
-  gap: 1px;
-}
-
-.sidebarAppName {
-  color: #fff;
-  font-family: var(--font-display);
-  font-size: 1.85rem;
-  line-height: 1;
-}
-
-.sidebarAppPulse {
-  color: rgba(231, 237, 246, 0.66);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.sidebarMenu {
-  display: grid;
-  gap: var(--space-2xs);
-}
-
-.sidebarNavLink {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: 11px 12px;
-  border-radius: var(--radius-sm);
-  color: rgba(231, 237, 246, 0.78);
-  font-size: 14px;
-  font-weight: 600;
-  transition: background-color 0.18s ease, color 0.18s ease;
-}
-
-.sidebarNavIcon {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.06);
-  transition: background-color 0.18s ease;
-}
-
-.sidebarNavLink.active {
-  background: rgba(255, 255, 255, 0.10);
-  color: #fff;
-}
-
 /* Calm active indicator: a quiet left marker, not a playful glow. */
-.sidebarNavLink.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  border-radius: 2px;
-  background: var(--highlight);
-}
-
-.sidebarNavLink.active .sidebarNavIcon {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.sidebarNavLink:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.sidebarUserName {
-  color: #fff;
-  font-weight: 700;
-}
-
-.sidebarUserEmail {
-  color: rgba(231, 237, 246, 0.66);
-  font-size: 12px;
-}
-
-.sidebarLogoutBtn {
-  justify-self: start;
-  padding: 0;
-  color: rgba(231, 237, 246, 0.82);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.sidebarLogoutBtn:hover {
-  color: #fff;
-}
 
 /* ============================================================================
    BOTTOM NAV (mobile)
    ========================================================================== */
 
-.bottomNav {
-  position: fixed;
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
-  z-index: 40;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-2xs);
-  padding: var(--space-xs);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--border-strong);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  box-shadow: var(--shadow-raised);
-  backdrop-filter: blur(16px);
-}
-
-.bottomNavLink {
-  display: grid;
-  justify-items: center;
-  gap: 3px;
-  padding: 8px 4px;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  transition: color 0.18s ease;
-  position: relative;
-}
-
-.bottomNavGlyph {
-  width: 34px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-md);
-  transition: background-color 0.18s ease, color 0.18s ease;
-}
-
-.bottomNavLink.active {
-  color: var(--primary-strong);
-}
-
-.bottomNavLink.active::before {
-  content: "";
-  position: absolute;
-  top: -8px; /* Touch the top of the container's padding */
-  left: 25%;
-  right: 25%;
-  height: 2px;
-  border-radius: 0 0 2px 2px;
-  background: var(--highlight);
-}
-
-.bottomNavLink.active .bottomNavGlyph {
-  background: var(--tint-strong);
-  color: var(--primary-strong);
-}
-
-.floatingAddButton {
-  position: fixed;
-  right: 24px;
-  bottom: 92px;
-  z-index: 45;
-  width: 54px;
-  height: 54px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--highlight) 55%, transparent);
-  background: var(--highlight);
-  color: #fff;
-  box-shadow: var(--shadow-raised);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.floatingAddButton:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 38px rgba(17, 24, 39, 0.22);
-}
-
 /* ============================================================================
    OVERVIEW / DASHBOARD
    ========================================================================== */
-
-.overviewHeroGrid,
-.editorialBoard,
 .portfolioStage,
 .portfolioEditorialGrid,
-.settingsOverviewIntro,
 .settingsDetailGrid {
   display: grid;
   gap: var(--space-md);
 }
-
-.overviewPrimaryCard,
 .performanceHero {
   display: grid;
   gap: var(--space-md);
 }
-
-.overviewHeroTop,
 .portfolioSummaryTop {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-md);
 }
-
-.trendFrame,
-.portfolioChartFrame {
-  min-height: 146px;
-}
-
-.overviewAccentQuote {
-  display: grid;
-  gap: var(--space-sm);
-  align-content: space-between;
-}
-
-.plannerCard,
 .allocationPanel,
 .portfolioInsightPanel,
-.recentLedgerPanel,
 .settingsListPanel {
   display: grid;
   gap: var(--space-md);
 }
 
-.plannerList {
-  display: grid;
-  gap: var(--space-xs);
-}
-
 /* Architectural marker (was a bubble): quiet left accent bar. */
-.plannerItem {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
-  background: var(--tint);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--primary);
-}
-
-.plannerBullet {
-  display: none;
-}
-
-.allocationGrid,
 .portfolioMiniGrid {
   display: grid;
   gap: var(--space-sm);
-}
-
-.allocationTile {
-  display: grid;
-  gap: var(--space-2xs);
-  padding: var(--space-md);
-  border-radius: var(--radius-md);
-  background: var(--surface-soft);
-  border: 1px solid var(--border-strong);
 }
 
 /* ============================================================================
@@ -1086,70 +1083,6 @@ svg {
 .ledgerRow:hover {
   border-color: var(--border-strong);
   background: var(--surface-soft);
-}
-
-.ledgerDateBlock {
-  width: 52px;
-  flex-shrink: 0;
-  display: grid;
-  justify-items: center;
-  gap: 1px;
-  padding: var(--space-xs) 0;
-  border-radius: var(--radius-md);
-  background: var(--tint);
-  border: 1px solid var(--border);
-  color: var(--primary-strong);
-}
-
-.settingsNavLink {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-muted);
-  transition: background-color 0.18s ease, color 0.18s ease;
-  position: relative;
-  font-weight: 600;
-}
-
-.settingsNavLink:hover {
-  background: var(--tint);
-  color: var(--primary-strong);
-}
-
-.settingsNavLink.active {
-  background: var(--surface-strong);
-  color: var(--primary-strong);
-  font-weight: 700;
-}
-
-.settingsNavLink.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  border-radius: 2px;
-  background: var(--highlight);
-}
-
-.ledgerDateDay {
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.ledgerDateMonth {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .ledgerPrimary {
@@ -1180,61 +1113,6 @@ svg {
    HISTORY
    ========================================================================== */
 
-.historyToolbar {
-  display: grid;
-  gap: var(--space-md);
-}
-
-.historySearchField label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.historyFilterCluster {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-}
-
-.historyTimeline,
-.historyGroups {
-  display: grid;
-  gap: var(--space-lg);
-}
-
-.historyGroup {
-  display: grid;
-  gap: var(--space-xs);
-}
-
-.historyGroupHeader {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.historyGroupLabel {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.historyDivider {
-  height: 1px;
-  flex: 1;
-  background: var(--border-strong);
-}
-
 .historyRow {
   background: var(--surface);
 }
@@ -1243,11 +1121,6 @@ svg {
    ADD ENTRY
    ========================================================================== */
 
-.addCanvas {
-  display: grid;
-  gap: var(--space-md);
-}
-
 .quickAddAmountBlock {
   position: relative;
   display: grid;
@@ -1255,7 +1128,7 @@ svg {
   padding: var(--space-lg);
   border-radius: var(--radius-md);
   background: var(--surface-soft);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--card-border);
 }
 
 .quickAddCurrency {
@@ -1299,7 +1172,7 @@ svg {
   min-height: 44px;
   padding: 0 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--card-border);
   background: var(--surface-soft);
   color: var(--primary-strong);
   font-size: 14px;
@@ -1313,22 +1186,286 @@ svg {
   color: var(--highlight);
 }
 
-.quickAddFooter {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  padding-top: var(--space-2xs);
-}
-
-.helperNote {
-  display: grid;
-  gap: var(--space-sm);
-  align-content: start;
-}
-
 /* ============================================================================
    PORTFOLIO
    ========================================================================== */
+
+.investmentOverview {
+  display: grid;
+  gap: var(--space-md);
+  align-items: stretch;
+}
+
+.investmentValueCard {
+  display: grid;
+  align-content: start;
+}
+
+.investmentActionsCard {
+  display: grid;
+  gap: var(--space-lg);
+  align-content: start;
+}
+
+.investmentActionList {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.investmentActionButton {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-strong);
+  text-align: left;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.investmentActionButton:hover {
+  border-color: var(--highlight);
+  background: var(--primary-softer);
+  transform: translateY(-1px);
+}
+
+.investmentActionButton.primary {
+  border-color: color-mix(in srgb, var(--highlight) 38%, var(--border));
+  background: var(--primary-softer);
+}
+
+.investmentActionButton span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.investmentActionButton small {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.marketPriceLookup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  background: var(--primary-softer);
+}
+
+.marketPriceLookup strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.marketPriceLookup p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.marketPriceLookup .btn-ghost {
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+.marketQuoteResult {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid color-mix(in srgb, var(--positive) 25%, var(--border));
+  border-radius: var(--radius-md);
+  background: var(--positive-soft);
+}
+
+.marketQuoteResult > div {
+  display: grid;
+  gap: 2px;
+}
+
+.marketQuoteResult span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.marketQuoteResult strong {
+  color: var(--positive);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.marketQuoteResult p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.marketQuoteResult a {
+  color: var(--highlight);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.marketQuoteError {
+  margin: 0;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  background: var(--negative-soft);
+  color: var(--negative);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dividendHistoryCard {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.dividendHistoryHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.dividendTotal {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.dividendTotal span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dividendTotal strong {
+  color: var(--positive);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.investmentSuccess {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid color-mix(in srgb, var(--positive) 22%, var(--border));
+  border-radius: var(--radius-md);
+  background: var(--positive-soft);
+  color: var(--positive);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dividendList {
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.dividendRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dividendDate {
+  display: grid;
+  justify-items: center;
+  min-width: 58px;
+  padding: var(--space-xs);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+.dividendDate strong {
+  color: var(--text-strong);
+  font-size: 17px;
+}
+
+.dividendDate span {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.dividendDetails {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dividendDetails strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.dividendDetails span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dividendAmount {
+  color: var(--positive);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dividendEmptyState {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-soft);
+}
+
+.dividendEmptyMark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--positive-soft);
+  color: var(--positive);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.dividendEmptyState strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.dividendEmptyState p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 
 .portfolioStage,
 .portfolioEditorialGrid {
@@ -1396,106 +1533,14 @@ svg {
    SETTINGS
    ========================================================================== */
 
-.settingsShell {
-  padding-bottom: 64px;
-}
-
-.settingsChrome {
-  display: grid;
-  gap: var(--section-gap);
-}
-
-.settingsHero {
-  display: grid;
-  gap: var(--space-md);
-  padding: var(--card-pad-lg);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-}
-
-.settingsHeroMain {
+.settingsSection{
   display: grid;
   gap: var(--space-md);
 }
 
-.settingsHeroNote {
-  display: grid;
-  gap: var(--space-2xs);
-  padding: var(--space-md);
-  border-radius: var(--radius-md);
-  background: var(--surface-soft);
-  border: 1px solid var(--border-strong);
-}
-
-.settingsScaffold {
-  display: grid;
-  gap: var(--space-lg);
-}
-
-.settingsRail,
-.settingsCanvas {
-  display: grid;
-  gap: var(--space-md);
-}
-
-.settingsNavFrame {
-  display: grid;
-  gap: var(--space-sm);
-  padding: var(--card-pad);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-}
-
-.settingsNavIntro {
-  display: grid;
-  gap: var(--space-2xs);
-}
-
-.settingsNav {
-  display: grid;
-  gap: var(--space-2xs);
-}
-
-
-
-.settingsSessionPanel {
-  display: grid;
-  gap: var(--space-md);
-}
-
-.settingsSessionIdentity {
-  display: grid;
-  gap: var(--space-2xs);
-}
-
-.settingsSection,
-.settingsOverviewSection {
-  display: grid;
-  gap: var(--space-md);
-}
-
-.settingsLeadCard,
-.settingsReferenceCard {
+.settingsLeadCard{
   display: grid;
   gap: var(--space-xs);
-}
-
-.settingsLeadHeading {
-  margin: 0;
-  color: var(--text-strong);
-  font-size: clamp(1rem, 1.5vw, 1.2rem);
-  font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-}
-
-.settingsEditorialGrid {
-  display: grid;
-  gap: var(--space-sm);
 }
 
 .settingsOverviewCard {
@@ -1503,7 +1548,7 @@ svg {
   gap: var(--space-xs);
   padding: var(--space-md);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--card-border);
   background: var(--surface);
   box-shadow: var(--shadow-soft);
   transition: border-color 0.18s ease, background-color 0.18s ease;
@@ -1588,7 +1633,7 @@ svg {
 
 .transactionItem {
   padding: var(--space-md);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--card-border);
   border-radius: var(--radius-md);
   background: var(--surface);
   transition: border-color 0.18s ease, background-color 0.18s ease;
@@ -1602,22 +1647,6 @@ svg {
 /* ============================================================================
    MISC
    ========================================================================== */
-
-.syncStatus {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 50;
-}
-
-.loginShell {
-  display: grid;
-  place-items: center;
-}
-
-.loginCard {
-  width: min(100%, 460px);
-}
 
 .srOnlyLabel {
   position: absolute;
@@ -1636,72 +1665,23 @@ svg {
    ========================================================================== */
 
 @media (min-width: 700px) {
-  .shell {
-    padding: var(--space-2xl) var(--space-xl) 116px;
-  }
-
-  .metricGrid,
   .statsGrid,
-  .allocationGrid,
   .portfolioMiniGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .splitFields,
-  .overviewHeroGrid,
-  .editorialBoard,
   .portfolioEditorialGrid,
-  .settingsOverviewIntro,
   .settingsDetailGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
-  .shell {
-    padding: var(--space-2xl) var(--space-2xl) var(--space-3xl);
-  }
 
-  .appLayoutContainer {
-    display: grid;
-    grid-template-columns: 272px minmax(0, 1fr);
-    gap: var(--space-2xl);
-    width: min(100%, 1400px);
-    margin: 0 auto;
-    padding: var(--space-xl) var(--space-2xl) var(--space-3xl);
+  .investmentOverview {
+    grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr);
   }
-
-  .sidebarNav {
-    position: sticky;
-    top: var(--space-xl);
-    height: calc(100vh - 48px);
-    display: grid;
-    align-content: start;
-    gap: var(--space-xl);
-    padding: var(--space-xl) var(--space-md);
-    border-radius: var(--radius-xl);
-    background: linear-gradient(180deg, var(--primary-strong), var(--primary-deep));
-    box-shadow: var(--shadow-raised);
-  }
-
-  .mainContentContainer {
-    min-width: 0;
-  }
-
-  .bottomNav {
-    display: none;
-  }
-
-  .floatingAddButton {
-    right: 42px;
-    bottom: 42px;
-  }
-
-  .overviewHeroGrid {
-    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
-  }
-
-  .editorialBoard,
   .portfolioEditorialGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1710,24 +1690,16 @@ svg {
     grid-template-columns: minmax(0, 1.7fr) minmax(310px, 1fr);
   }
 
-  .settingsScaffold {
-    grid-template-columns: 272px minmax(0, 1fr);
-    align-items: start;
-  }
-
   .settingsDetailGrid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
 @media (max-width: 699px) {
-  .pageHeader,
-  .sectionHeader,
   .settingsHeaderRow,
   .settingsOverviewCardHeader,
   .portfolioHoldingTop,
   .utilityRow,
-  .overviewHeroTop,
   .portfolioSummaryTop {
     flex-direction: column;
     align-items: stretch;
@@ -1737,8 +1709,116 @@ svg {
     align-items: flex-start;
   }
 
+  .dividendHistoryHeader {
+    display: grid;
+  }
+
+  .dividendTotal {
+    justify-items: start;
+  }
+
+  .dividendEmptyState {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dividendEmptyState .btn-primary {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .dividendRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dividendAmount {
+    grid-column: 2;
+  }
+
+  .marketPriceLookup {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .marketQuoteResult {
+    grid-template-columns: 1fr;
+  }
+
+  .marketQuoteResult p {
+    grid-column: auto;
+  }
+
   .ledgerAmountBlock {
     width: 100%;
     text-align: left;
+  }
+}
+
+/* ============================================================================
+   PRINT
+   Reports are meant to be shared, so printing drops the app chrome, un-clips
+   scroll containers and keeps cards and table rows from splitting across pages.
+   ========================================================================== */
+
+@media print {
+  /* Paper is white whatever theme is on screen, so print re-points the surface
+     and ink tokens instead of overriding individual rules. Printing a dark
+     theme would otherwise flood the page with ink and read poorly. */
+  html {
+    color-scheme: light;
+    --background: #ffffff;
+    --background-soft: #ffffff;
+    --background-strong: #ffffff;
+    --surface: #ffffff;
+    --surface-soft: #ffffff;
+    --surface-muted: #f2f5fa;
+    --surface-raised: #ffffff;
+    --text: #10182b;
+    --text-strong: #000000;
+    --text-muted: #4a5568;
+    --on-surface: #10182b;
+    --on-surface-soft: #4a5568;
+    --border: #c9d3e2;
+    --border-strong: #a9b7cc;
+    --tint: transparent;
+    --tint-strong: transparent;
+  }
+
+  body {
+    background: var(--background);
+  }
+
+  .page-shell {
+    max-width: none;
+    padding: 0;
+    gap: var(--space-md);
+  }
+
+  /* A clipped scroll container prints as a cropped table. */
+  .overflow-x-auto,
+  .chipScrollerContainer {
+    overflow: visible !important;
+  }
+
+  .card,
+  .heroCard,
+  .spotlightCard,
+  .metricCard,
+  .statCard {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  table {
+    font-size: 11px;
+    break-inside: auto;
+  }
+
+  /* Repeat the header row when a long matrix spans pages. */
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
   }
 }

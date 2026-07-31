@@ -102,7 +102,7 @@ export default function IncomeSourcesSettingsPage() {
             <span className="muted">Review naming and source types before changing how income is classified.</span>
           </div>
           <button
-            className="primaryButton"
+            className="btn btn-primary"
             type="button"
             onClick={() => {
               setStatus("");
@@ -125,23 +125,23 @@ export default function IncomeSourcesSettingsPage() {
               <div className="muted">No income sources yet. Add one for cleaner income reporting.</div>
             ) : null}
             {sources.length ? (
-              <table className="min-w-full border-collapse text-sm">
+              <table className="dataTable">
                 <thead>
-                  <tr className="border-b border-outline text-left text-on-surface-soft">
-                    <th className="px-4 py-3 font-semibold">Name</th>
-                    <th className="px-4 py-3 font-semibold">Type</th>
-                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  <tr className="text-on-surface-soft">
+                    <th className="font-semibold">Name</th>
+                    <th className="font-semibold">Type</th>
+                    <th className="font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sources.map((source) => (
-                    <tr key={source.id} className="border-b border-outline/70 last:border-b-0">
-                      <td className="px-4 py-3 font-semibold text-on-surface">{source.name}</td>
-                      <td className="px-4 py-3 text-on-surface-soft">{source.sourceType.replaceAll("_", " ")}</td>
-                      <td className="px-4 py-3">
+                    <tr key={source.id}>
+                      <td data-label="Name" className="font-semibold text-on-surface">{source.name}</td>
+                      <td data-label="Type" className="text-on-surface-soft">{source.sourceType.replaceAll("_", " ")}</td>
+                      <td data-label="Actions">
                         <div className="flex flex-wrap gap-2">
                           <button
-                            className="ghostButton"
+                            className="btn btn-ghost"
                             type="button"
                             onClick={() => {
                               setStatus("");
@@ -152,7 +152,7 @@ export default function IncomeSourcesSettingsPage() {
                           >
                             Edit
                           </button>
-                          <button className="ghostButton" type="button" onClick={() => setDeleteId(source.id)}>
+                          <button className="btn btn-ghost" type="button" onClick={() => setDeleteId(source.id)}>
                             Remove
                           </button>
                         </div>

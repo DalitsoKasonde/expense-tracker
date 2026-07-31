@@ -160,7 +160,7 @@ export function RegisterForm() {
 
       {error ? <p className="text-sm text-negative" role="alert">{error}</p> : null}
 
-      <button type="submit" className="primaryButton" disabled={isPending}>
+      <button type="submit" className="btn btn-primary" disabled={isPending}>
         {isPending ? "Creating account..." : "Create account"}
       </button>
     </form>

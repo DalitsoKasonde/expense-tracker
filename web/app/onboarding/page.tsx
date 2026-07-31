@@ -294,7 +294,7 @@ export default function OnboardingPage() {
 
   if (sessionStatus === "loading" || checking) {
     return (
-      <main className="grid min-h-screen place-items-center bg-background p-6 text-on-surface-soft">
+      <main className="grid min-h-dvh place-items-center bg-background p-6 text-on-surface-soft">
         Loading your setup...
       </main>
     );
@@ -302,18 +302,18 @@ export default function OnboardingPage() {
 
   if (sessionStatus === "unauthenticated" || !session) {
     return (
-      <main className="grid min-h-screen place-items-center bg-background p-6">
+      <main className="grid min-h-dvh place-items-center bg-background p-6">
         <section className="card grid max-w-md gap-4 text-center">
           <h1 className="text-2xl font-semibold text-on-surface">Sign in to continue</h1>
           <p className="text-on-surface-soft">Your setup is tied to your Expenses account.</p>
-          <Link href="/login" className="primaryButton justify-center">Go to sign in</Link>
+          <Link href="/login" className="btn btn-primary justify-center">Go to sign in</Link>
         </section>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8 sm:px-8">
+    <main className="min-h-dvh bg-background px-4 py-8 sm:px-8">
       <section className="mx-auto grid w-full max-w-3xl gap-6 rounded-lg border border-outline bg-surface p-5 shadow-md sm:p-8">
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-4">
@@ -458,7 +458,7 @@ export default function OnboardingPage() {
                       </div>
                       <button
                         type="button"
-                        className="ghostButton self-end"
+                        className="btn btn-ghost self-end"
                         aria-label={`Remove ${account.name || "custom account"}`}
                         onClick={() => setAccounts((current) => current.filter(
                           (item) => item.localId !== account.localId,
@@ -468,7 +468,7 @@ export default function OnboardingPage() {
                       </button>
                     </div>
                   ))}
-                  <button type="button" className="ghostButton justify-self-start" onClick={addCustomAccount}>
+                  <button type="button" className="btn btn-ghost justify-self-start" onClick={addCustomAccount}>
                     + Add custom account
                   </button>
                   <p className="text-xs text-on-surface-soft">
@@ -555,7 +555,7 @@ export default function OnboardingPage() {
             </div>
             <button
               type="button"
-              className="ghostButton justify-self-start"
+              className="btn btn-ghost justify-self-start"
               onClick={() => {
                 router.push("/today");
                 router.refresh();
@@ -585,7 +585,7 @@ export default function OnboardingPage() {
           <div className="flex items-center justify-between gap-3 border-t border-outline pt-5">
             <button
               type="button"
-              className="ghostButton"
+              className="btn btn-ghost"
               disabled={step === 1 || saving}
               onClick={() => {
                 setError("");
@@ -595,14 +595,14 @@ export default function OnboardingPage() {
               Back
             </button>
             {step === 1 ? (
-              <button type="button" className="primaryButton" onClick={() => setStep(2)}>
+              <button type="button" className="btn btn-primary" onClick={() => setStep(2)}>
                 Continue
               </button>
             ) : null}
             {step === 2 ? (
               <button
                 type="button"
-                className="primaryButton"
+                className="btn btn-primary"
                 disabled={saving}
                 onClick={() => void finishSetup()}
               >

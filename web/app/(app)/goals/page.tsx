@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AddEntryButton } from "@/components/add-entry-button";
-import { EmptyState, FormDialog, LoadingSkeleton, PageHeader, SavingsGoalCard } from "@/components/ui";
+import {
+  EmptyState,
+  FormDialog,
+  LoadingSkeleton,
+  PageHeader,
+  PageShell,
+  SavingsGoalCard,
+} from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
@@ -94,17 +101,17 @@ export default function GoalsPage() {
   }
 
   return (
-    <main className="mx-auto grid min-h-screen max-w-app content-start gap-6 px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10">
+    <PageShell>
       <PageHeader
         eyebrow="Plan"
         title="Savings goals"
         subtitle="Create personal targets and track how close you are to reaching them."
-        actions={<button type="button" className="primaryButton" onClick={() => setCreateOpen(true)}>New goal</button>}
+        actions={<button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>New goal</button>}
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-outline bg-primary-softer p-4">
         <p className="text-sm text-on-surface-soft">To fund a goal, transfer money into the savings account created for it.</p>
-        <AddEntryButton className="ghostButton">Transfer money</AddEntryButton>
+        <AddEntryButton className="btn btn-ghost">Transfer money</AddEntryButton>
       </div>
 
       {status ? <p className="statusText">{status}</p> : null}
@@ -113,7 +120,7 @@ export default function GoalsPage() {
         <EmptyState
           title="No personal goals yet"
           description="Create a goal for an emergency fund, school fees, travel, or anything else you are saving toward."
-          action={<button type="button" className="primaryButton" onClick={() => setCreateOpen(true)}>Create your first goal</button>}
+          action={<button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>Create your first goal</button>}
         />
       ) : null}
       {groups.length ? (
@@ -151,6 +158,6 @@ export default function GoalsPage() {
           </div>
         </div>
       </FormDialog>
-    </main>
+    </PageShell>
   );
 }

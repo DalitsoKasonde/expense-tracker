@@ -1,4 +1,4 @@
-# Chuma
+# Expenses
 
 A local-first financial workspace for accounts, daily money movement, goals, imports, and investments:
 

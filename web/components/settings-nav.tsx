@@ -19,8 +19,10 @@ export function SettingsNav() {
   const currentPath = pathname ?? "";
 
   return (
-    <div className="rounded-lg border border-outline bg-surface p-1.5 shadow-sm">
-      <nav className="flex gap-1.5 overflow-x-auto" aria-label="Settings sections">
+    <div className="rounded-lg border border-outline bg-surface p-1 shadow-sm">
+      {/* The inner padding keeps the focus outline from being clipped by this
+          horizontal scroll container. */}
+      <nav className="flex gap-1.5 overflow-x-auto p-0.5" aria-label="Settings sections">
         {items.map((item) => {
           const isActive =
             currentPath === item.href || currentPath.startsWith(`${item.href}/`);
@@ -29,7 +31,7 @@ export function SettingsNav() {
               key={item.href}
               href={item.href}
               aria-current={isActive ? "page" : undefined}
-              className={`flex min-h-10 shrink-0 items-center rounded-md px-3 text-sm font-semibold whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${isActive ? "bg-primary-softer text-primary" : "text-on-surface-soft hover:bg-surface-soft hover:text-on-surface"}`}
+              className={`flex min-h-10 shrink-0 items-center rounded-md px-3 text-sm font-semibold whitespace-nowrap ${isActive ? "bg-primary-softer text-primary" : "text-on-surface-soft hover:bg-surface-soft hover:text-on-surface"}`}
             >
               {item.label}
             </Link>

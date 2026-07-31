@@ -1,11 +1,11 @@
-# Single-VM deployment (Chuma + other apps)
+# Single-VM deployment (Expenses + other apps)
 
-One Ubuntu server hosts the web app and API as Docker containers. Chuma
+One Ubuntu server hosts the web app and API as Docker containers. Expenses
 connects to an existing PostgreSQL container rather than creating its own.
 One shared Traefik container handles TLS/routing for all apps via Docker
 labels — each app is otherwise independently deployed.
 
-Sizing: start at $12/mo (1 vCPU / 2GB RAM) with just Chuma running. 1GB/1vCPU
+Sizing: start at $12/mo (1 vCPU / 2GB RAM) with just Expenses running. 1GB/1vCPU
 is too small once Docker + a Next.js container are both live. Images are built
 in CI and pulled here precisely because an on-VM `docker compose build` can
 transiently need 1GB+ RAM on its own and would compete with the live
@@ -51,11 +51,11 @@ docker network connect --alias postgres chuma-database <existing-postgres-contai
 ```
 
 If the network or connection already exists, do not recreate it. Create
-the Chuma database and user in that PostgreSQL instance, then put those
+the Expenses database and user in that PostgreSQL instance, then put those
 credentials in `.env.prod`'s `DATABASE_URL`. PostgreSQL port 5432 does not
 need to be published to the host or internet.
 
-## Deploying Chuma
+## Deploying Expenses
 
 CI builds the images; the VM only pulls them. See
 `.github/workflows/ci.yml` (build + push to GHCR, tagged with the commit
@@ -91,7 +91,7 @@ The API reaches the existing PostgreSQL container through the external
 startup. In production it skips migrations flagged as development-only
 seeds (see `api/internal/migrations/runner.go`), so fixture accounts with
 well-known passwords never land in live data. Compose only manages the
-Chuma API and web containers.
+Expenses API and web containers.
 
 Routing is declared directly on the `api`/`web` services via
 `traefik.*` labels in `docker-compose.prod.yml` — Traefik picks them up

@@ -33,11 +33,11 @@ export default function AppError({
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <button className="primaryButton" type="button" onClick={() => reset()}>
+        <button className="btn btn-primary" type="button" onClick={() => reset()}>
           Try again
         </button>
         <button
-          className="ghostButton"
+          className="btn btn-ghost"
           type="button"
           onClick={() => {
             window.location.href = "/today";

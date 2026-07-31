@@ -132,6 +132,7 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.Get("/v1/dashboard/insights", s.insightSummary)
 		protected.Get("/v1/notifications", s.notifications)
 		protected.Get("/v1/dashboard/annual", s.annualOverall)
+		protected.Get("/v1/dashboard/categories", s.categorySpending)
 
 		// Loans
 		protected.Get("/v1/loans", s.listLoans)
@@ -169,6 +170,7 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.Get("/v1/assets/{id}/holding", s.getAssetHolding)
 		protected.Post("/v1/assets/{id}/sell", s.sellAssetFIFO)
 		protected.Post("/v1/assets/{id}/dividends", s.recordAssetDividend)
+		protected.Get("/v1/market-data/luse/{ticker}", s.getLuSEQuote)
 
 		// Investments
 		protected.Get("/v1/investments/holdings", s.getHoldings)

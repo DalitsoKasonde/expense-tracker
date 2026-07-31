@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { AddEntryDialog } from "@/components/add-entry-dialog";
+import { PageShell } from "@/components/ui";
 
 export default function AddPage() {
   const router = useRouter();
 
   return (
-    <main className="mx-auto min-h-screen max-w-app px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10">
+    <PageShell>
       <AddEntryDialog
         open
         onClose={() => {
@@ -18,6 +19,6 @@ export default function AddPage() {
           router.push("/today");
         }}
       />
-    </main>
+    </PageShell>
   );
 }

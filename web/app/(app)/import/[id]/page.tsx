@@ -4,7 +4,10 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PageHeader } from "@/components/ui";
+import {
+  PageHeader,
+  PageShell,
+} from "@/components/ui";
 import { getApiBaseUrl } from "@/lib/client-api";
 
 interface Import {
@@ -85,12 +88,12 @@ export default function ImportDetailPage() {
     }
   };
 
-  if (loading) return <div className="shell">Loading...</div>;
-  if (!imp) return <div className="shell">Import not found</div>;
+  if (loading) return <div className="page-shell">Loading...</div>;
+  if (!imp) return <div className="page-shell">Import not found</div>;
 
   return (
-    <main className="shell">
-      <section className="appChrome workspaceStack">
+    <PageShell>
+      <section className="workspaceStack">
         <PageHeader
           eyebrow="Imports"
           title="Import details"
@@ -117,24 +120,25 @@ export default function ImportDetailPage() {
 
         <div className="mt-8 flex gap-4">
           {imp.status === "ready_to_confirm" && (
-            <Link href={`/import/${importId}/preview`} className="primaryButton">
+            <Link href={`/import/${importId}/preview`} className="btn btn-primary">
               View Preview
             </Link>
           )}
           {imp.status === "confirmed" && (
             <button
-              className="primaryButton dangerButton"
+              type="button"
+              className="btn btn-danger"
               onClick={handleUndo}
               disabled={undoing}
             >
               {undoing ? "Undoing..." : "Undo Import"}
             </button>
           )}
-          <Link href="/import" className="ghostButton">
+          <Link href="/import" className="btn btn-ghost">
             Back
           </Link>
         </div>
       </section>
-    </main>
+    </PageShell>
   );
 }

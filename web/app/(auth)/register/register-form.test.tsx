@@ -49,7 +49,7 @@ describe("RegisterForm", () => {
   it("shows a mismatch before submission", () => {
     render(<RegisterForm />);
 
-    completeRegistrationForm("chuma2026", "chuma2027");
+    completeRegistrationForm("expenses2026", "expenses2027");
 
     expect(screen.getByText("Passwords do not match.")).toBeInTheDocument();
     expect(screen.getByLabelText("Confirm Password")).toHaveAttribute("aria-invalid", "true");
@@ -60,7 +60,7 @@ describe("RegisterForm", () => {
     mocks.signIn.mockResolvedValue({ ok: true });
     render(<RegisterForm />);
 
-    completeRegistrationForm("chuma2026");
+    completeRegistrationForm("expenses2026");
     fireEvent.submit(screen.getByRole("button", { name: "Create account" }).closest("form")!);
 
     await waitFor(() => {
@@ -70,7 +70,7 @@ describe("RegisterForm", () => {
           method: "POST",
           body: JSON.stringify({
             email: "test@example.com",
-            password: "chuma2026",
+            password: "expenses2026",
             displayName: "Test User",
           }),
         }),
@@ -83,7 +83,7 @@ describe("RegisterForm", () => {
     mocks.fetch.mockResolvedValue(new Response("email already registered", { status: 409 }));
     render(<RegisterForm />);
 
-    completeRegistrationForm("chuma2026");
+    completeRegistrationForm("expenses2026");
     fireEvent.submit(screen.getByRole("button", { name: "Create account" }).closest("form")!);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("email already registered");

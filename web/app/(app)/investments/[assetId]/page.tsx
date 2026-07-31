@@ -3,7 +3,11 @@
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { FormDialog, PageHeader } from "@/components/ui";
+import {
+  FormDialog,
+  PageHeader,
+  PageShell,
+} from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { formatMoney } from "@/lib/format-money";
@@ -54,12 +58,66 @@ interface AssetHolding {
   currentValueMinor: number;
 }
 
+interface AssetTransaction {
+  id: string;
+  transactionDate: string;
+  entryKind: string;
+  amount: number;
+  currency: string;
+  accountId?: string;
+  assetId?: string;
+  note?: string;
+  originEventType?: string;
+}
+
+interface MarketQuote {
+  ticker: string;
+  name: string;
+  priceMinor: number;
+  changeMinor: number;
+  changePercent: number;
+  currency: string;
+  quotedAt: string;
+  marketDate: string;
+  sourceName: string;
+  sourceUrl: string;
+  refreshInterval: string;
+}
+
+type EquityDialog = "dividend" | "sell" | "value" | null;
+
 function today() {
   return new Date().toISOString().split("T")[0];
 }
 
 function toMinor(value: string) {
   return Math.round((parseFloat(value || "0") || 0) * 100);
+}
+
+function inferLuSETicker(symbol: string | null | undefined, name: string) {
+  const explicitSymbol = symbol?.trim().toUpperCase().replace(/\.ZM$/, "");
+  if (explicitSymbol) {
+    return explicitSymbol;
+  }
+
+  const normalizedName = name.trim().toLowerCase();
+  const aliases: Array<[string, string]> = [
+    ["airtel", "ATEL"],
+    ["copperbelt energy", "CECZ"],
+    ["zanaco", "ZNCO"],
+    ["zambia national commercial", "ZNCO"],
+    ["zambia sugar", "ZSUG"],
+    ["standard chartered", "SCBL"],
+    ["puma", "PUMA"],
+    ["shoprite", "SHOP"],
+    ["british american tobacco", "BATZ"],
+    ["chilanga cement", "CHIL"],
+    ["zambia reinsurance", "ZMRE"],
+    ["zccm", "ZCCM-IH"],
+    ["national breweries", "NATB"],
+    ["bata", "BATA"],
+  ];
+  return aliases.find(([alias]) => normalizedName.includes(alias))?.[1] ?? "";
 }
 
 export default function AssetDetailPage() {
@@ -72,7 +130,13 @@ export default function AssetDetailPage() {
   const [projection, setProjection] = useState<BondProjection | null>(null);
   const [holding, setHolding] = useState<AssetHolding | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [dividends, setDividends] = useState<AssetTransaction[]>([]);
+  const [equityDialog, setEquityDialog] = useState<EquityDialog>(null);
   const [actionStatus, setActionStatus] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [marketQuote, setMarketQuote] = useState<MarketQuote | null>(null);
+  const [marketQuoteError, setMarketQuoteError] = useState("");
+  const [loadingMarketQuote, setLoadingMarketQuote] = useState(false);
   const [savingAction, setSavingAction] = useState(false);
   const [sellForm, setSellForm] = useState({
     cashAccountId: "",
@@ -123,6 +187,8 @@ export default function AssetDetailPage() {
     couponForm.destination === "stock" && couponUnitPriceMinor > 0
       ? Math.max(0, couponNetMinor - couponPurchaseFeeMinor) / couponUnitPriceMinor
       : 0;
+  const dividendTotalMinor = dividends.reduce((total, dividend) => total + dividend.amount, 0);
+  const luseTicker = asset ? inferLuSETicker(asset.symbol, asset.name) : "";
 
   useEffect(() => {
     if (!assetId) {
@@ -132,14 +198,28 @@ export default function AssetDetailPage() {
     let ignore = false;
     const fetchDetails = async () => {
       try {
-        const [accountsResult, holdingResult] = await Promise.all([
+        const [accountsResult, holdingResult, transactionResult] = await Promise.all([
           apiCallRef.current<Account[]>("/v1/accounts").catch(() => []),
           apiCallRef.current<AssetHolding>(`/v1/assets/${assetId}/holding`).catch(() => null),
+          apiCallRef.current<AssetTransaction[]>("/v1/transactions?limit=1000").catch(() => []),
         ]);
         if (!ignore) {
           setAccounts(accountsResult ?? []);
           setHolding(holdingResult);
-          const firstCash = accountsResult?.find((account) => account.accountClass !== "liability")?.id ?? "";
+          setDividends(
+            (transactionResult ?? []).filter(
+              (transaction) =>
+                transaction.assetId === assetId &&
+                (transaction.originEventType === "equity_dividend" ||
+                  transaction.entryKind === "dividend_drip"),
+            ),
+          );
+          const firstCash =
+            accountsResult?.find(
+              (account) =>
+                account.accountClass !== "liability" &&
+                (!asset?.currency || account.currency === asset.currency),
+            )?.id ?? "";
           setSellForm((current) => ({ ...current, cashAccountId: current.cashAccountId || firstCash }));
           setDividendForm((current) => ({ ...current, cashAccountId: current.cashAccountId || firstCash }));
         }
@@ -152,7 +232,7 @@ export default function AssetDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [assetId]);
+  }, [asset?.currency, assetId]);
 
   useEffect(() => {
     if (!assetId || asset?.assetClass !== "bond") {
@@ -179,6 +259,52 @@ export default function AssetDetailPage() {
   async function refreshHolding() {
     const result = await apiCallRef.current<AssetHolding>(`/v1/assets/${assetId}/holding`);
     setHolding(result);
+  }
+
+  async function refreshDividends() {
+    const result = await apiCallRef.current<AssetTransaction[]>("/v1/transactions?limit=1000");
+    setDividends(
+      (result ?? []).filter(
+        (transaction) =>
+          transaction.assetId === assetId &&
+          (transaction.originEventType === "equity_dividend" ||
+            transaction.entryKind === "dividend_drip"),
+      ),
+    );
+  }
+
+  function openEquityDialog(dialog: Exclude<EquityDialog, null>) {
+    setActionError("");
+    setMarketQuoteError("");
+    setEquityDialog(dialog);
+  }
+
+  async function loadMarketQuote() {
+    if (!luseTicker) {
+      setMarketQuoteError("Add the LuSE ticker to this investment before looking up its market price.");
+      return;
+    }
+
+    setLoadingMarketQuote(true);
+    setMarketQuoteError("");
+    try {
+      const quote = await apiCallRef.current<MarketQuote>(
+        `/v1/market-data/luse/${encodeURIComponent(luseTicker)}`,
+      );
+      const estimatedValueMinor = Math.round(quote.priceMinor * (holding?.quantity ?? 0));
+      setMarketQuote(quote);
+      setValuationForm((current) => ({
+        ...current,
+        currentValue: (estimatedValueMinor / 100).toFixed(2),
+        valuationDate: quote.marketDate || current.valuationDate,
+      }));
+    } catch (error) {
+      setMarketQuoteError(
+        error instanceof Error ? error.message : "The latest market price is unavailable.",
+      );
+    } finally {
+      setLoadingMarketQuote(false);
+    }
   }
 
   function openCouponConfirmation(cashflow: BondCashflowProjection) {
@@ -263,6 +389,7 @@ export default function AssetDetailPage() {
     event.preventDefault();
     setSavingAction(true);
     setActionStatus("");
+    setActionError("");
     try {
       await apiCallRef.current(`/v1/assets/${assetId}/sell`, {
         method: "POST",
@@ -278,9 +405,10 @@ export default function AssetDetailPage() {
       });
       setSellForm((current) => ({ ...current, quantity: "", unitPrice: "", fees: "0", note: "" }));
       await refreshHolding();
-      setActionStatus("Sale recorded using FIFO lots.");
+      setEquityDialog(null);
+      setActionStatus("Sale recorded.");
     } catch (error) {
-      setActionStatus(error instanceof Error ? error.message : "Failed to record sale");
+      setActionError(error instanceof Error ? error.message : "Failed to record sale");
     } finally {
       setSavingAction(false);
     }
@@ -290,6 +418,7 @@ export default function AssetDetailPage() {
     event.preventDefault();
     setSavingAction(true);
     setActionStatus("");
+    setActionError("");
     try {
       await apiCallRef.current(`/v1/assets/${assetId}/dividends`, {
         method: "POST",
@@ -304,10 +433,15 @@ export default function AssetDetailPage() {
         },
       });
       setDividendForm((current) => ({ ...current, amount: "", reinvestmentPrice: "", note: "" }));
-      await refreshHolding();
-      setActionStatus(dividendForm.disposition === "drip" ? "DRIP dividend recorded as a new lot." : "Cash dividend recorded.");
+      await Promise.all([refreshHolding(), refreshDividends()]);
+      setEquityDialog(null);
+      setActionStatus(
+        dividendForm.disposition === "drip"
+          ? "Reinvested dividend recorded."
+          : "Cash dividend recorded.",
+      );
     } catch (error) {
-      setActionStatus(error instanceof Error ? error.message : "Failed to record dividend");
+      setActionError(error instanceof Error ? error.message : "Failed to record dividend");
     } finally {
       setSavingAction(false);
     }
@@ -317,6 +451,14 @@ export default function AssetDetailPage() {
     event.preventDefault();
     setSavingAction(true);
     setActionStatus("");
+    setActionError("");
+    const quotedValueMinor = marketQuote
+      ? Math.round(marketQuote.priceMinor * (holding?.quantity ?? 0))
+      : null;
+    const usesMarketQuote =
+      quotedValueMinor !== null &&
+      toMinor(valuationForm.currentValue) === quotedValueMinor &&
+      valuationForm.valuationDate === marketQuote?.marketDate;
     try {
       await apiCallRef.current(`/v1/assets/${assetId}/valuations`, {
         method: "POST",
@@ -324,186 +466,164 @@ export default function AssetDetailPage() {
           valuationDate: valuationForm.valuationDate,
           currentValueMinor: toMinor(valuationForm.currentValue),
           currency: asset?.currency ?? "ZMW",
-          source: "manual",
+          source: usesMarketQuote ? "mansa_market" : "manual",
         },
       });
       await refreshHolding();
+      setEquityDialog(null);
       setActionStatus("Valuation updated.");
     } catch (error) {
-      setActionStatus(error instanceof Error ? error.message : "Failed to update valuation");
+      setActionError(error instanceof Error ? error.message : "Failed to update valuation");
     } finally {
       setSavingAction(false);
     }
   }
 
-  if (loading) return <div className="shell">Loading...</div>;
+  if (loading) return <div className="page-shell">Loading...</div>;
   if (!asset) {
     return (
-      <main className="shell">
-        <section className="appChrome">
+      <PageShell>
+        <section className="workspaceStack">
           <p className="muted">Asset not found.</p>
-          <Link href="/investments" className="ghostButton">
+          <Link href="/investments" className="btn btn-ghost">
             Back
           </Link>
         </section>
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main className="shell">
-      <section className="appChrome workspaceStack">
+    <PageShell>
+      <section className="workspaceStack">
         <PageHeader
           eyebrow="Portfolio"
           title={asset.name}
-          subtitle={`${asset.assetClass.replaceAll("_", " ")}. Review invested cost, current value, and upcoming payments.`}
+          subtitle={
+            asset.assetClass === "bond"
+              ? "See what your bond is worth and when payments are due."
+              : "See what you own, what it is worth, and every dividend you have received."
+          }
         />
 
-        <div className="portfolioStage">
-          <section className="heroCard resourceBody">
-            <p className="sectionKicker">Current position</p>
+        <div className="investmentOverview">
+          <section className="heroCard investmentValueCard">
+            <p className="sectionKicker">Current value</p>
             <h2 className="text-2xl font-bold my-2">{formatMoney(asset.currentValueMinor, asset.currency)}</h2>
-            <p className="muted">Current value contributing to net worth.</p>
+            <p className="muted">What this investment is worth today.</p>
             <div className="portfolioMiniGrid mt-4">
               <div className="metricCard">
-                <span className="metricCardLabel">Invested</span>
+                <span className="metricCardLabel">Money invested</span>
                 <strong className="metricCardValue">{formatMoney(asset.investedAmountMinor, asset.currency)}</strong>
               </div>
               {holding ? (
                 <div className="metricCard">
-                  <span className="metricCardLabel">Shares / Units</span>
+                  <span className="metricCardLabel">Shares owned</span>
                   <strong className="metricCardValue">{holding.quantity.toFixed(4)}</strong>
                 </div>
               ) : null}
               <div className="metricCard">
-                <span className="metricCardLabel">Change</span>
+                <span className="metricCardLabel">Gain or loss</span>
                 <strong className="metricCardValue">
                   {formatMoney(asset.currentValueMinor - asset.investedAmountMinor, asset.currency)}
                 </strong>
               </div>
+              {holding ? (
+                <div className="metricCard">
+                  <span className="metricCardLabel">Average price paid</span>
+                  <strong className="metricCardValue">
+                    {formatMoney(holding.avgCostBasis, asset.currency)}
+                  </strong>
+                </div>
+              ) : null}
             </div>
           </section>
 
-          <aside className="spotlightCard marketSummaryCard">
-            <span className="sectionKicker">Asset summary</span>
-            <h2 className="sectionHeading">
-              {asset.symbol ? `${asset.name} is tracked under ${asset.symbol}.` : `${asset.name} is now part of the unified portfolio.`}
-            </h2>
-            <p className="muted">
-              {asset.assetClass === "bond"
-                ? "Bond coupons remain projected until you confirm the actual amount, tax, date, and destination."
-                : "This asset flows directly into portfolio value and unified net worth through the shared valuation model."}
-            </p>
-            <span className="pageAccent">Asset detail</span>
+          <aside className="card investmentActionsCard">
+            <div>
+              <p className="sectionKicker">What would you like to do?</p>
+              <h2 className="sectionHeading">Manage {asset.name}</h2>
+            </div>
+            {asset.assetClass !== "bond" ? (
+              <div className="investmentActionList">
+                <button type="button" className="investmentActionButton primary" onClick={() => openEquityDialog("dividend")}>
+                  <span>Record a dividend</span>
+                  <small>Add a cash payment or reinvested dividend</small>
+                </button>
+                <button type="button" className="investmentActionButton" onClick={() => openEquityDialog("value")}>
+                  <span>Update current value</span>
+                  <small>Keep your portfolio value up to date</small>
+                </button>
+                <button type="button" className="investmentActionButton" onClick={() => openEquityDialog("sell")}>
+                  <span>Record a sale</span>
+                  <small>Reduce the number of shares you own</small>
+                </button>
+              </div>
+            ) : (
+              <p className="muted">Review the payment schedule below and confirm each payment when it arrives.</p>
+            )}
           </aside>
         </div>
 
         {asset.assetClass !== "bond" ? (
-          <section className="card settingsListPanel">
-            <div className="sectionHeaderCopy">
-              <p className="sectionKicker">Equity actions</p>
-              <h2 className="sectionHeading">Lots, dividends, and valuation</h2>
+          <section className="card dividendHistoryCard">
+            <div className="dividendHistoryHeader">
+              <div>
+                <p className="sectionKicker">Payments received</p>
+                <h2 className="sectionHeading">Dividend history</h2>
+                <p className="muted mt-1">Every dividend recorded for {asset.name} appears here.</p>
+              </div>
+              <div className="dividendTotal">
+                <span>Total received</span>
+                <strong>{formatMoney(dividendTotalMinor, asset.currency)}</strong>
+              </div>
             </div>
 
-            {holding ? (
-              <div className="statsGrid">
-                <div className="statCard">
-                  <p className="muted">Average cost</p>
-                  <strong>{formatMoney(holding.avgCostBasis, asset.currency)}</strong>
-                </div>
-                <div className="statCard">
-                  <p className="muted">Unrealized P&L</p>
-                  <strong>{formatMoney(holding.unrealizedPnl, asset.currency)}</strong>
-                </div>
+            {actionStatus ? <p className="investmentSuccess" role="status">{actionStatus}</p> : null}
+
+            {dividends.length > 0 ? (
+              <div className="dividendList">
+                {dividends.map((dividend) => {
+                  const account = accounts.find((item) => item.id === dividend.accountId);
+                  const reinvested = dividend.entryKind === "dividend_drip";
+                  return (
+                    <div className="dividendRow" key={dividend.id}>
+                      <div className="dividendDate">
+                        <strong>{new Date(`${dividend.transactionDate.slice(0, 10)}T00:00:00`).getDate()}</strong>
+                        <span>
+                          {new Date(`${dividend.transactionDate.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </div>
+                      <div className="dividendDetails">
+                        <strong>{reinvested ? "Reinvested dividend" : "Cash dividend"}</strong>
+                        <span>{account?.name ?? (reinvested ? "Added to this investment" : "Cash account")}</span>
+                      </div>
+                      <strong className="dividendAmount">
+                        +{formatMoney(dividend.amount, dividend.currency)}
+                      </strong>
+                    </div>
+                  );
+                })}
               </div>
-            ) : null}
-
-            <div className="settingsDetailGrid">
-              <form className="settingsFormPanel" onSubmit={submitSell}>
-                <div className="resourceBody">
-                  <strong>Sell FIFO</strong>
-                  <span className="muted">Consumes oldest lots first and calculates realized gain.</span>
+            ) : (
+              <div className="dividendEmptyState">
+                <span className="dividendEmptyMark" aria-hidden="true">$</span>
+                <div>
+                  <strong>No dividends recorded yet</strong>
+                  <p>When {asset.name} pays you, record it here so you can keep a complete history.</p>
                 </div>
-                <ActionAccountSelect inputId="sell-cash-account" accounts={accounts} value={sellForm.cashAccountId} onChange={(value) => setSellForm((current) => ({ ...current, cashAccountId: value }))} />
-                <div className="splitFields">
-                  <div className="field">
-                    <label htmlFor="sell-quantity">Quantity</label>
-                    <input id="sell-quantity" type="number" step="0.000001" value={sellForm.quantity} onChange={(event) => setSellForm((current) => ({ ...current, quantity: event.target.value }))} required />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="sell-unit-price">Unit price</label>
-                    <input id="sell-unit-price" type="number" step="0.01" value={sellForm.unitPrice} onChange={(event) => setSellForm((current) => ({ ...current, unitPrice: event.target.value }))} required />
-                  </div>
-                </div>
-                <div className="splitFields">
-                  <div className="field">
-                    <label htmlFor="sell-fees">Fees</label>
-                    <input id="sell-fees" type="number" step="0.01" value={sellForm.fees} onChange={(event) => setSellForm((current) => ({ ...current, fees: event.target.value }))} />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="sell-execution-date">Date</label>
-                    <input id="sell-execution-date" type="date" value={sellForm.executionDate} onChange={(event) => setSellForm((current) => ({ ...current, executionDate: event.target.value }))} required />
-                  </div>
-                </div>
-                <button className="primaryButton" type="submit" disabled={savingAction}>Record sale</button>
-              </form>
-
-              <form className="settingsFormPanel" onSubmit={submitDividend}>
-                <div className="resourceBody">
-                  <strong>Dividend</strong>
-                  <span className="muted">Cash dividends increase cash; DRIP creates a partial-share lot.</span>
-                </div>
-                <ActionAccountSelect inputId="dividend-cash-account" accounts={accounts} value={dividendForm.cashAccountId} onChange={(value) => setDividendForm((current) => ({ ...current, cashAccountId: value }))} />
-                <div className="splitFields">
-                  <div className="field">
-                    <label htmlFor="dividend-disposition">Disposition</label>
-                    <select id="dividend-disposition" value={dividendForm.disposition} onChange={(event) => setDividendForm((current) => ({ ...current, disposition: event.target.value }))}>
-                      <option value="cash">Cash</option>
-                      <option value="drip">DRIP</option>
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label htmlFor="dividend-amount">Amount</label>
-                    <input id="dividend-amount" type="number" step="0.01" value={dividendForm.amount} onChange={(event) => setDividendForm((current) => ({ ...current, amount: event.target.value }))} required />
-                  </div>
-                </div>
-                {dividendForm.disposition === "drip" ? (
-                  <div className="field">
-                    <label htmlFor="dividend-reinvestment-price">Reinvestment price</label>
-                    <input id="dividend-reinvestment-price" type="number" step="0.01" value={dividendForm.reinvestmentPrice} onChange={(event) => setDividendForm((current) => ({ ...current, reinvestmentPrice: event.target.value }))} required />
-                  </div>
-                ) : null}
-                <div className="field">
-                  <label htmlFor="dividend-execution-date">Date</label>
-                  <input id="dividend-execution-date" type="date" value={dividendForm.executionDate} onChange={(event) => setDividendForm((current) => ({ ...current, executionDate: event.target.value }))} required />
-                </div>
-                <button className="primaryButton" type="submit" disabled={savingAction}>Record dividend</button>
-              </form>
-            </div>
-
-            <form className="settingsFormPanel" onSubmit={submitValuation}>
-              <div className="resourceBody">
-                <strong>Manual valuation</strong>
-                <span className="muted">Update current value for unrealized P&L and net worth reporting.</span>
+                <button type="button" className="btn btn-primary" onClick={() => openEquityDialog("dividend")}>
+                  Record first dividend
+                </button>
               </div>
-                <div className="splitFields">
-                  <div className="field">
-                    <label htmlFor="valuation-current-value">Current value</label>
-                    <input id="valuation-current-value" type="number" step="0.01" value={valuationForm.currentValue} onChange={(event) => setValuationForm((current) => ({ ...current, currentValue: event.target.value }))} required />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="valuation-date">Valuation date</label>
-                    <input id="valuation-date" type="date" value={valuationForm.valuationDate} onChange={(event) => setValuationForm((current) => ({ ...current, valuationDate: event.target.value }))} required />
-                  </div>
-                </div>
-              <button className="primaryButton" type="submit" disabled={savingAction}>Update valuation</button>
-            </form>
-
-            {actionStatus ? <p className="statusText">{actionStatus}</p> : null}
+            )}
           </section>
         ) : null}
 
-        {asset.assetClass === "bond" && projection ? (
+        {asset.assetClass === "bond" ? projection ? (
           <section className="card settingsListPanel">
             <div className="sectionHeaderCopy">
               <p className="sectionKicker">Bond ladder</p>
@@ -575,7 +695,7 @@ export default function AssetDetailPage() {
                       {cashflow.eventType === "coupon" && cashflow.status === "projected" ? (
                         <button
                           type="button"
-                          className="ghostButton mt-2"
+                          className="btn btn-ghost mt-2"
                           onClick={() => openCouponConfirmation(cashflow)}
                         >
                           Confirm coupon
@@ -589,14 +709,256 @@ export default function AssetDetailPage() {
           </section>
         ) : (
           <section className="card resourceBody">
-            <strong>{asset.assetClass === "bond" ? "Projection loading or unavailable" : "Valuation-based asset"}</strong>
+            <strong>Payment schedule unavailable</strong>
             <span className="muted">
-              {asset.assetClass === "bond"
-                ? "Bond schedule details will appear here once projection data is available."
-                : "This asset is currently tracked through invested amount and current value rather than a coupon schedule."}
+              Bond payment details will appear here when they are available.
             </span>
           </section>
-        )}
+        ) : null}
+
+        <FormDialog
+          open={equityDialog === "dividend"}
+          title="Record a dividend"
+          description={`Add a payment you received from ${asset.name}.`}
+          submitLabel="Save dividend"
+          pending={savingAction}
+          error={actionError || undefined}
+          onSubmit={submitDividend}
+          onClose={() => setEquityDialog(null)}
+        >
+          <div className="grid gap-4">
+            <div className="field">
+              <label htmlFor="dividend-disposition">What happened to the payment?</label>
+              <select
+                id="dividend-disposition"
+                value={dividendForm.disposition}
+                onChange={(event) =>
+                  setDividendForm((current) => ({ ...current, disposition: event.target.value }))
+                }
+              >
+                <option value="cash">Paid into my cash account</option>
+                <option value="drip">Reinvested to buy more shares</option>
+              </select>
+            </div>
+            <div className="splitFields">
+              <div className="field">
+                <label htmlFor="dividend-amount">Dividend amount ({asset.currency})</label>
+                <input
+                  id="dividend-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={dividendForm.amount}
+                  onChange={(event) =>
+                    setDividendForm((current) => ({ ...current, amount: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="dividend-execution-date">Date received</label>
+                <input
+                  id="dividend-execution-date"
+                  type="date"
+                  value={dividendForm.executionDate}
+                  onChange={(event) =>
+                    setDividendForm((current) => ({ ...current, executionDate: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+            </div>
+            <ActionAccountSelect
+              inputId="dividend-cash-account"
+              accounts={cashAccounts}
+              value={dividendForm.cashAccountId}
+              onChange={(value) =>
+                setDividendForm((current) => ({ ...current, cashAccountId: value }))
+              }
+            />
+            {dividendForm.disposition === "drip" ? (
+              <div className="field">
+                <label htmlFor="dividend-reinvestment-price">Share price when reinvested ({asset.currency})</label>
+                <input
+                  id="dividend-reinvestment-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={dividendForm.reinvestmentPrice}
+                  onChange={(event) =>
+                    setDividendForm((current) => ({
+                      ...current,
+                      reinvestmentPrice: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </div>
+            ) : null}
+          </div>
+        </FormDialog>
+
+        <FormDialog
+          open={equityDialog === "sell"}
+          title="Record a sale"
+          description={`Add shares of ${asset.name} that you sold.`}
+          submitLabel="Save sale"
+          pending={savingAction}
+          error={actionError || undefined}
+          onSubmit={submitSell}
+          onClose={() => setEquityDialog(null)}
+        >
+          <div className="grid gap-4">
+            <ActionAccountSelect
+              inputId="sell-cash-account"
+              accounts={cashAccounts}
+              value={sellForm.cashAccountId}
+              onChange={(value) => setSellForm((current) => ({ ...current, cashAccountId: value }))}
+            />
+            <div className="splitFields">
+              <div className="field">
+                <label htmlFor="sell-quantity">Shares sold</label>
+                <input
+                  id="sell-quantity"
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={sellForm.quantity}
+                  onChange={(event) =>
+                    setSellForm((current) => ({ ...current, quantity: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="sell-unit-price">Price per share ({asset.currency})</label>
+                <input
+                  id="sell-unit-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={sellForm.unitPrice}
+                  onChange={(event) =>
+                    setSellForm((current) => ({ ...current, unitPrice: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+            </div>
+            <div className="splitFields">
+              <div className="field">
+                <label htmlFor="sell-fees">Fees ({asset.currency})</label>
+                <input
+                  id="sell-fees"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={sellForm.fees}
+                  onChange={(event) =>
+                    setSellForm((current) => ({ ...current, fees: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="sell-execution-date">Date sold</label>
+                <input
+                  id="sell-execution-date"
+                  type="date"
+                  value={sellForm.executionDate}
+                  onChange={(event) =>
+                    setSellForm((current) => ({ ...current, executionDate: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        </FormDialog>
+
+        <FormDialog
+          open={equityDialog === "value"}
+          title="Update current value"
+          description={`Enter what your ${asset.name} holding is worth on this date.`}
+          submitLabel="Update value"
+          pending={savingAction}
+          error={actionError || undefined}
+          onSubmit={submitValuation}
+          onClose={() => setEquityDialog(null)}
+        >
+          <div className="grid gap-4">
+            <div className="marketPriceLookup">
+              <div>
+                <strong>Use the latest LuSE price</strong>
+                <p>
+                  We’ll multiply the latest {luseTicker || "LuSE"} share price by your{" "}
+                  {holding?.quantity.toFixed(4) ?? "0"} shares.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={loadingMarketQuote || !holding || holding.quantity <= 0}
+                onClick={() => void loadMarketQuote()}
+              >
+                {loadingMarketQuote ? "Checking price…" : "Get market price"}
+              </button>
+            </div>
+
+            {marketQuote ? (
+              <div className="marketQuoteResult" role="status">
+                <div>
+                  <span>{marketQuote.ticker} closing price</span>
+                  <strong>{formatMoney(marketQuote.priceMinor, marketQuote.currency)}</strong>
+                </div>
+                <div>
+                  <span>Estimated holding value</span>
+                  <strong>
+                    {formatMoney(
+                      Math.round(marketQuote.priceMinor * (holding?.quantity ?? 0)),
+                      marketQuote.currency,
+                    )}
+                  </strong>
+                </div>
+                <p>
+                  Market date{" "}
+                  {new Date(`${marketQuote.marketDate}T00:00:00`).toLocaleDateString()} ·{" "}
+                  <a href={marketQuote.sourceUrl} target="_blank" rel="noreferrer">
+                    {marketQuote.sourceName}
+                  </a>
+                </p>
+              </div>
+            ) : null}
+
+            {marketQuoteError ? <p className="marketQuoteError" role="alert">{marketQuoteError}</p> : null}
+
+            <div className="field">
+              <label htmlFor="valuation-current-value">Current value ({asset.currency})</label>
+              <input
+                id="valuation-current-value"
+                type="number"
+                min="0"
+                step="0.01"
+                value={valuationForm.currentValue}
+                onChange={(event) =>
+                  setValuationForm((current) => ({ ...current, currentValue: event.target.value }))
+                }
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="valuation-date">Value on</label>
+              <input
+                id="valuation-date"
+                type="date"
+                value={valuationForm.valuationDate}
+                onChange={(event) =>
+                  setValuationForm((current) => ({ ...current, valuationDate: event.target.value }))
+                }
+                required
+              />
+            </div>
+          </div>
+        </FormDialog>
 
         <FormDialog
           open={Boolean(confirmingCashflowId)}
@@ -763,12 +1125,12 @@ export default function AssetDetailPage() {
         </FormDialog>
 
         <div className="mt-8">
-          <Link href="/investments" className="ghostButton">
+          <Link href="/investments" className="btn btn-ghost">
             Back
           </Link>
         </div>
       </section>
-    </main>
+    </PageShell>
   );
 }
 
@@ -785,7 +1147,7 @@ function ActionAccountSelect({
 }) {
   return (
     <div className="field">
-      <label htmlFor={inputId}>Cash account</label>
+      <label htmlFor={inputId}>Account receiving the money</label>
       <select id={inputId} value={value} onChange={(event) => onChange(event.target.value)} required>
         <option value="">Select account</option>
         {accounts

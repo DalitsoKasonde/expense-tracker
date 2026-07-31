@@ -1,4 +1,4 @@
-# Chuma workspace rules
+# Expenses workspace rules
 
 These rules apply to every file in this repo. Follow them before proposing or writing any code.
 
@@ -106,8 +106,8 @@ These rules apply to every file in this repo. Follow them before proposing or wr
 
 ## Git and CI
 
-- Never commit directly to `main`. All Chuma redesign work is on `chuma-redesign`.
-- Every commit on `chuma-redesign` must leave the branch green: `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `go build ./...`, `go vet ./...`.
+- Never commit directly to `main`. Work on a feature branch.
+- Every commit must leave the branch green: `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `go build ./...`, `go vet ./...`.
 - Do not commit `.env`, `.env.local`, `api/api` (binary), or any file in `api/.cache/` or `web/.next/`. These are already gitignored; verify before staging.
 - Commit messages: `<scope>: <what changed>` in lowercase. Example: `dashboard: replace semantic classes with Tailwind tokens`.
 

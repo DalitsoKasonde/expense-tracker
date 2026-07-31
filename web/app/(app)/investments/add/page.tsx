@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { PageHeader } from "@/components/ui";
+import {
+  PageHeader,
+  PageShell,
+} from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { addYearsToDate, isPastDate } from "@/lib/date-terms";
 import { formatMoney } from "@/lib/format-money";
@@ -269,7 +272,7 @@ export default function AddInvestmentPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10">
+    <PageShell width="narrow">
       <section className="grid gap-6">
         <PageHeader title="Add investment" subtitle="Track a stock holding or a government bond in its original currency." />
 
@@ -282,7 +285,7 @@ export default function AddInvestmentPage() {
           </button>
         </div>
 
-        <form className="grid gap-4 rounded-lg border border-outline bg-surface p-5 shadow-sm sm:p-6" onSubmit={handleSubmit}>
+        <form className="card grid gap-4" onSubmit={handleSubmit}>
           <div className="field">
             <label htmlFor="name">{kind === "stock" ? "Company or fund name" : "Bond name"}</label>
             <input id="name" value={form.name} onChange={(event) => update("name", event.target.value)} placeholder={kind === "stock" ? "e.g. ZCCM Investments Holdings" : "e.g. GRZ 15-year bond"} required />
@@ -429,15 +432,15 @@ export default function AddInvestmentPage() {
 
           {error ? <p className="muted">{error}</p> : null}
 
-          <button type="submit" className="primaryButton" disabled={saving || loadingOptions || (accountRequired && usableAccounts.length === 0)}>
+          <button type="submit" className="btn btn-primary" disabled={saving || loadingOptions || (accountRequired && usableAccounts.length === 0)}>
             {saving ? "Saving..." : kind === "stock" ? "Add stock holding" : "Add government bond"}
           </button>
         </form>
 
         <div className="mt-4 text-center">
-          <Link href="/investments" className="ghostButton">Back to portfolio</Link>
+          <Link href="/investments" className="btn btn-ghost">Back to portfolio</Link>
         </div>
       </section>
-    </main>
+    </PageShell>
   );
 }

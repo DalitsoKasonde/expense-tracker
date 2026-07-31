@@ -132,7 +132,7 @@ export function SyncStatus() {
   }
 
   return (
-    <div role="status" className={`fixed right-4 top-4 z-50 rounded-md border px-4 py-2 text-sm font-semibold shadow-md ${tone}`}>
+    <div role="status" className={`fixed right-4 top-4 z-50 rounded-md border px-4 py-2 text-sm font-semibold shadow-md print:hidden ${tone}`}>
       {message}
     </div>
   );

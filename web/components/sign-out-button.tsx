@@ -6,7 +6,7 @@ type SignOutButtonProps = {
   className?: string;
 };
 
-export function SignOutButton({ className = "ghostButton" }: SignOutButtonProps) {
+export function SignOutButton({ className = "btn btn-ghost" }: SignOutButtonProps) {
   return (
     <button
       type="button"

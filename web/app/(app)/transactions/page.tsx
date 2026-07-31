@@ -5,7 +5,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
 import { getPendingTransactions } from "@/lib/offline-db";
 import { isPositiveEntry } from "@/lib/format-money";
-import { EmptyState, LoadingSkeleton, PageHeader, TransactionFilters, TransactionRow, type TransactionFilterValue, type TransactionRowData } from "@/components/ui";
+import {
+  EmptyState,
+  LoadingSkeleton,
+  PageHeader,
+  PageShell,
+  type TransactionFilterValue,
+  TransactionFilters,
+  TransactionRow,
+  type TransactionRowData,
+} from "@/components/ui";
 import { AddEntryButton } from "@/components/add-entry-button";
 
 type Transaction = TransactionRowData & { accountId?: string; categoryId?: string };
@@ -68,14 +77,14 @@ export default function TransactionsPage() {
     return [...result.entries()];
   }, [filtered]);
 
-  if (loading) return <main className="mx-auto grid min-h-screen max-w-app gap-6 px-4 py-8 pb-28 sm:px-8 lg:px-12"><LoadingSkeleton className="h-24" /><LoadingSkeleton className="h-80" /></main>;
+  if (loading) return <PageShell><LoadingSkeleton className="h-24" /><LoadingSkeleton className="h-80" /></PageShell>;
 
   return (
-    <main className="mx-auto grid min-h-screen max-w-app gap-8 px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10">
-      <PageHeader eyebrow="Activity" title="Money activity" subtitle="Find every payment, deposit, transfer, loan movement, and investment purchase." actions={<AddEntryButton className="primaryButton">Add entry</AddEntryButton>} />
-      <section className="rounded-lg border border-outline bg-surface p-5 shadow-sm"><TransactionFilters value={filters} onChange={setFilters} accounts={accounts} categories={categories} /></section>
+    <PageShell>
+      <PageHeader eyebrow="Activity" title="Money activity" subtitle="Find every payment, deposit, transfer, loan movement, and investment purchase." actions={<AddEntryButton className="btn btn-primary">Add entry</AddEntryButton>} />
+      <section className="card"><TransactionFilters value={filters} onChange={setFilters} accounts={accounts} categories={categories} /></section>
       {error ? <div role="alert" className="rounded-md border border-negative/30 bg-negative-soft p-4 text-sm text-negative">{error}</div> : null}
-      {groups.length ? <div className="grid gap-7">{groups.map(([label, rows]) => <section key={label}><div className="mb-3 flex items-center gap-4"><h2 className="shrink-0 text-sm font-semibold text-on-surface">{label}</h2><div className="h-px flex-1 bg-outline" /></div><div className="rounded-lg border border-outline bg-surface px-4 shadow-sm">{rows.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</div></section>)}</div> : <EmptyState title="No matching transactions" description="Adjust your filters or add a new entry to see activity here." action={<button type="button" className="ghostButton" onClick={() => setFilters({ query: "", direction: "all" })}>Clear filters</button>} />}
-    </main>
+      {groups.length ? <div className="grid gap-7">{groups.map(([label, rows]) => <section key={label}><div className="mb-3 flex items-center gap-4"><h2 className="shrink-0 text-sm font-semibold text-on-surface">{label}</h2><div className="h-px flex-1 bg-outline" /></div><div className="rounded-lg border border-outline bg-surface px-4 shadow-sm">{rows.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</div></section>)}</div> : <EmptyState title="No matching transactions" description="Adjust your filters or add a new entry to see activity here." action={<button type="button" className="btn btn-ghost" onClick={() => setFilters({ query: "", direction: "all" })}>Clear filters</button>} />}
+    </PageShell>
   );
 }

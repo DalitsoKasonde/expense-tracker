@@ -5,7 +5,7 @@ import type { Route } from "next";
 export function SavingsGoalCard({ name, currentMinor, targetMinor, currency, href }: { name: string; currentMinor: number; targetMinor: number; currency: string; href?: Route }) {
   const percentage = targetMinor > 0 ? Math.min(100, Math.round((currentMinor / targetMinor) * 100)) : 0;
   const card = (
-    <article className="h-full rounded-lg border border-outline bg-surface p-5 shadow-sm transition hover:border-primary hover:shadow-md">
+    <article className="card card-interactive h-full">
       <div className="flex items-start justify-between gap-4">
         <div><p className="font-semibold text-on-surface">{name}</p><p className="mt-1 text-xs text-on-surface-soft">{formatMoney(currentMinor, currency)} of {formatMoney(targetMinor, currency)}</p></div>
         <strong className="text-sm text-savings">{percentage}%</strong>

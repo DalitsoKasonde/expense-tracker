@@ -16,9 +16,21 @@ type Account struct {
 	AccountClass        string  `json:"accountClass"`
 	Currency            string  `json:"currency"`
 	OpeningBalanceMinor int64   `json:"openingBalanceMinor"`
+	HasTransactions     bool    `json:"hasTransactions"`
 	ArchivedAt          *string `json:"archivedAt"`
 	CreatedAt           string  `json:"createdAt"`
 }
+
+// accountHasTransactionsSQL reports whether any live transaction touches the account row `a`.
+const accountHasTransactionsSQL = `
+	exists (
+		select 1
+		from transactions t
+		where t.user_id = a.user_id
+		  and t.deleted_at is null
+		  and (t.account_id = a.id or t.destination_account_id = a.id)
+	)
+`
 
 type AccountStore struct {
 	db *pgxpool.Pool
@@ -30,10 +42,11 @@ func NewAccountStore(db *pgxpool.Pool) *AccountStore {
 
 func (s *AccountStore) ListByUser(ctx context.Context, userID string) ([]Account, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, user_id, name, account_type, account_class, currency, opening_balance::bigint, archived_at::text, created_at::text
-		from accounts
-		where user_id = $1 and archived_at is null
-		order by created_at desc
+		select a.id, a.user_id, a.name, a.account_type, a.account_class, a.currency, a.opening_balance::bigint,
+			`+accountHasTransactionsSQL+`, a.archived_at::text, a.created_at::text
+		from accounts a
+		where a.user_id = $1 and a.archived_at is null
+		order by a.created_at desc
 	`, userID)
 	if err != nil {
 		return nil, err
@@ -43,7 +56,7 @@ func (s *AccountStore) ListByUser(ctx context.Context, userID string) ([]Account
 	accounts := make([]Account, 0)
 	for rows.Next() {
 		var a Account
-		if err := rows.Scan(&a.ID, &a.UserID, &a.Name, &a.AccountType, &a.AccountClass, &a.Currency, &a.OpeningBalanceMinor, &a.ArchivedAt, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.UserID, &a.Name, &a.AccountType, &a.AccountClass, &a.Currency, &a.OpeningBalanceMinor, &a.HasTransactions, &a.ArchivedAt, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, a)
@@ -55,9 +68,10 @@ func (s *AccountStore) ListByUser(ctx context.Context, userID string) ([]Account
 func (s *AccountStore) GetActiveByID(ctx context.Context, id, userID string) (Account, error) {
 	var account Account
 	err := s.db.QueryRow(ctx, `
-		select id, user_id, name, account_type, account_class, currency, opening_balance::bigint, archived_at::text, created_at::text
-		from accounts
-		where id = $1 and user_id = $2 and archived_at is null
+		select a.id, a.user_id, a.name, a.account_type, a.account_class, a.currency, a.opening_balance::bigint,
+			`+accountHasTransactionsSQL+`, a.archived_at::text, a.created_at::text
+		from accounts a
+		where a.id = $1 and a.user_id = $2 and a.archived_at is null
 	`, id, userID).Scan(
 		&account.ID,
 		&account.UserID,
@@ -66,6 +80,7 @@ func (s *AccountStore) GetActiveByID(ctx context.Context, id, userID string) (Ac
 		&account.AccountClass,
 		&account.Currency,
 		&account.OpeningBalanceMinor,
+		&account.HasTransactions,
 		&account.ArchivedAt,
 		&account.CreatedAt,
 	)
@@ -101,7 +116,10 @@ func (s *AccountStore) Create(ctx context.Context, userID, name, accountType, ac
 	return account, normalizeWriteError(err)
 }
 
-func (s *AccountStore) Update(ctx context.Context, id, userID, name, accountType, accountClass, currency string) (Account, error) {
+// Update edits an account. openingBalanceMinor is optional: when supplied the opening
+// balance is rewritten, which is only allowed while the account has no transactions —
+// once money has moved through it, the balance must change via transactions instead.
+func (s *AccountStore) Update(ctx context.Context, id, userID, name, accountType, accountClass, currency string, openingBalanceMinor *int64) (Account, error) {
 	var account Account
 	if accountType == "" {
 		accountType = "cash"
@@ -112,12 +130,35 @@ func (s *AccountStore) Update(ctx context.Context, id, userID, name, accountType
 	if currency == "" {
 		currency = "ZMW"
 	}
+
+	if openingBalanceMinor != nil {
+		var hasTransactions bool
+		if err := s.db.QueryRow(ctx, `
+			select `+accountHasTransactionsSQL+`
+			from accounts a
+			where a.id = $1 and a.user_id = $2 and a.archived_at is null
+		`, id, userID).Scan(&hasTransactions); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return account, ErrNotFound
+			}
+			return account, err
+		}
+		if hasTransactions {
+			return account, ErrAccountHasTransactions
+		}
+	}
+
 	err := s.db.QueryRow(ctx, `
-		update accounts
-		set name = $1, account_type = $2, account_class = $3, currency = $4
-		where id = $5 and user_id = $6 and archived_at is null
-		returning id, user_id, name, account_type, account_class, currency, opening_balance::bigint, archived_at::text, created_at::text
-	`, name, accountType, accountClass, currency, id, userID).Scan(
+		update accounts a
+		set name = $1,
+			account_type = $2,
+			account_class = $3,
+			currency = $4,
+			opening_balance = coalesce($7::bigint, a.opening_balance)
+		where a.id = $5 and a.user_id = $6 and a.archived_at is null
+		returning a.id, a.user_id, a.name, a.account_type, a.account_class, a.currency, a.opening_balance::bigint,
+			`+accountHasTransactionsSQL+`, a.archived_at::text, a.created_at::text
+	`, name, accountType, accountClass, currency, id, userID, openingBalanceMinor).Scan(
 		&account.ID,
 		&account.UserID,
 		&account.Name,
@@ -125,6 +166,7 @@ func (s *AccountStore) Update(ctx context.Context, id, userID, name, accountType
 		&account.AccountClass,
 		&account.Currency,
 		&account.OpeningBalanceMinor,
+		&account.HasTransactions,
 		&account.ArchivedAt,
 		&account.CreatedAt,
 	)

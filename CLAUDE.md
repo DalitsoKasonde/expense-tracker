@@ -4,15 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Chuma: a local-first financial workspace (accounts, daily money movement, goals, imports, investments).
+Expenses: a local-first financial workspace (accounts, daily money movement, goals, imports, investments).
 
 - `web/`: Next.js 16 (App Router) + TypeScript + React 19 PWA, invite-only NextAuth login
 - `api/`: Go + chi + pgx API with JWT auth and bootstrap-admin login
 - `api/migrations/`: numbered SQL migrations for the schema (`NNN_name.up.sql` / `.down.sql`)
 
-The repo is mid-redesign on branch `chuma-redesign` (a visual/UX overhaul referenced in
-`chuma-redesign-plan.md`, `plan.md`, `plan-v2.md`, `build-plan.md`, `settings-system-plan.md` at repo root).
-Never commit directly to `main`; this work happens on `chuma-redesign`.
+The UI overhaul that shipped is documented in `chuma-redesign-plan.md`, `plan.md`, `plan-v2.md`,
+`build-plan.md` and `settings-system-plan.md` at repo root (kept for history; the product is now
+called Expenses).
+Never commit directly to `main`; work on a feature branch.
 
 ## Common commands
 
@@ -51,7 +52,7 @@ go test ./internal/store/... -run TestName   # single package/test
 `./dev.sh` from repo root runs migrations then starts both API and web dev servers together.
 
 CI (`.github/workflows/ci.yml`) runs, per side: web → `npm ci`, `typecheck`, `lint`, `test`; api → `go test ./...`.
-**Every commit on `chuma-redesign` must leave the branch green on:** `npm run lint`, `npm run typecheck`, `npm run test`,
+**Every commit must leave the branch green on:** `npm run lint`, `npm run typecheck`, `npm run test`,
 `npm run build` (web) and `go build ./...`, `go vet ./...` (api).
 
 ## Local setup

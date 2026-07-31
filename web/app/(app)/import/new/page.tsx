@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { PageHeader } from "@/components/ui";
+import {
+  PageHeader,
+  PageShell,
+} from "@/components/ui";
 import { getApiBaseUrl } from "@/lib/client-api";
 
 type Account = {
@@ -129,11 +132,11 @@ export default function UploadPage() {
     }
   };
 
-  if (!session) return <div className="shell">Loading...</div>;
+  if (!session) return <div className="page-shell">Loading...</div>;
 
   return (
-    <main className="shell">
-      <section className="appChrome workspaceStack">
+    <PageShell>
+      <section className="workspaceStack">
         <PageHeader
           eyebrow="Imports"
           title="Upload workbooks"
@@ -223,7 +226,7 @@ export default function UploadPage() {
 
           <button
             type="submit"
-            className="primaryButton"
+            className="btn btn-primary"
             disabled={loading || accountsLoading}
           >
             {loading ? "Uploading..." : "Upload and prepare preview"}
@@ -231,11 +234,11 @@ export default function UploadPage() {
         </form>
 
         <div className="mt-4">
-          <Link href="/import" className="ghostButton">
+          <Link href="/import" className="btn btn-ghost">
             Back
           </Link>
         </div>
       </section>
-    </main>
+    </PageShell>
   );
 }

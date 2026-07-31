@@ -7,14 +7,18 @@ import {
   LoadingSkeleton,
   MetricCard,
   PageHeader,
+  PageShell,
 } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
 import { annualReportFilename, buildAnnualReportCsv } from "@/lib/report-export";
 import {
   analyzeReportMonths,
+  buildAxisTicks,
   buildTrendGeometry,
   cashCommitments,
+  monthsInScope,
+  peakSpendingMonth,
   percentageChange,
   wealthAllocation,
 } from "@/lib/report-analysis";
@@ -59,6 +63,26 @@ type AnnualOverall = {
 type InsightSummary = {
   debtRemaining: number;
   alerts: string[];
+};
+
+type CategorySpendingNode = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  /** This category plus every descendant. */
+  total: number;
+  /** This category's own transactions, excluding descendants. */
+  direct: number;
+  months: number[];
+  children: CategorySpendingNode[];
+};
+
+type CategorySpending = {
+  year: number;
+  currency: string;
+  total: number;
+  months: number[];
+  categories: CategorySpendingNode[];
 };
 
 type MoneyRow = {
@@ -135,7 +159,7 @@ function barHeight(value: number, maximum: number) {
 
 function ReportsLoading() {
   return (
-    <main className="mx-auto grid min-h-screen max-w-app gap-6 px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10">
+    <PageShell>
       <LoadingSkeleton className="h-24" />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <LoadingSkeleton className="h-36" />
@@ -147,7 +171,7 @@ function ReportsLoading() {
         <LoadingSkeleton className="h-96 lg:col-span-2" />
         <LoadingSkeleton className="h-96" />
       </div>
-    </main>
+    </PageShell>
   );
 }
 
@@ -156,19 +180,24 @@ export default function ReportsPage() {
   const apiCall = useApiCall();
   const apiCallRef = useRef(apiCall);
   apiCallRef.current = apiCall;
-  const { currency } = useUserCurrency();
+  const { currency, loading: currencyLoading } = useUserCurrency();
   const [annual, setAnnual] = useState<AnnualOverall | null>(null);
   const [previousAnnual, setPreviousAnnual] = useState<AnnualOverall | null>(null);
   const [summary, setSummary] = useState<InsightSummary | null>(null);
+  const [categorySpending, setCategorySpending] = useState<CategorySpending | null>(null);
+  const [categoryError, setCategoryError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [yearInitialized, setYearInitialized] = useState(false);
+  // A ref, not state: this only guards the one-time jump to the latest year with
+  // data. As state in the dependency list it re-triggered the effect and every
+  // first page load fetched the whole report twice.
+  const yearInitializedRef = useRef(false);
   const [retryVersion, setRetryVersion] = useState(0);
 
   useEffect(() => {
-    if (sessionStatus === "loading") {
+    if (sessionStatus === "loading" || currencyLoading) {
       return;
     }
     if (!session?.accessToken) {
@@ -177,24 +206,35 @@ export default function ReportsPage() {
     }
 
     let ignore = false;
+    let jumpedToLatestYear = false;
+    // The API aggregates per currency and defaults to ZMW. Without this the page
+    // showed ZMW-only figures labelled with the user's preferred currency.
+    const currencyParam = encodeURIComponent(currency);
+    const annualPath = (year: number) =>
+      `/v1/dashboard/annual?year=${year}&currency=${currencyParam}`;
+
     const loadReports = async () => {
       setLoading(true);
       try {
-        const [annualResult, summaryResult] = await Promise.allSettled([
-          apiCallRef.current<AnnualOverall>(`/v1/dashboard/annual?year=${selectedYear}`),
-          apiCallRef.current<InsightSummary>("/v1/dashboard/insights"),
+        const [annualResult, summaryResult, categoryResult] = await Promise.allSettled([
+          apiCallRef.current<AnnualOverall>(annualPath(selectedYear)),
+          apiCallRef.current<InsightSummary>(`/v1/dashboard/insights?currency=${currencyParam}`),
+          apiCallRef.current<CategorySpending>(
+            `/v1/dashboard/categories?year=${selectedYear}&currency=${currencyParam}`,
+          ),
         ]);
         if (annualResult.status === "rejected") {
           throw annualResult.reason;
         }
         if (!ignore) {
           if (
-            !yearInitialized &&
+            !yearInitializedRef.current &&
             annualResult.value.availableYears?.length &&
             annualResult.value.latestDataYear !== selectedYear
           ) {
+            yearInitializedRef.current = true;
+            jumpedToLatestYear = true;
             setSelectedYear(annualResult.value.latestDataYear);
-            setYearInitialized(true);
             return;
           }
           const comparisonYear = annualResult.value.availableYears.find(
@@ -203,26 +243,38 @@ export default function ReportsPage() {
           let comparison: AnnualOverall | null = null;
           if (comparisonYear) {
             try {
-              comparison = await apiCallRef.current<AnnualOverall>(
-                `/v1/dashboard/annual?year=${comparisonYear}`,
-              );
+              comparison = await apiCallRef.current<AnnualOverall>(annualPath(comparisonYear));
             } catch {
               comparison = null;
             }
           }
           if (ignore) return;
+          yearInitializedRef.current = true;
           setAnnual(annualResult.value);
           setPreviousAnnual(comparison);
           setSummary(summaryResult.status === "fulfilled" ? summaryResult.value : null);
+          // The breakdown is one card, not the whole report, so a failure here
+          // reports inside that card instead of blanking the page.
+          setCategorySpending(
+            categoryResult.status === "fulfilled" ? categoryResult.value : null,
+          );
+          setCategoryError(
+            categoryResult.status === "fulfilled"
+              ? ""
+              : categoryResult.reason instanceof Error
+                ? categoryResult.reason.message
+                : "Something went wrong",
+          );
           setError("");
-          setYearInitialized(true);
         }
       } catch (loadError) {
         if (!ignore) {
           setError(loadError instanceof Error ? loadError.message : "Failed to load reports");
         }
       } finally {
-        if (!ignore) setLoading(false);
+        // Stay in the loading state while the effect re-runs for the other year,
+        // otherwise the page flashes an empty report in between.
+        if (!ignore && !jumpedToLatestYear) setLoading(false);
       }
     };
 
@@ -230,11 +282,18 @@ export default function ReportsPage() {
     return () => {
       ignore = true;
     };
-  }, [retryVersion, selectedYear, session?.accessToken, sessionStatus, yearInitialized]);
+  }, [currency, currencyLoading, retryVersion, selectedYear, session?.accessToken, sessionStatus]);
+
+  // Both charts plot the same months, so the bar chart no longer shows a tail of
+  // empty future months while the trend chart stops at the current one.
+  const chartMonths = useMemo(
+    () => (annual ? monthsInScope(annual.data, annual.year) : []),
+    [annual],
+  );
 
   const reportAnalysis = useMemo(
-    () => analyzeReportMonths(annual?.data ?? []),
-    [annual?.data],
+    () => analyzeReportMonths(chartMonths),
+    [chartMonths],
   );
 
   const chartSummary = annual
@@ -268,21 +327,24 @@ export default function ReportsPage() {
   if (loading || sessionStatus === "loading") return <ReportsLoading />;
 
   return (
-    <main className="mx-auto grid min-h-screen max-w-app content-start gap-8 px-4 py-6 pb-28 sm:px-8 lg:px-12 lg:py-10">
+    <PageShell>
       <PageHeader
         eyebrow="Reports"
         title="Financial report"
         subtitle="See where your money came from, where it went, and whether each month strengthened your position."
         actions={
           annual ? (
-            <div className="flex flex-wrap items-end gap-3">
-              <button className="ghostButton" type="button" onClick={exportAnnualReport}>
+            <div className="flex flex-wrap items-end gap-3 print:hidden">
+              <button className="btn btn-ghost" type="button" onClick={exportAnnualReport}>
                 Export CSV
+              </button>
+              <button className="btn btn-ghost" type="button" onClick={() => window.print()}>
+                Print
               </button>
               <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-on-surface-soft">
                 Report year
                 <select
-                  className="min-w-28 rounded-md border border-outline bg-surface px-3 py-2 text-sm font-semibold text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+                  className="control min-w-28 font-semibold"
                   value={selectedYear}
                   onChange={(event) => setSelectedYear(Number(event.target.value))}
                 >
@@ -364,11 +426,21 @@ export default function ReportsPage() {
                     </div>
                     <div className="overflow-x-auto pb-2">
                       <div className="flex min-w-max gap-3">
-                        {annual.data.map((month) => {
+                        {chartMonths.map((month) => {
                           const commitments = cashCommitments(month);
                           const allocation = wealthAllocation(month);
                           return (
-                            <div key={month.month} className="grid w-14 shrink-0 gap-2 text-center">
+                            <div
+                              key={month.month}
+                              className="grid w-14 shrink-0 gap-2 text-center"
+                              title={`${month.monthLabel}: inflow ${formatMoney(
+                                month.totalInflow,
+                                currency,
+                              )}, cash commitments ${formatMoney(
+                                commitments,
+                                currency,
+                              )}, savings and investments ${formatMoney(allocation, currency)}`}
+                            >
                               <div className="flex h-48 items-end justify-center gap-1 rounded-md border-b border-outline bg-surface-soft px-1 pt-3">
                                 <span
                                   className={`w-2.5 rounded-t-sm bg-income ${month.totalInflow ? "min-h-1" : ""}`}
@@ -422,7 +494,7 @@ export default function ReportsPage() {
               </ChartCard>
             </div>
 
-            <section className="rounded-lg border border-outline bg-surface p-5 shadow-sm">
+            <section className="card">
               <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Year highlights</p>
               <h2 className="mt-1 text-lg font-semibold text-on-surface">What stands out</h2>
               {reportAnalysis.activeMonthCount ? (
@@ -493,11 +565,7 @@ export default function ReportsPage() {
 
           <div className="grid items-stretch gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <BalanceTrendChart
-                annual={annual}
-                currency={currency}
-                currentYear={currentYear}
-              />
+              <BalanceTrendChart annual={annual} currency={currency} />
             </div>
             <FinancialRatios annual={annual} />
           </div>
@@ -515,6 +583,18 @@ export default function ReportsPage() {
             ) : null}
           </div>
 
+          <CategorySpendingCard
+            spending={categorySpending}
+            error={categoryError}
+            year={annual.year}
+            currency={currency}
+            monthLabels={annual.data.map((month) => month.monthLabel)}
+            onRetry={() => {
+              setCategoryError("");
+              setRetryVersion((current) => current + 1);
+            }}
+          />
+
           {selectedYear === currentYear && summary?.alerts?.length ? (
             <section className="rounded-lg border border-warning bg-warning-soft p-5">
               <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Needs attention</p>
@@ -529,7 +609,7 @@ export default function ReportsPage() {
             </section>
           ) : null}
 
-          <section className="overflow-hidden rounded-lg border border-outline bg-surface shadow-sm">
+          <section className="card card-flush overflow-hidden">
             <div className="flex flex-wrap items-end justify-between gap-4 border-b border-outline p-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Annual detail</p>
@@ -616,22 +696,223 @@ export default function ReportsPage() {
           </section>
         </>
       ) : null}
-    </main>
+    </PageShell>
+  );
+}
+
+function CategorySpendingCard({
+  spending,
+  error,
+  year,
+  currency,
+  monthLabels,
+  onRetry,
+}: {
+  spending: CategorySpending | null;
+  error: string;
+  year: number;
+  currency: string;
+  monthLabels: string[];
+  onRetry: () => void;
+}) {
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  const categories = spending?.categories ?? [];
+  const total = spending?.total ?? 0;
+
+  function toggle(id: string) {
+    setExpandedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    );
+  }
+
+  return (
+    <section className="card">
+      <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">
+        Spending detail
+      </p>
+      <h2 className="mt-1 text-lg font-semibold text-on-surface">Where the money went</h2>
+      <p className="mt-1 text-sm text-on-surface-soft">
+        {year} living expenses grouped by category. Debt payments, savings, and investments
+        are counted elsewhere in this report, so this total matches the living expenses row.
+      </p>
+
+      {error ? (
+        <div className="mt-5" role="alert">
+          <p className="text-sm text-negative">
+            We couldn&apos;t load your category breakdown. {error}
+          </p>
+          <button className="btn btn-ghost mt-3" type="button" onClick={onRetry}>
+            Try again
+          </button>
+        </div>
+      ) : total > 0 ? (
+        <>
+          <p className="sr-only">
+            {`${year} living expenses total ${formatMoney(total, currency)}. ${categories
+              .map(
+                (category) =>
+                  `${category.name} ${formatMoney(category.total, currency)}, ${(
+                    (category.total / total) *
+                    100
+                  ).toFixed(1)} percent`,
+              )
+              .join(". ")}.`}
+          </p>
+          <p className="mt-5 text-sm text-on-surface-soft">
+            <span className="font-semibold tabular-nums text-on-surface">
+              {formatMoney(total, currency)}
+            </span>{" "}
+            across {categories.length} {categories.length === 1 ? "category" : "categories"}
+          </p>
+          <ul className="mt-4 grid gap-4">
+            {categories.map((category) => (
+              <CategorySpendingRow
+                key={category.id}
+                node={category}
+                total={total}
+                currency={currency}
+                monthLabels={monthLabels}
+                depth={0}
+                expandedIds={expandedIds}
+                onToggle={toggle}
+              />
+            ))}
+          </ul>
+        </>
+      ) : (
+        <div className="mt-5">
+          <EmptyState
+            title="No categorised spending this year"
+            description="Give your expenses a category when you record them to see this breakdown."
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CategorySpendingRow({
+  node,
+  total,
+  currency,
+  monthLabels,
+  depth,
+  expandedIds,
+  onToggle,
+}: {
+  node: CategorySpendingNode;
+  total: number;
+  currency: string;
+  monthLabels: string[];
+  depth: number;
+  expandedIds: string[];
+  onToggle: (id: string) => void;
+}) {
+  const share = total === 0 ? 0 : (node.total / total) * 100;
+  const peak = peakSpendingMonth(node.months);
+  const expandable = node.children.length > 0;
+  const expanded = expandable && expandedIds.includes(node.id);
+  const childrenId = `category-children-${node.id}`;
+  // Bars are always a share of the report total, never of the parent, so a
+  // subcategory's bar means the same thing as a top-level one.
+  const bar = (
+    <div className="mt-2 h-2 overflow-hidden rounded-pill bg-surface-soft">
+      <div className="h-full rounded-pill bg-expense" style={{ width: `${share}%` }} />
+    </div>
+  );
+  const heading = (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className={`text-sm ${depth === 0 ? "font-semibold" : ""} text-on-surface`}>
+        {node.name}
+      </span>
+      <span className="shrink-0 text-right">
+        <span className="font-semibold tabular-nums text-on-surface">
+          {formatMoney(node.total, currency)}
+        </span>
+        <span className="ml-2 text-xs tabular-nums text-on-surface-soft">
+          {share.toFixed(1)}%
+        </span>
+      </span>
+    </div>
+  );
+
+  return (
+    <li className={depth === 0 ? "" : "ml-4"}>
+      {expandable ? (
+        <button
+          type="button"
+          className="flex min-h-11 w-full flex-col justify-center rounded-md text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          aria-expanded={expanded}
+          aria-controls={childrenId}
+          onClick={() => onToggle(node.id)}
+        >
+          <span className="flex w-full items-baseline gap-2">
+            <span aria-hidden="true" className="text-xs text-on-surface-soft">
+              {expanded ? "▾" : "▸"}
+            </span>
+            <span className="min-w-0 flex-1">{heading}</span>
+          </span>
+          <span className="w-full pl-5">{bar}</span>
+        </button>
+      ) : (
+        <div className={depth === 0 ? "" : "pl-5"}>
+          {heading}
+          {bar}
+        </div>
+      )}
+      {/* Indented to clear the disclosure arrow, except on a top-level row that
+          has no arrow to clear. */}
+      <p className={`mt-1 text-xs text-on-surface-soft ${depth === 0 && !expandable ? "" : "pl-5"}`}>
+        {peak
+          ? `Peak in ${monthLabels[peak.index] ?? `month ${peak.index + 1}`} · ${formatMoney(
+              peak.amount,
+              currency,
+            )}`
+          : "No spending recorded"}
+        {expandable
+          ? ` · ${node.children.length} ${node.children.length === 1 ? "subcategory" : "subcategories"}`
+          : ""}
+      </p>
+      {expandable && expanded ? (
+        <ul id={childrenId} className="mt-4 grid gap-4 border-l border-outline pl-1">
+          {node.direct > 0 ? (
+            <li className="ml-4 pl-5">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm text-on-surface-soft">
+                  Recorded directly on {node.name}
+                </span>
+                <span className="font-semibold tabular-nums text-on-surface">
+                  {formatMoney(node.direct, currency)}
+                </span>
+              </div>
+            </li>
+          ) : null}
+          {node.children.map((child) => (
+            <CategorySpendingRow
+              key={child.id}
+              node={child}
+              total={total}
+              currency={currency}
+              monthLabels={monthLabels}
+              depth={depth + 1}
+              expandedIds={expandedIds}
+              onToggle={onToggle}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </li>
   );
 }
 
 function BalanceTrendChart({
   annual,
   currency,
-  currentYear,
 }: {
   annual: AnnualOverall;
   currency: string;
-  currentYear: number;
 }) {
-  const currentMonth = new Date().getMonth() + 1;
-  const months =
-    annual.year === currentYear ? annual.data.slice(0, currentMonth) : annual.data;
+  const months = monthsInScope(annual.data, annual.year);
   const netWorthValues = months.map((month) => month.netWorth);
   const cashValues = months.map((month) => month.endingCashBalance);
   const allValues = [...netWorthValues, ...cashValues];
@@ -640,17 +921,17 @@ function BalanceTrendChart({
     minimum: Math.min(0, ...allValues),
     maximum: Math.max(0, ...allValues),
   };
-  const netWorthGeometry = buildTrendGeometry(
-    netWorthValues,
-    600,
-    180,
-    16,
-    domain,
-  );
+  const netWorthGeometry = buildTrendGeometry(netWorthValues, 600, 180, 16, domain);
   const cashGeometry = buildTrendGeometry(cashValues, 600, 180, 16, domain);
+  const ticks = buildAxisTicks(domain, 180, 16);
   const latestMonth = months.at(-1);
   const pointList = (points: Array<{ x: number; y: number }>) =>
     points.map((point) => `${point.x},${point.y}`).join(" ");
+  const compact = {
+    notation: "compact" as const,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  };
 
   return (
     <ChartCard
@@ -663,90 +944,100 @@ function BalanceTrendChart({
     >
       {hasBalance ? (
         <>
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-            <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-on-surface-soft">
-              <span className="inline-flex items-center gap-2">
-                <span className="h-0.5 w-5 bg-investment" />
-                Net worth
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span className="h-0.5 w-5 bg-primary" />
-                Cash balance
-              </span>
-            </div>
-            <p className="text-right text-xs text-on-surface-soft">
-              Range{" "}
-              {formatMoney(domain.minimum, currency, {
-                notation: "compact",
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 1,
-              })}{" "}
-              to{" "}
-              {formatMoney(domain.maximum, currency, {
-                notation: "compact",
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 1,
-              })}
-            </p>
+          <div className="mb-4 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-on-surface-soft">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-0.5 w-5 bg-investment" />
+              Net worth
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span className="h-0.5 w-5 bg-primary" />
+              Cash balance
+            </span>
           </div>
-          <svg
-            viewBox="0 0 600 180"
-            className="w-full overflow-visible"
-            preserveAspectRatio="none"
-          >
-            <title>{annual.year} cash balance and net-worth trend</title>
-            <desc>
-              Net worth and ending cash balance plotted for each available month.
-            </desc>
-            {[16, 90, 164].map((position) => (
-              <line
-                key={position}
-                x1="16"
-                x2="584"
-                y1={position}
-                y2={position}
-                className="stroke-outline"
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-            <polyline
-              points={pointList(netWorthGeometry.points)}
-              className="fill-none stroke-investment stroke-2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-            />
-            <polyline
-              points={pointList(cashGeometry.points)}
-              className="fill-none stroke-primary stroke-2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-            />
-            {netWorthGeometry.points.map((point, index) => (
-              <circle
-                key={`net-worth-${months[index]?.month}`}
-                cx={point.x}
-                cy={point.y}
-                r="3"
-                className="fill-investment"
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-            {cashGeometry.points.map((point, index) => (
-              <circle
-                key={`cash-${months[index]?.month}`}
-                cx={point.x}
-                cy={point.y}
-                r="3"
-                className="fill-primary"
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-          </svg>
-          <div className="mt-2 flex justify-between gap-2 text-xs font-semibold text-on-surface-soft">
-            {months.map((month) => (
-              <span key={month.month}>{month.monthLabel}</span>
+          {/* The axis labels sit outside the SVG so they keep a fixed type size
+              instead of scaling with the viewBox. The tick column must span the
+              plot and nothing else, so the month labels live below the row and
+              are indented by the tick column width plus the gap. */}
+          <div className="flex gap-2">
+            <div className="relative w-16 shrink-0">
+              {ticks.map((tick) => (
+                <span
+                  key={tick.value}
+                  className="absolute right-0 -translate-y-1/2 text-[11px] tabular-nums text-on-surface-soft"
+                  style={{ top: `${(tick.y / 180) * 100}%` }}
+                >
+                  {formatMoney(tick.value, currency, compact)}
+                </span>
+              ))}
+            </div>
+            <div className="min-w-0 flex-1">
+              <svg viewBox="0 0 600 180" className="w-full">
+                <title>{annual.year} cash balance and net-worth trend</title>
+                <desc>
+                  Net worth and ending cash balance plotted for each available month.
+                </desc>
+                {ticks.map((tick) => (
+                  <line
+                    key={tick.value}
+                    x1="16"
+                    x2="584"
+                    y1={tick.y}
+                    y2={tick.y}
+                    className={tick.value === 0 ? "stroke-outline-strong" : "stroke-outline"}
+                    strokeDasharray={tick.value === 0 ? undefined : "4 4"}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+                <polyline
+                  points={pointList(netWorthGeometry.points)}
+                  className="fill-none stroke-investment stroke-2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <polyline
+                  points={pointList(cashGeometry.points)}
+                  className="fill-none stroke-primary stroke-2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {netWorthGeometry.points.map((point, index) => (
+                  <circle
+                    key={`net-worth-${months[index]?.month}`}
+                    cx={point.x}
+                    cy={point.y}
+                    r="3"
+                    className="fill-investment"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+                {cashGeometry.points.map((point, index) => (
+                  <circle
+                    key={`cash-${months[index]?.month}`}
+                    cx={point.x}
+                    cy={point.y}
+                    r="3"
+                    className="fill-primary"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+              </svg>
+            </div>
+          </div>
+          {/* 4.5rem = the w-16 tick column plus the gap-2 between columns, so a
+              label lands under the point it belongs to. */}
+          <div className="relative ml-[4.5rem] mt-1 h-4">
+            {months.map((month, index) => (
+              <span
+                key={month.month}
+                className="absolute -translate-x-1/2 text-xs font-semibold text-on-surface-soft"
+                style={{
+                  left: `${((netWorthGeometry.points[index]?.x ?? 0) / 600) * 100}%`,
+                }}
+              >
+                {month.monthLabel}
+              </span>
             ))}
           </div>
           <div className="mt-4 grid gap-3 border-t border-outline pt-4 sm:grid-cols-2">
@@ -809,7 +1100,7 @@ function FinancialRatios({ annual }: { annual: AnnualOverall }) {
   ];
 
   return (
-    <section className="rounded-lg border border-outline bg-surface p-5 shadow-sm">
+    <section className="card">
       <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">
         Financial ratios
       </p>
@@ -824,10 +1115,13 @@ function FinancialRatios({ annual }: { annual: AnnualOverall }) {
       </p>
       <dl className="mt-5 grid gap-5">
         {ratios.map((ratio) => {
-          const width =
-            ratio.value === null || ratio.value === undefined
-              ? 0
-              : Math.min(100, Math.max(0, ratio.value / 100));
+          const percentage =
+            ratio.value === null || ratio.value === undefined ? null : ratio.value / 100;
+          const width = percentage === null ? 0 : Math.min(100, Math.max(0, percentage));
+          // A ratio can exceed 100% (spending more on debt than you earn). The
+          // bar caps, so say so rather than showing a full bar as if it were
+          // exactly 100%.
+          const overScale = percentage !== null && percentage > 100;
           return (
             <div key={ratio.label}>
               <div className="flex items-baseline justify-between gap-3">
@@ -842,7 +1136,10 @@ function FinancialRatios({ annual }: { annual: AnnualOverall }) {
                   style={{ width: `${width}%` }}
                 />
               </div>
-              <p className="mt-1 text-xs text-on-surface-soft">{ratio.detail}</p>
+              <p className="mt-1 text-xs text-on-surface-soft">
+                {ratio.detail}
+                {overScale ? " · above 100%, bar capped" : ""}
+              </p>
             </div>
           );
         })}
@@ -997,7 +1294,7 @@ function YearComparison({
   ];
 
   return (
-    <section className="overflow-hidden rounded-lg border border-outline bg-surface shadow-sm">
+    <section className="card card-flush overflow-hidden">
       <div className="p-5">
         <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">
           Year comparison
@@ -1010,16 +1307,16 @@ function YearComparison({
         </p>
       </div>
       <div className="overflow-x-auto border-t border-outline">
-        <table className="w-full min-w-max text-sm">
+        <table className="dataTable">
           <caption className="sr-only">
             Financial comparison between {annual.year} and {previousAnnual.year}
           </caption>
           <thead className="bg-surface-soft text-xs uppercase tracking-wider text-on-surface-soft">
             <tr>
-              <th className="px-5 py-3 text-left">Metric</th>
-              <th className="px-3 py-3 text-right">{previousAnnual.year}</th>
-              <th className="px-3 py-3 text-right">{annual.year}</th>
-              <th className="px-5 py-3 text-right">Change</th>
+              <th>Metric</th>
+              <th className="numeric">{previousAnnual.year}</th>
+              <th className="numeric">{annual.year}</th>
+              <th className="numeric">Change</th>
             </tr>
           </thead>
           <tbody>
@@ -1039,17 +1336,17 @@ function YearComparison({
                     ? "text-positive"
                     : "text-negative";
               return (
-                <tr key={row.label} className="border-t border-outline">
-                  <th className="px-5 py-3 text-left font-medium text-on-surface">
+                <tr key={row.label}>
+                  <th scope="row" className="font-medium text-on-surface">
                     {row.label}
                   </th>
-                  <td className="px-3 py-3 text-right tabular-nums text-on-surface">
+                  <td data-label={String(previousAnnual.year)} className="numeric text-on-surface">
                     {formatMoney(row.previous, currency)}
                   </td>
-                  <td className="px-3 py-3 text-right font-semibold tabular-nums text-on-surface">
+                  <td data-label={String(annual.year)} className="numeric font-semibold text-on-surface">
                     {formatMoney(row.current, currency)}
                   </td>
-                  <td className={`px-5 py-3 text-right font-semibold tabular-nums ${tone}`}>
+                  <td data-label="Change" className={`numeric font-semibold ${tone}`}>
                     {difference > 0 ? "+" : ""}
                     {formatMoney(difference, currency)}
                     {percentage === null ? null : (

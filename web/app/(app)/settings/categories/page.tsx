@@ -144,7 +144,7 @@ export default function CategoriesSettingsPage() {
             <span className="muted">Parent-child structure is shown directly in the table for easier editing.</span>
           </div>
           <button
-            className="primaryButton"
+            className="btn btn-primary"
             type="button"
             onClick={() => {
               setStatus("");
@@ -167,30 +167,27 @@ export default function CategoriesSettingsPage() {
               <div className="muted">No categories yet. Create your first category.</div>
             ) : null}
             {orderedCategories.length ? (
-              <table className="min-w-full border-collapse text-sm">
+              <table className="dataTable">
                 <thead>
-                  <tr className="border-b border-outline text-left text-on-surface-soft">
-                    <th className="px-4 py-3 font-semibold">Name</th>
-                    <th className="px-4 py-3 font-semibold">Group</th>
-                    <th className="px-4 py-3 font-semibold">Level</th>
-                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  <tr className="text-on-surface-soft">
+                    <th className="font-semibold">Name</th>
+                    <th className="font-semibold">Group</th>
+                    <th className="font-semibold">Level</th>
+                    <th className="font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orderedCategories.map((category) => (
-                    <tr key={category.id} className="border-b border-outline/70 last:border-b-0">
-                      <td
-                        className="px-4 py-3 font-semibold text-on-surface"
-                        style={{ paddingLeft: `${1 + category.depth * 1.25}rem` }}
-                      >
+                    <tr key={category.id}>
+                      <td data-label="Name" className="font-semibold text-on-surface" style={{ paddingLeft: `${1 + category.depth * 1.25}rem` }}>
                         {category.name}
                       </td>
-                      <td className="px-4 py-3 text-on-surface-soft">{category.categoryGroup}</td>
-                      <td className="px-4 py-3 text-on-surface-soft">{category.parentId ? "Subcategory" : "Top level"}</td>
-                      <td className="px-4 py-3">
+                      <td data-label="Group" className="text-on-surface-soft">{category.categoryGroup}</td>
+                      <td data-label="Level" className="text-on-surface-soft">{category.parentId ? "Subcategory" : "Top level"}</td>
+                      <td data-label="Actions">
                         <div className="flex flex-wrap gap-2">
                           <button
-                            className="ghostButton"
+                            className="btn btn-ghost"
                             type="button"
                             onClick={() => {
                               setStatus("");
@@ -205,7 +202,7 @@ export default function CategoriesSettingsPage() {
                           >
                             Edit
                           </button>
-                          <button className="ghostButton" type="button" onClick={() => setDeleteId(category.id)}>
+                          <button className="btn btn-ghost" type="button" onClick={() => setDeleteId(category.id)}>
                             Remove
                           </button>
                         </div>

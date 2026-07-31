@@ -86,12 +86,12 @@ export function TopNav({ initials, email }: TopNavProps) {
   }, []);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-outline bg-background/95 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-outline bg-background/95 backdrop-blur print:hidden">
       <div className="mx-auto flex max-w-app items-center justify-end gap-3 px-4 py-3 sm:px-8 lg:px-12">
         <div className="relative" ref={notificationsRef}>
           <button
             type="button"
-            className="grid size-10 place-items-center rounded-full border border-outline bg-surface text-on-surface-soft transition-colors hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="grid size-10 place-items-center rounded-full border border-outline bg-surface text-on-surface-soft transition-colors hover:text-on-surface"
             aria-label="Notifications"
             aria-expanded={notificationsOpen}
             onClick={() => {
@@ -110,7 +110,7 @@ export function TopNav({ initials, email }: TopNavProps) {
                     <span className="text-sm text-on-surface-soft">{notificationsError}</span>
                     <button
                       type="button"
-                      className="ghostButton justify-center"
+                      className="btn btn-ghost justify-center"
                       disabled={notificationsLoading}
                       onClick={loadNotifications}
                     >
@@ -142,7 +142,7 @@ export function TopNav({ initials, email }: TopNavProps) {
               ) : null}
               <Link
                 href="/settings/preferences"
-                className="ghostButton justify-center"
+                className="btn btn-ghost justify-center"
                 onClick={() => setNotificationsOpen(false)}
               >
                 Open preferences
@@ -154,7 +154,7 @@ export function TopNav({ initials, email }: TopNavProps) {
         <div className="relative" ref={profileRef}>
           <button
             type="button"
-            className="grid size-10 place-items-center rounded-full bg-primary text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="grid size-10 place-items-center rounded-full bg-action text-sm font-semibold text-action-contrast"
             aria-label={email ?? "Profile"}
             aria-expanded={profileOpen}
             title={email ?? "Profile"}
@@ -173,7 +173,7 @@ export function TopNav({ initials, email }: TopNavProps) {
               </div>
               <Link
                 href="/settings/preferences"
-                className="flex min-h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold text-on-surface-soft transition-colors hover:bg-surface-soft hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="flex min-h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold text-on-surface-soft transition-colors hover:bg-surface-soft hover:text-on-surface"
                 onClick={() => setProfileOpen(false)}
               >
                 <SettingsIcon className="size-4" />
@@ -181,7 +181,7 @@ export function TopNav({ initials, email }: TopNavProps) {
               </Link>
               <button
                 type="button"
-                className="ghostButton justify-center"
+                className="btn btn-ghost justify-center"
                 onClick={() => {
                   void signOutEverywhere();
                 }}

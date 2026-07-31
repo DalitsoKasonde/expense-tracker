@@ -29,10 +29,10 @@ export default function ImportSettingsPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link href="/import/new" className="primaryButton">
+              <Link href="/import/new" className="btn btn-primary">
                 Start import
               </Link>
-              <Link href="/import" className="ghostButton">
+              <Link href="/import" className="btn btn-ghost">
                 View import history
               </Link>
             </div>

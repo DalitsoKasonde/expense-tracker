@@ -34,6 +34,7 @@ type Config struct {
 	CookieSecure   bool
 	CookieSameSite string
 	MaxBodyBytes   int64
+	MansaAPIKey    string
 }
 
 func Load() (Config, error) {
@@ -48,6 +49,7 @@ func Load() (Config, error) {
 		AppVersion:             envOrDefault("APP_VERSION", defaultAppVersion),
 		CookieName:             envOrDefault("AUTH_COOKIE_NAME", defaultCookieName),
 		CookieSameSite:         strings.ToLower(envOrDefault("AUTH_COOKIE_SAMESITE", defaultCookieSameSite)),
+		MansaAPIKey:            os.Getenv("MANSA_API_KEY"),
 	}
 
 	if cfg.AppEnv == "" {

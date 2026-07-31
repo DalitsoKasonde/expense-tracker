@@ -205,7 +205,7 @@ export function LoansWorkspace() {
             <input type="checkbox" checked={loanForm.isForced} onChange={(event) => setLoanForm((current) => ({ ...current, isForced: event.target.checked }))} />
             Forced loan
           </label>
-          <button className="primaryButton" type="submit" disabled={saving}>
+          <button className="btn btn-primary" type="submit" disabled={saving}>
             {saving ? "Saving..." : "Create loan"}
           </button>
         </form>
@@ -245,7 +245,7 @@ export function LoansWorkspace() {
             <span className="muted">Adds money to your chosen account and updates what you owe.</span>
           </div>
           <LoanAccountFields loans={loans} cashAccounts={cashAccounts} form={borrowForm} setForm={setBorrowForm} />
-          <button className="primaryButton" type="submit" disabled={saving || loans.length === 0 || cashAccounts.length === 0}>
+          <button className="btn btn-primary" type="submit" disabled={saving || loans.length === 0 || cashAccounts.length === 0}>
             Record borrowed
           </button>
         </form>
@@ -256,7 +256,7 @@ export function LoansWorkspace() {
             <span className="muted">Your payment goes to fees first, then interest, then the amount borrowed.</span>
           </div>
           <LoanAccountFields loans={loans} cashAccounts={cashAccounts} form={repayForm} setForm={setRepayForm} />
-          <button className="primaryButton" type="submit" disabled={saving || loans.length === 0 || cashAccounts.length === 0}>
+          <button className="btn btn-primary" type="submit" disabled={saving || loans.length === 0 || cashAccounts.length === 0}>
             Record repayment
           </button>
         </form>

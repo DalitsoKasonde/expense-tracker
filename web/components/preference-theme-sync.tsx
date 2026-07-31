@@ -4,16 +4,21 @@ import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { primeUserCurrency } from "@/lib/use-user-currency";
 import { getApiBaseUrl } from "@/lib/client-api";
+import { applyTheme } from "@/lib/theme";
 
 type UserPreferences = {
   theme: "light" | "dark";
 };
 
-export function applyTheme(theme: "light" | "dark") {
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
-}
+export { applyTheme };
 
+/**
+ * Reconciles the locally applied theme with the account preference.
+ *
+ * The pre-paint script in the root layout has already applied a theme, so this
+ * only corrects it when the server disagrees. A failed request keeps whatever
+ * is on screen instead of snapping back to light.
+ */
 export function PreferenceThemeSync() {
   const { data: session } = useSession();
 
@@ -38,9 +43,7 @@ export function PreferenceThemeSync() {
           }
         }
       } catch {
-        if (!cancelled) {
-          applyTheme("light");
-        }
+        // Offline or API down: keep the theme already painted.
       }
     };
 

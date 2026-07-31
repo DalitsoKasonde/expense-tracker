@@ -20,7 +20,7 @@ export function AsyncErrorState({
         <h2 className="font-semibold text-on-surface">{title}</h2>
         <p className="mt-1 text-sm text-on-surface-soft">{description}</p>
       </div>
-      <button type="button" className="ghostButton" disabled={retrying} onClick={onRetry}>
+      <button type="button" className="btn btn-ghost" disabled={retrying} onClick={onRetry}>
         {retrying ? "Trying again..." : "Try again"}
       </button>
     </div>

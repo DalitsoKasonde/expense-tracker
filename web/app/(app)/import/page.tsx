@@ -3,7 +3,10 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PageHeader } from "@/components/ui";
+import {
+  PageHeader,
+  PageShell,
+} from "@/components/ui";
 import { getApiBaseUrl } from "@/lib/client-api";
 
 interface Import {
@@ -51,18 +54,18 @@ export default function ImportPage() {
     fetchImports();
   }, [session?.accessToken]);
 
-  if (loading) return <div className="shell">Loading...</div>;
+  if (loading) return <div className="page-shell">Loading...</div>;
 
   return (
-    <main className="shell">
-      <section className="appChrome workspaceStack">
+    <PageShell>
+      <section className="workspaceStack">
         <PageHeader
           eyebrow="Imports"
           title="Import history"
           subtitle="Review uploaded workbooks, confirm prepared transactions, or undo an import."
         />
 
-        <Link href="/import/new" className="primaryButton block text-center">
+        <Link href="/import/new" className="btn btn-primary btn-block">
           Upload Excel
         </Link>
 
@@ -95,6 +98,6 @@ export default function ImportPage() {
           </div>
         )}
       </section>
-    </main>
+    </PageShell>
   );
 }

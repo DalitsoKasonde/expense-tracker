@@ -153,10 +153,10 @@ export default function SavingsGroupsSettingsPage() {
             <span className="muted">Current balance and cycle contributions are shown separately.</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="primaryButton" type="button" onClick={() => setCreateOpen(true)}>
+            <button className="btn btn-primary" type="button" onClick={() => setCreateOpen(true)}>
               Create group
             </button>
-            <button className="ghostButton" type="button" onClick={() => setShareoutOpen(true)} disabled={groups.length === 0 || cashAccounts.length === 0}>
+            <button className="btn btn-ghost" type="button" onClick={() => setShareoutOpen(true)} disabled={groups.length === 0 || cashAccounts.length === 0}>
               Record share-out
             </button>
           </div>
@@ -170,22 +170,22 @@ export default function SavingsGroupsSettingsPage() {
             {loading ? <div className="muted">Loading groups...</div> : null}
             {!loading && groups.length === 0 ? <div className="muted">No savings groups yet.</div> : null}
             {groups.length ? (
-              <table className="min-w-full border-collapse text-sm">
+              <table className="dataTable">
                 <thead>
-                  <tr className="border-b border-outline text-left text-on-surface-soft">
-                    <th className="px-4 py-3 font-semibold">Name</th>
-                    <th className="px-4 py-3 font-semibold">Cycle</th>
-                    <th className="px-4 py-3 font-semibold">Balance</th>
-                    <th className="px-4 py-3 font-semibold">Contributed</th>
+                  <tr className="text-on-surface-soft">
+                    <th className="font-semibold">Name</th>
+                    <th className="font-semibold">Cycle</th>
+                    <th className="font-semibold">Balance</th>
+                    <th className="font-semibold">Contributed</th>
                   </tr>
                 </thead>
                 <tbody>
                   {groups.map((group) => (
-                    <tr key={group.id} className="border-b border-outline/70 last:border-b-0">
-                      <td className="px-4 py-3 font-semibold text-on-surface">{group.name}</td>
-                      <td className="px-4 py-3 text-on-surface-soft">{`${new Date(group.cycleStart).toLocaleDateString()} · ${group.cycleLengthMonths} months`}</td>
-                      <td className="px-4 py-3 text-on-surface">{formatMoney(group.currentBalance, userCurrency)}</td>
-                      <td className="px-4 py-3 text-on-surface-soft">{formatMoney(group.contributedMinor, userCurrency)}</td>
+                    <tr key={group.id}>
+                      <td data-label="Name" className="font-semibold text-on-surface">{group.name}</td>
+                      <td data-label="Cycle" className="text-on-surface-soft">{`${new Date(group.cycleStart).toLocaleDateString()} · ${group.cycleLengthMonths} months`}</td>
+                      <td data-label="Balance" className="text-on-surface">{formatMoney(group.currentBalance, userCurrency)}</td>
+                      <td data-label="Contributed" className="text-on-surface-soft">{formatMoney(group.contributedMinor, userCurrency)}</td>
                     </tr>
                   ))}
                 </tbody>

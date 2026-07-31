@@ -67,7 +67,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <PreferenceThemeSync />
-      <div className="min-h-screen lg:grid lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="min-h-dvh lg:grid lg:grid-cols-[260px_minmax(0,1fr)]">
         <SidebarNav />
         <div className="min-w-0">
           <TopNav initials={initials} email={session.user?.email} />
