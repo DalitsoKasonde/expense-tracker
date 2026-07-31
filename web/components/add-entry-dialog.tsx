@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { buildCategoryRows, type Category } from "@/lib/category-tree";
 import { addYearsToDate, isPastDate } from "@/lib/date-terms";
+import { supportsHistoricalBackfill } from "@/lib/historical-entries";
 import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
@@ -27,13 +29,6 @@ interface Account {
   accountType: string;
   accountClass: string;
   currency: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  categoryGroup: string;
-  parentId: string | null;
 }
 
 interface IncomeSource {
@@ -155,31 +150,6 @@ const entryTypeGroups: Array<{ label: string; options: EntryTypeOption[] }> = [
 ];
 
 const entryTypes = entryTypeGroups.flatMap((group) => group.options);
-
-function buildOrderedCategories(categories: Category[]) {
-  const byParent = new Map<string | null, Category[]>();
-  for (const category of categories) {
-    const key = category.parentId ?? null;
-    const bucket = byParent.get(key) ?? [];
-    bucket.push(category);
-    byParent.set(key, bucket);
-  }
-
-  for (const bucket of byParent.values()) {
-    bucket.sort((left, right) => left.name.localeCompare(right.name));
-  }
-
-  const ordered: Array<Category & { depth: number }> = [];
-  const visit = (parentId: string | null, depth: number) => {
-    for (const category of byParent.get(parentId) ?? []) {
-      ordered.push({ ...category, depth });
-      visit(category.id, depth + 1);
-    }
-  };
-
-  visit(null, 0);
-  return ordered;
-}
 
 function categoryGroupForEntryKind(entryKind: EntryKind) {
   switch (entryKind) {
@@ -409,7 +379,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
       ),
     [cashAccounts, formData.currency],
   );
-  const orderedCategories = useMemo(() => buildOrderedCategories(categories), [categories]);
+  const orderedCategories = useMemo(() => buildCategoryRows(categories), [categories]);
   const filteredCategories = useMemo(
     () =>
       orderedCategories.filter(
@@ -448,8 +418,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
       ? newInvestment.issueDate
       : formData.transactionDate;
   const historicalEligible =
-    (formData.entryKind === "saving_transfer" ||
-      formData.entryKind === "investment_buy") &&
+    supportsHistoricalBackfill(formData.entryKind) &&
     isPastDate(historicalDate, today());
   const historicalBackfill = historicalEligible && formData.historicalBackfill;
   const sourceAccountRequired =
@@ -976,7 +945,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                       Record as historical without a funding account
                     </strong>
                     <span className="mt-1 block text-xs text-on-surface-soft">
-                      Available only for dates before today. This records the past saving or investment without changing a source-account balance.
+                      Available only for dates before today. This records what happened without changing any account balance, so you can backfill past years you have no account history for.
                     </span>
                   </span>
                 </label>
@@ -1248,30 +1217,26 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                   <span className="muted">Use a category when it helps history and reports.</span>
                 </div>
 
-                <div className="chipScrollerContainer">
-                  <div className="chipScroller">
-                    <button
-                      type="button"
-                      className={formData.categoryId === "" ? "choiceChip active" : "choiceChip"}
-                      onClick={() => setFormData((current) => ({ ...current, categoryId: "" }))}
-                    >
-                      No category
-                    </button>
+                <div className="field">
+                  <label htmlFor="categoryId">Choose category</label>
+                  <select
+                    id="categoryId"
+                    name="categoryId"
+                    value={formData.categoryId}
+                    onChange={handleChange}
+                  >
+                    <option value="">No category</option>
                     {filteredCategories.map((category) => (
-                      <button
-                        key={category.id}
-                        type="button"
-                        className={
-                          formData.categoryId === category.id ? "choiceChip active" : "choiceChip"
-                        }
-                        onClick={() =>
-                          setFormData((current) => ({ ...current, categoryId: category.id }))
-                        }
-                      >
-                        {`${category.depth > 0 ? `${"· ".repeat(category.depth)}` : ""}${category.name}`}
-                      </button>
+                      <option key={category.id} value={category.id}>
+                        {category.path}
+                      </option>
                     ))}
-                  </div>
+                  </select>
+                  <span className="muted">
+                    {filteredCategories.length
+                      ? "Subcategories include their parent path so similar names stay clear."
+                      : "Create categories in Settings when you want more detailed reporting."}
+                  </span>
                 </div>
               </div>
             ) : null}

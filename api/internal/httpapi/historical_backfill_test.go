@@ -8,8 +8,14 @@ import (
 func TestValidateHistoricalBackfill(t *testing.T) {
 	now := time.Date(2026, time.July, 29, 8, 0, 0, 0, time.UTC)
 
-	t.Run("accepts past savings and investments", func(t *testing.T) {
-		for _, entryKind := range []string{"saving_transfer", "investment_buy"} {
+	t.Run("accepts past expenses, savings and investments", func(t *testing.T) {
+		for _, entryKind := range []string{
+			"saving_transfer",
+			"investment_buy",
+			"expense_living",
+			"expense_interest",
+			"expense_fee",
+		} {
 			if err := validateHistoricalBackfill(entryKind, "2026-07-28", now); err != nil {
 				t.Fatalf("expected %s to be accepted: %v", entryKind, err)
 			}
@@ -25,8 +31,17 @@ func TestValidateHistoricalBackfill(t *testing.T) {
 	})
 
 	t.Run("rejects unrelated entry kinds and malformed dates", func(t *testing.T) {
-		if err := validateHistoricalBackfill("expense_living", "2026-07-28", now); err == nil {
-			t.Fatal("expected expense backfill to be rejected")
+		// Income needs a destination account to land in, and transfers to a
+		// receivable need both sides, so neither can drop its account.
+		for _, entryKind := range []string{
+			"income_earned",
+			"income_borrowed",
+			"loan_receivable_advance",
+			"debt_principal_payment",
+		} {
+			if err := validateHistoricalBackfill(entryKind, "2026-07-28", now); err == nil {
+				t.Fatalf("expected %s backfill to be rejected", entryKind)
+			}
 		}
 		if err := validateHistoricalBackfill("saving_transfer", "28/07/2026", now); err == nil {
 			t.Fatal("expected malformed date to be rejected")

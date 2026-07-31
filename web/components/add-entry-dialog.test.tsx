@@ -45,6 +45,32 @@ describe("AddEntryDialog", () => {
     expect(screen.queryByText("Destination")).not.toBeInTheDocument();
   });
 
+  it("shows category hierarchy as readable paths", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          { id: "account-1", name: "Mobile Money", accountType: "mobile_money", accountClass: "asset", currency: "ZMW" },
+        ]);
+      }
+      if (path === "/v1/categories") {
+        return Promise.resolve([
+          { id: "bundles", name: "Data Bundles", categoryGroup: "expense", parentId: null },
+          { id: "weekly", name: "Weekly", categoryGroup: "expense", parentId: "bundles" },
+          { id: "salary", name: "Salary", categoryGroup: "income", parentId: null },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+
+    const picker = await screen.findByRole("combobox", { name: "Choose category" });
+    expect(picker).toHaveTextContent("Data Bundles");
+    expect(picker).toHaveTextContent("Data Bundles › Weekly");
+    expect(picker).not.toHaveTextContent("Salary");
+  });
+
   it("creates stocks and government bonds without leaving quick add", async () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "I bought an investment" })).toBeInTheDocument());
@@ -151,6 +177,49 @@ describe("AddEntryDialog", () => {
         }),
       }),
     );
+  });
+
+  it("records a past expense without a funding account", async () => {
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+    expect(screen.getByLabelText("Paid from")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2020-03-04" } });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /record as historical without a funding account/i,
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "250" } });
+    expect(screen.queryByLabelText("Paid from")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/transactions", {
+        method: "POST",
+        body: expect.objectContaining({
+          entryKind: "expense_living",
+          amount: 25000,
+          accountId: undefined,
+          historicalBackfill: true,
+        }),
+      }),
+    );
+  });
+
+  it("keeps the funding account required for a dated-today expense", async () => {
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+
+    // The checkbox only appears for past dates: a today-dated expense has to move
+    // money out of a real account.
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /record as historical without a funding account/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Paid from")).toBeRequired();
   });
 
   it("records money lent as a transfer into a receivable asset", async () => {
