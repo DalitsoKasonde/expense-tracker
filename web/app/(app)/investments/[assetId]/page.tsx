@@ -1,9 +1,11 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  Breadcrumbs,
+  ConfirmationDialog,
   FormDialog,
   PageHeader,
   PageShell,
@@ -11,6 +13,7 @@ import {
 import { useApiCall } from "@/lib/client-api";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { formatMoney } from "@/lib/format-money";
+import type { MarketStockDirectory } from "@/lib/market-data";
 
 type BondCashflowProjection = {
   id: string;
@@ -123,6 +126,7 @@ function inferLuSETicker(symbol: string | null | undefined, name: string) {
 export default function AssetDetailPage() {
   const params = useParams<{ assetId: string }>();
   const assetId = params?.assetId ?? "";
+  const router = useRouter();
   const apiCall = useApiCall();
   const apiCallRef = useRef(apiCall);
   apiCallRef.current = apiCall;
@@ -135,9 +139,14 @@ export default function AssetDetailPage() {
   const [actionStatus, setActionStatus] = useState("");
   const [actionError, setActionError] = useState("");
   const [marketQuote, setMarketQuote] = useState<MarketQuote | null>(null);
+  const [stockDirectory, setStockDirectory] = useState<MarketStockDirectory | null>(null);
   const [marketQuoteError, setMarketQuoteError] = useState("");
   const [loadingMarketQuote, setLoadingMarketQuote] = useState(false);
   const [savingAction, setSavingAction] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", symbol: "" });
   const [sellForm, setSellForm] = useState({
     cashAccountId: "",
     quantity: "",
@@ -256,6 +265,19 @@ export default function AssetDetailPage() {
     };
   }, [asset?.assetClass, assetId]);
 
+  useEffect(() => {
+    if (asset?.assetClass === "bond") return;
+    let ignore = false;
+    void apiCallRef.current<MarketStockDirectory>("/v1/market-data/luse")
+      .then((directory) => {
+        if (!ignore) setStockDirectory(directory ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      ignore = true;
+    };
+  }, [asset?.assetClass]);
+
   async function refreshHolding() {
     const result = await apiCallRef.current<AssetHolding>(`/v1/assets/${assetId}/holding`);
     setHolding(result);
@@ -271,6 +293,52 @@ export default function AssetDetailPage() {
             transaction.entryKind === "dividend_drip"),
       ),
     );
+  }
+
+  async function deleteInvestment() {
+    setDeleting(true);
+    setActionError("");
+    try {
+      await apiCallRef.current(`/v1/assets/${assetId}`, { method: "DELETE" });
+      router.push("/investments");
+      router.refresh();
+    } catch (error) {
+      setDeleteOpen(false);
+      setActionError(error instanceof Error ? error.message : "Failed to delete investment");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function openEditInvestment() {
+    setActionError("");
+    setEditForm({ name: asset?.name ?? "", symbol: asset?.symbol ?? "" });
+    setEditOpen(true);
+  }
+
+  async function saveInvestment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!asset) return;
+    setSavingAction(true);
+    setActionError("");
+    try {
+      await apiCallRef.current(`/v1/assets/${assetId}`, {
+        method: "PATCH",
+        body: {
+          name: editForm.name.trim(),
+          symbol: editForm.symbol.trim() || undefined,
+          assetClass: asset.assetClass,
+          currency: asset.currency,
+        },
+      });
+      setEditOpen(false);
+      setActionStatus("Investment details updated.");
+      reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to update investment");
+    } finally {
+      setSavingAction(false);
+    }
   }
 
   function openEquityDialog(dialog: Exclude<EquityDialog, null>) {
@@ -496,6 +564,13 @@ export default function AssetDetailPage() {
   return (
     <PageShell>
       <section className="workspaceStack">
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/today" },
+            { label: "Portfolio", href: "/investments" },
+            { label: asset.name },
+          ]}
+        />
         <PageHeader
           eyebrow="Portfolio"
           title={asset.name}
@@ -562,6 +637,24 @@ export default function AssetDetailPage() {
             ) : (
               <p className="muted">Review the payment schedule below and confirm each payment when it arrives.</p>
             )}
+            <button type="button" className="btn btn-ghost" onClick={openEditInvestment}>
+              Edit investment
+            </button>
+            <div className="border-t border-outline pt-4">
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={deleting}
+                onClick={() => {
+                  setActionError("");
+                  setDeleteOpen(true);
+                }}
+              >
+                Delete investment
+              </button>
+              <p className="muted mt-2">Only investments without later sales, dividends, reinvestments, or confirmed coupons can be deleted.</p>
+            </div>
+            {actionError && equityDialog === null ? <p className="field-error" role="alert">{actionError}</p> : null}
           </aside>
         </div>
 
@@ -715,6 +808,77 @@ export default function AssetDetailPage() {
             </span>
           </section>
         ) : null}
+
+        <ConfirmationDialog
+          open={deleteOpen}
+          title={`Delete ${asset.name}?`}
+          description="This removes the investment and reverses its purchase entries from account balances. This cannot be undone. Investments with later sales, dividends, reinvestments, or confirmed coupons cannot be deleted."
+          confirmLabel={deleting ? "Deleting..." : "Delete investment"}
+          destructive
+          onConfirm={() => void deleteInvestment()}
+          onClose={() => setDeleteOpen(false)}
+        />
+
+        <FormDialog
+          open={editOpen}
+          title={`Edit ${asset.name}`}
+          description="Correct the investment name or ticker. Currency stays fixed so existing purchase history remains consistent."
+          submitLabel="Save changes"
+          pending={savingAction}
+          error={actionError || undefined}
+          onSubmit={saveInvestment}
+          onClose={() => {
+            setEditOpen(false);
+            setActionError("");
+          }}
+        >
+          <div className="grid gap-4">
+            {asset.assetClass !== "bond" ? (
+              <div className="field">
+                <label htmlFor="edit-listed-stock">LuSE-listed stock (optional)</label>
+                <select
+                  id="edit-listed-stock"
+                  value={stockDirectory?.stocks.some((stock) => stock.ticker === editForm.symbol) ? editForm.symbol : ""}
+                  onChange={(event) => {
+                    const stock = stockDirectory?.stocks.find((item) => item.ticker === event.target.value);
+                    if (stock) setEditForm({ name: stock.name, symbol: stock.ticker });
+                  }}
+                >
+                  <option value="">Select a listed stock or edit manually</option>
+                  {(stockDirectory?.stocks ?? []).map((stock) => (
+                    <option key={stock.ticker} value={stock.ticker}>
+                      {stock.ticker} — {stock.name}
+                    </option>
+                  ))}
+                </select>
+                {stockDirectory ? (
+                  <span className="muted">Listings by <a href={stockDirectory.sourceUrl} target="_blank" rel="noreferrer">{stockDirectory.sourceName}</a>.</span>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="field">
+              <label htmlFor="edit-investment-name">Investment name</label>
+              <input
+                id="edit-investment-name"
+                value={editForm.name}
+                onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="edit-investment-symbol">{asset.assetClass === "bond" ? "Bond code (optional)" : "Ticker symbol (optional)"}</label>
+              <input
+                id="edit-investment-symbol"
+                value={editForm.symbol}
+                onChange={(event) => setEditForm((current) => ({ ...current, symbol: event.target.value.toUpperCase() }))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="edit-investment-currency">Currency</label>
+              <input id="edit-investment-currency" value={asset.currency} readOnly />
+            </div>
+          </div>
+        </FormDialog>
 
         <FormDialog
           open={equityDialog === "dividend"}

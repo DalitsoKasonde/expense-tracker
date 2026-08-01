@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  Breadcrumbs,
   PageHeader,
   PageShell,
 } from "@/components/ui";
@@ -11,9 +12,11 @@ import { useApiCall } from "@/lib/client-api";
 import { supportedCurrencies } from "@/lib/currencies";
 import { addYearsToDate, isPastDate } from "@/lib/date-terms";
 import { formatMoney } from "@/lib/format-money";
+import type { MarketStockDirectory } from "@/lib/market-data";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
 type InvestmentKind = "stock" | "bond";
+type StockMode = "existing" | "new";
 
 type Account = {
   id: string;
@@ -30,6 +33,10 @@ type InvestmentType = {
 
 type Asset = {
   id: string;
+  name: string;
+  symbol?: string | null;
+  assetClass: string;
+  currency: string;
 };
 
 function today() {
@@ -45,14 +52,18 @@ export default function AddInvestmentPage() {
   const router = useRouter();
   const { currency: userCurrency } = useUserCurrency();
   const [kind, setKind] = useState<InvestmentKind>("stock");
+  const [stockMode, setStockMode] = useState<StockMode>("existing");
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [investmentTypes, setInvestmentTypes] = useState<InvestmentType[]>([]);
+  const [stockDirectory, setStockDirectory] = useState<MarketStockDirectory | null>(null);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     name: "",
     symbol: "",
+    assetId: "",
     currency: userCurrency,
     accountId: "",
     quantity: "",
@@ -75,6 +86,11 @@ export default function AddInvestmentPage() {
     () => accounts.filter((account) => account.accountClass !== "liability" && account.currency === form.currency),
     [accounts, form.currency]
   );
+  const stockAssets = useMemo(
+    () => assets.filter((asset) => asset.assetClass !== "bond"),
+    [assets],
+  );
+  const selectedStock = stockAssets.find((asset) => asset.id === form.assetId);
   const historicalDate = kind === "stock" ? form.purchaseDate : form.issueDate;
   const historicalEligible = isPastDate(historicalDate, today());
   const historicalBackfill = historicalEligible && form.historicalBackfill;
@@ -88,18 +104,30 @@ export default function AddInvestmentPage() {
 
   useEffect(() => {
     let ignore = false;
+    void apiCall<MarketStockDirectory>("/v1/market-data/luse")
+      .then((directory) => {
+        if (!ignore) setStockDirectory(directory ?? null);
+      })
+      .catch(() => {
+        // Manual stock entry remains available when market data is offline.
+      });
     void Promise.all([
       apiCall<Account[]>("/v1/accounts"),
       apiCall<InvestmentType[]>("/v1/investment-types"),
+      apiCall<Asset[]>("/v1/assets"),
     ])
-      .then(([nextAccounts, nextTypes]) => {
+      .then(([nextAccounts, nextTypes, nextAssets]) => {
         if (ignore) return;
         const availableAccounts = (nextAccounts ?? []).filter((account) => account.accountClass !== "liability");
+        const availableStocks = (nextAssets ?? []).filter((asset) => asset.assetClass !== "bond");
         setAccounts(nextAccounts ?? []);
         setInvestmentTypes(nextTypes ?? []);
+        setAssets(nextAssets ?? []);
         setForm((current) => ({
           ...current,
           accountId: current.accountId || availableAccounts[0]?.id || "",
+          assetId: current.assetId || availableStocks[0]?.id || "",
+          currency: availableStocks[0]?.currency || current.currency,
         }));
       })
       .catch((caught) => {
@@ -129,6 +157,15 @@ export default function AddInvestmentPage() {
       return { ...current, accountId: matchingAccount?.id ?? "" };
     });
   }, [accounts, form.currency]);
+
+  useEffect(() => {
+    if (kind !== "stock" || stockMode !== "existing" || !selectedStock) return;
+    setForm((current) =>
+      current.currency === selectedStock.currency
+        ? current
+        : { ...current, currency: selectedStock.currency },
+    );
+  }, [kind, selectedStock, stockMode]);
 
   function update<K extends keyof typeof form>(name: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -183,18 +220,26 @@ export default function AddInvestmentPage() {
       throw new Error("Enter a quantity and unit price greater than zero.");
     }
 
-    const stockType = await ensureStockType();
-    const asset = await apiCall<Asset>("/v1/assets", {
-      method: "POST",
-      body: {
-        investmentTypeId: stockType.id,
-        assetClass: "stock",
-        name: form.name,
-        symbol: form.symbol.trim() || undefined,
-        currency: form.currency,
-      },
-    });
-    if (!asset) throw new Error("Could not create the stock");
+    let assetId = form.assetId;
+    let createdAssetId = "";
+    if (stockMode === "existing") {
+      if (!assetId) throw new Error("Select an existing stock.");
+    } else {
+      const stockType = await ensureStockType();
+      const asset = await apiCall<Asset>("/v1/assets", {
+        method: "POST",
+        body: {
+          investmentTypeId: stockType.id,
+          assetClass: "stock",
+          name: form.name,
+          symbol: form.symbol.trim() || undefined,
+          currency: form.currency,
+        },
+      });
+      if (!asset) throw new Error("Could not create the stock");
+      assetId = asset.id;
+      createdAssetId = asset.id;
+    }
 
     try {
       await apiCall("/v1/transactions", {
@@ -205,7 +250,7 @@ export default function AddInvestmentPage() {
           amount: Math.round(quantity * unitPriceMinor) + feesMinor,
           currency: form.currency,
           accountId: historicalBackfill ? undefined : form.accountId,
-          assetId: asset.id,
+          assetId,
           quantity,
           unitPrice: unitPriceMinor,
           fees: feesMinor || undefined,
@@ -215,7 +260,9 @@ export default function AddInvestmentPage() {
         },
       });
     } catch (caught) {
-      await apiCall(`/v1/assets/${asset.id}`, { method: "DELETE" }).catch(() => undefined);
+      if (createdAssetId) {
+        await apiCall(`/v1/assets/${createdAssetId}`, { method: "DELETE" }).catch(() => undefined);
+      }
       throw caught;
     }
   }
@@ -275,6 +322,13 @@ export default function AddInvestmentPage() {
   return (
     <PageShell width="narrow">
       <section className="grid gap-6">
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/today" },
+            { label: "Portfolio", href: "/investments" },
+            { label: "Add investment" },
+          ]}
+        />
         <PageHeader title="Add investment" subtitle="Track a stock holding or a government bond in its original currency." />
 
         <div className="rangeSwitcher" role="tablist" aria-label="Investment type">
@@ -287,21 +341,105 @@ export default function AddInvestmentPage() {
         </div>
 
         <form className="card grid gap-4" onSubmit={handleSubmit}>
-          <div className="field">
-            <label htmlFor="name">{kind === "stock" ? "Company or fund name" : "Bond name"}</label>
-            <input id="name" value={form.name} onChange={(event) => update("name", event.target.value)} placeholder={kind === "stock" ? "e.g. ZCCM Investments Holdings" : "e.g. GRZ 15-year bond"} required />
-          </div>
+          {kind === "stock" ? (
+            <div className="entryTypeGrid" aria-label="Stock purchase type">
+              <button
+                type="button"
+                className={stockMode === "existing" ? "entryTypeButton active" : "entryTypeButton"}
+                onClick={() => setStockMode("existing")}
+              >
+                Existing stock
+              </button>
+              <button
+                type="button"
+                className={stockMode === "new" ? "entryTypeButton active" : "entryTypeButton"}
+                onClick={() => setStockMode("new")}
+              >
+                New stock
+              </button>
+            </div>
+          ) : null}
+
+          {kind === "stock" && stockMode === "existing" ? (
+            <div className="field">
+              <label htmlFor="assetId">Stock</label>
+              <select
+                id="assetId"
+                value={form.assetId}
+                onChange={(event) => update("assetId", event.target.value)}
+                required
+                disabled={loadingOptions || stockAssets.length === 0}
+              >
+                <option value="">Select stock</option>
+                {stockAssets.map((asset) => (
+                  <option key={asset.id} value={asset.id}>
+                    {asset.name}{asset.symbol ? ` (${asset.symbol})` : ""} · {asset.currency}
+                  </option>
+                ))}
+              </select>
+              {!loadingOptions && stockAssets.length === 0 ? (
+                <span className="muted">No stocks exist yet. Choose New stock to create your first holding.</span>
+              ) : (
+                <span className="muted">This purchase will be added as a new lot under the selected holding.</span>
+              )}
+            </div>
+          ) : (
+            <>
+              {kind === "stock" ? (
+                <div className="field">
+                  <label htmlFor="listedStock">LuSE-listed stock (optional)</label>
+                  <select
+                    id="listedStock"
+                    value={stockDirectory?.stocks.some((stock) => stock.ticker === form.symbol) ? form.symbol : ""}
+                    onChange={(event) => {
+                      const stock = stockDirectory?.stocks.find((item) => item.ticker === event.target.value);
+                      if (!stock) return;
+                      setForm((current) => ({
+                        ...current,
+                        name: stock.name,
+                        symbol: stock.ticker,
+                        currency: stock.currency,
+                      }));
+                    }}
+                  >
+                    <option value="">Select a listed stock or enter it manually</option>
+                    {(stockDirectory?.stocks ?? []).map((stock) => (
+                      <option key={stock.ticker} value={stock.ticker}>
+                        {stock.ticker} — {stock.name}
+                      </option>
+                    ))}
+                  </select>
+                  {stockDirectory ? (
+                    <span className="muted">
+                      Listings by <a href={stockDirectory.sourceUrl} target="_blank" rel="noreferrer">{stockDirectory.sourceName}</a>. Selecting one fills the name, ticker, and currency.
+                    </span>
+                  ) : (
+                    <span className="muted">Enter the company and ticker manually if the directory is unavailable.</span>
+                  )}
+                </div>
+              ) : null}
+              <div className="field">
+                <label htmlFor="name">{kind === "stock" ? "Company or fund name" : "Bond name"}</label>
+                <input id="name" value={form.name} onChange={(event) => update("name", event.target.value)} placeholder={kind === "stock" ? "e.g. ZCCM Investments Holdings" : "e.g. GRZ 15-year bond"} required />
+              </div>
+            </>
+          )}
 
           <div className="splitFields">
-            <div className="field">
-              <label htmlFor="symbol">{kind === "stock" ? "Ticker symbol" : "Bond code (optional)"}</label>
-              <input id="symbol" value={form.symbol} onChange={(event) => update("symbol", event.target.value.toUpperCase())} placeholder={kind === "stock" ? "e.g. ZCCM-IH" : "e.g. GRZ-BOND"} />
-            </div>
+            {kind !== "stock" || stockMode === "new" ? (
+              <div className="field">
+                <label htmlFor="symbol">{kind === "stock" ? "Ticker symbol (optional)" : "Bond code (optional)"}</label>
+                <input id="symbol" value={form.symbol} onChange={(event) => update("symbol", event.target.value.toUpperCase())} placeholder={kind === "stock" ? "e.g. ZCCM-IH" : "e.g. GRZ-BOND"} />
+              </div>
+            ) : null}
             <div className="field">
               <label htmlFor="currency">Currency</label>
-              <select id="currency" value={form.currency} onChange={(event) => update("currency", event.target.value)}>
+              <select id="currency" value={form.currency} onChange={(event) => update("currency", event.target.value)} disabled={kind === "stock" && stockMode === "existing"}>
                 {supportedCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
               </select>
+              {kind === "stock" && stockMode === "existing" ? (
+                <span className="muted">Uses the selected stock&apos;s currency.</span>
+              ) : null}
             </div>
           </div>
 
@@ -433,8 +571,14 @@ export default function AddInvestmentPage() {
 
           {error ? <p className="muted">{error}</p> : null}
 
-          <button type="submit" className="btn btn-primary" disabled={saving || loadingOptions || (accountRequired && usableAccounts.length === 0)}>
-            {saving ? "Saving..." : kind === "stock" ? "Add stock holding" : "Add government bond"}
+          <button type="submit" className="btn btn-primary" disabled={saving || loadingOptions || (accountRequired && usableAccounts.length === 0) || (kind === "stock" && stockMode === "existing" && stockAssets.length === 0)}>
+            {saving
+              ? "Saving..."
+              : kind === "stock" && stockMode === "existing"
+                ? "Add purchase to stock"
+                : kind === "stock"
+                  ? "Add stock holding"
+                  : "Add government bond"}
           </button>
         </form>
 

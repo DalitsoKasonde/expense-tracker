@@ -1,6 +1,7 @@
 export * from "./account-card";
 export * from "./async-error-state";
 export * from "./badge";
+export * from "./breadcrumbs";
 export * from "./button";
 export * from "./card";
 export * from "./chart-card";

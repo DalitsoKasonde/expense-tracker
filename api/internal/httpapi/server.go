@@ -38,6 +38,7 @@ type Server struct {
 	bonds            *store.BondStore
 	unifiedDashboard *store.UnifiedDashboardStore
 	idempotencyKeys  *store.IdempotencyKeyStore
+	marketStocks     marketStockDirectoryCache
 }
 
 func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
@@ -170,6 +171,7 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.Get("/v1/assets/{id}/holding", s.getAssetHolding)
 		protected.Post("/v1/assets/{id}/sell", s.sellAssetFIFO)
 		protected.Post("/v1/assets/{id}/dividends", s.recordAssetDividend)
+		protected.Get("/v1/market-data/luse", s.listLuSEStocks)
 		protected.Get("/v1/market-data/luse/{ticker}", s.getLuSEQuote)
 
 		// Investments

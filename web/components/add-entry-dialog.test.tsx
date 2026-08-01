@@ -88,6 +88,13 @@ describe("AddEntryDialog", () => {
     expect(screen.queryByText("Create an asset first")).not.toBeInTheDocument();
   });
 
+  it("shows an explicit purchase date for stock purchases", async () => {
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I bought an investment" }));
+
+    expect(screen.getByLabelText("Purchase date")).toBeInTheDocument();
+  });
+
   it("calculates stock purchase cost from shares, price, and broker fees", async () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "I bought an investment" })).toBeInTheDocument());

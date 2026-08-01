@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -125,9 +127,68 @@ func (s *AssetStore) Update(ctx context.Context, id, userID, assetClass, name, c
 }
 
 func (s *AssetStore) Delete(ctx context.Context, id, userID string) error {
-	tag, err := s.db.Exec(ctx, `
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var lockedID string
+	err = tx.QueryRow(ctx, `
+		select id
+		from assets
+		where id = $1 and user_id = $2
+		for update
+	`, id, userID).Scan(&lockedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	var hasLaterActivity bool
+	err = tx.QueryRow(ctx, `
+		select exists (
+			select 1
+			from transactions
+			where user_id = $1
+			  and asset_id = $2
+			  and deleted_at is null
+			  and (
+				entry_kind <> 'investment_buy'
+				or origin_event_type is not null
+			  )
+		)
+	`, userID, id).Scan(&hasLaterActivity)
+	if err != nil {
+		return err
+	}
+	if hasLaterActivity {
+		return ErrAssetHasActivity
+	}
+
+	// Removing a mistaken investment must also reverse its purchases from cash
+	// balances. Transactions remain soft-deleted for auditability; asset lots,
+	// valuations, and projected bond records are removed by their FK cascades.
+	if _, err = tx.Exec(ctx, `
+		update transactions
+		set deleted_at = now(), updated_at = now()
+		where user_id = $1
+		  and asset_id = $2
+		  and deleted_at is null
+		  and entry_kind = 'investment_buy'
+	`, userID, id); err != nil {
+		return err
+	}
+
+	tag, err := tx.Exec(ctx, `
 		delete from assets
 		where id = $1 and user_id = $2
 	`, id, userID)
-	return normalizeExecResult(tag, err)
+	if err := normalizeExecResult(tag, err); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

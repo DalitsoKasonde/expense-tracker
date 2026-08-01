@@ -904,7 +904,9 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
 
                 {formData.entryKind === "investment_buy" && investmentMode === "bond" ? null : (
                   <div className="field">
-                    <label htmlFor="transactionDate">Date</label>
+                    <label htmlFor="transactionDate">
+                      {isStockPurchase ? "Purchase date" : "Date"}
+                    </label>
                     <input
                       id="transactionDate"
                       name="transactionDate"

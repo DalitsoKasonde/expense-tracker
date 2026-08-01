@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import {
+  Breadcrumbs,
   EmptyState,
   PageHeader,
   PageShell,
@@ -75,10 +76,16 @@ export default function InvestmentsPage() {
   return (
     <PageShell>
       <section className="workspaceStack">
+        <Breadcrumbs items={[{ label: "Home", href: "/today" }, { label: "Portfolio" }]} />
         <PageHeader
           eyebrow="Portfolio"
           title="Portfolio"
           subtitle={largestHolding ? `Largest holding: ${largestHolding.name}. See what you invested, what each holding is worth now, and how your money is allocated.` : "Add your first investment to track cost, current value, and allocation."}
+          actions={
+            <Link href="/investments/add" className="btn btn-primary">
+              Add investment
+            </Link>
+          }
         />
 
         {assets.length === 0 ? (

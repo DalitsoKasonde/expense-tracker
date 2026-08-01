@@ -1517,6 +1517,14 @@ func (s *Server) deleteAsset(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	if err := s.assets.Delete(r.Context(), id, claims.UserID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "investment not found", http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, store.ErrAssetHasActivity) {
+			http.Error(w, "investment cannot be deleted after sales, dividends, reinvestments, or confirmed coupons", http.StatusConflict)
+			return
+		}
 		http.Error(w, "failed to delete asset", http.StatusInternalServerError)
 		return
 	}
