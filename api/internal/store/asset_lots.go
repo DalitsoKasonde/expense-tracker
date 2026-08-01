@@ -24,12 +24,13 @@ type AssetLot struct {
 }
 
 type AssetHolding struct {
-	AssetID           string  `json:"assetId"`
-	Quantity          float64 `json:"quantity"`
-	TotalCost         int64   `json:"totalCost"`
-	AverageCostBasis  int64   `json:"avgCostBasis"`
-	UnrealizedPnL     int64   `json:"unrealizedPnl"`
-	CurrentValueMinor int64   `json:"currentValueMinor"`
+	AssetID           string     `json:"assetId"`
+	Quantity          float64    `json:"quantity"`
+	TotalCost         int64      `json:"totalCost"`
+	AverageCostBasis  int64      `json:"avgCostBasis"`
+	UnrealizedPnL     int64      `json:"unrealizedPnl"`
+	CurrentValueMinor int64      `json:"currentValueMinor"`
+	Lots              []AssetLot `json:"lots"`
 }
 
 type EquitySellInput struct {
@@ -203,6 +204,11 @@ func (s *AssetLotStore) GetAssetHolding(ctx context.Context, userID, assetID str
 	}
 
 	holding.UnrealizedPnL = holding.CurrentValueMinor - holding.TotalCost
+	lots, err := s.ListByAsset(ctx, userID, assetID)
+	if err != nil {
+		return holding, err
+	}
+	holding.Lots = lots
 	return holding, nil
 }
 

@@ -44,7 +44,22 @@ describe("AssetDetailPage", () => {
     mocks.apiCall.mockImplementation((path: string, options?: { method?: string }) => {
       if (path === "/v1/accounts") return Promise.resolve([]);
       if (path === "/v1/assets/asset-1/holding") {
-        return Promise.resolve({ quantity: 10, totalCost: 10_000, avgCostBasis: 1_000, unrealizedPnl: 1_000, currentValueMinor: 11_000 });
+        return Promise.resolve({
+          quantity: 10,
+          totalCost: 10_000,
+          avgCostBasis: 1_000,
+          unrealizedPnl: 1_000,
+          currentValueMinor: 11_000,
+          lots: [{
+            id: "lot-1",
+            quantity: 5,
+            remainingQuantity: 5,
+            unitPrice: 200,
+            fees: 12,
+            totalCost: 1012,
+            acquisitionDate: "2026-08-01",
+          }],
+        });
       }
       if (path.startsWith("/v1/transactions")) return Promise.resolve([]);
       if (path === "/v1/market-data/luse") {
@@ -89,5 +104,28 @@ describe("AssetDetailPage", () => {
       }),
     );
     expect(mocks.reload).toHaveBeenCalled();
+  });
+
+  it("shows each stock purchase lot with its one-off brokerage fee", async () => {
+    render(<AssetDetailPage />);
+
+    expect(await screen.findByRole("heading", { name: "Purchase lots" })).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByText("5.0000")).toHaveLength(2);
+    expect(within(table).getByText("ZMW 2.00")).toBeInTheDocument();
+    expect(within(table).getByText("ZMW 0.12")).toBeInTheDocument();
+    expect(within(table).getByText("ZMW 10.12")).toBeInTheDocument();
+    expect(within(table).getByText("ZMW 2.02")).toBeInTheDocument();
+    expect(screen.getByText("Average cost per share")).toBeInTheDocument();
+    expect(screen.getByText("Includes allocated brokerage fees.")).toBeInTheDocument();
+  });
+
+  it("links from an existing stock to the add-investment form", async () => {
+    render(<AssetDetailPage />);
+
+    expect(screen.getByRole("link", { name: /Add another investment/ })).toHaveAttribute(
+      "href",
+      "/investments/add",
+    );
   });
 });

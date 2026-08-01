@@ -59,6 +59,17 @@ interface AssetHolding {
   avgCostBasis: number;
   unrealizedPnl: number;
   currentValueMinor: number;
+  lots?: AssetLot[];
+}
+
+interface AssetLot {
+  id: string;
+  quantity: number;
+  remainingQuantity: number;
+  unitPrice: number;
+  fees: number;
+  totalCost: number;
+  acquisitionDate: string;
 }
 
 interface AssetTransaction {
@@ -95,6 +106,14 @@ function today() {
 
 function toMinor(value: string) {
   return Math.round((parseFloat(value || "0") || 0) * 100);
+}
+
+function formatPurchaseDate(value: string) {
+  return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function inferLuSETicker(symbol: string | null | undefined, name: string) {
@@ -605,10 +624,11 @@ export default function AssetDetailPage() {
               </div>
               {holding ? (
                 <div className="metricCard">
-                  <span className="metricCardLabel">Average price paid</span>
+                  <span className="metricCardLabel">Average cost per share</span>
                   <strong className="metricCardValue">
                     {formatMoney(holding.avgCostBasis, asset.currency)}
                   </strong>
+                  <span className="muted">Includes allocated brokerage fees.</span>
                 </div>
               ) : null}
             </div>
@@ -633,6 +653,10 @@ export default function AssetDetailPage() {
                   <span>Record a sale</span>
                   <small>Reduce the number of shares you own</small>
                 </button>
+                <Link href="/investments/add" className="investmentActionButton">
+                  <span>Add another investment</span>
+                  <small>Record another stock or government bond purchase</small>
+                </Link>
               </div>
             ) : (
               <p className="muted">Review the payment schedule below and confirm each payment when it arrives.</p>
@@ -657,6 +681,53 @@ export default function AssetDetailPage() {
             {actionError && equityDialog === null ? <p className="field-error" role="alert">{actionError}</p> : null}
           </aside>
         </div>
+
+        {asset.assetClass !== "bond" ? (
+          <section className="card settingsListPanel overflow-hidden">
+            <div className="settingsHeaderRow">
+              <div>
+                <p className="sectionKicker">Cost breakdown</p>
+                <h2 className="sectionHeading">Purchase lots</h2>
+                <p className="muted mt-1">Each purchase keeps its share price and one-off brokerage fee separate.</p>
+              </div>
+            </div>
+            {holding?.lots?.length ? (
+              <div className="overflow-x-auto">
+                <table className="dataTable">
+                  <thead>
+                    <tr>
+                      <th>Purchase date</th>
+                      <th className="numeric">Shares bought</th>
+                      <th className="numeric">Remaining</th>
+                      <th className="numeric">Share price</th>
+                      <th className="numeric">Brokerage fee</th>
+                      <th className="numeric">Total paid</th>
+                      <th className="numeric">Cost per share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {holding.lots.map((lot) => {
+                      const effectiveCost = lot.quantity > 0 ? Math.round(lot.totalCost / lot.quantity) : 0;
+                      return (
+                        <tr key={lot.id}>
+                          <td data-label="Purchase date" className="font-semibold text-on-surface">{formatPurchaseDate(lot.acquisitionDate)}</td>
+                          <td data-label="Shares bought" className="numeric">{lot.quantity.toFixed(4)}</td>
+                          <td data-label="Remaining" className="numeric">{lot.remainingQuantity.toFixed(4)}</td>
+                          <td data-label="Share price" className="numeric">{formatMoney(lot.unitPrice, asset.currency)}</td>
+                          <td data-label="Brokerage fee" className="numeric">{formatMoney(lot.fees, asset.currency)}</td>
+                          <td data-label="Total paid" className="numeric font-semibold">{formatMoney(lot.totalCost, asset.currency)}</td>
+                          <td data-label="Cost per share" className="numeric">{formatMoney(effectiveCost, asset.currency)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted">No purchase lots have been recorded for this stock yet.</p>
+            )}
+          </section>
+        ) : null}
 
         {asset.assetClass !== "bond" ? (
           <section className="card dividendHistoryCard">
