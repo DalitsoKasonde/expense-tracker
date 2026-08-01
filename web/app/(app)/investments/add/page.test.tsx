@@ -37,6 +37,19 @@ describe("AddInvestmentPage", () => {
           { id: "stock-1", name: "Zanaco", symbol: "ZANACO", assetClass: "stock", currency: "ZMW" },
         ]);
       }
+      if (path === "/v1/bonds") {
+        return Promise.resolve([
+          {
+            assetId: "bond-1",
+            name: "GRZ 3-year bond",
+            symbol: "GRZ-3Y",
+            currency: "ZMW",
+            issueDate: "2026-01-01",
+            maturityDate: "2029-01-01",
+            couponRateBps: 1500,
+          },
+        ]);
+      }
       if (path === "/v1/market-data/luse") {
         return Promise.resolve({
           stocks: [{ ticker: "ATEL", name: "Airtel Networks Zambia", currency: "ZMW", priceMinor: 19_499 }],
@@ -45,6 +58,7 @@ describe("AddInvestmentPage", () => {
           sourceUrl: "https://www.mansamarkets.com/zambia/",
         });
       }
+      if (path === "/v1/bonds/bond-1/purchases" && options?.method === "POST") return Promise.resolve({});
       if (path === "/v1/transactions" && options?.method === "POST") return Promise.resolve({});
       return Promise.reject(new Error(`unexpected path ${path}`));
     });
@@ -87,5 +101,31 @@ describe("AddInvestmentPage", () => {
     expect(screen.getByLabelText("Company or fund name")).toHaveValue("Airtel Networks Zambia");
     expect(screen.getByLabelText("Ticker symbol (optional)")).toHaveValue("ATEL");
     expect(screen.getByRole("combobox", { name: "Currency" })).toHaveValue("ZMW");
+  });
+
+  it("adds principal to an existing government bond", async () => {
+    render(<AddInvestmentPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Government bond" }));
+    fireEvent.click(screen.getByRole("button", { name: "Existing bond" }));
+
+    expect(screen.getByLabelText("Government bond")).toHaveValue("bond-1");
+    expect(screen.getByLabelText("Currency")).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Additional principal (ZMW)"), { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText("Purchase charge / fee (ZMW)"), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add purchase to bond" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/bonds/bond-1/purchases", {
+        method: "POST",
+        body: expect.objectContaining({
+          cashAccountId: "cash-zmw",
+          principalMinor: 100000,
+          purchaseFeeMinor: 1000,
+          purchaseDate: expect.any(String),
+        }),
+      }),
+    );
+    expect(mocks.push).toHaveBeenCalledWith("/investments");
   });
 });

@@ -146,6 +146,41 @@ func (s *Server) createBond(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, position)
 }
 
+func (s *Server) addBondPurchase(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req store.AddBondPurchaseInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.HistoricalBackfill {
+		if err := validateHistoricalBackfill("investment_buy", req.PurchaseDate, time.Now()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	position, err := s.bonds.AddPurchase(r.Context(), claims.UserID, chi.URLParam(r, "assetId"), req)
+	if err != nil {
+		switch err {
+		case store.ErrNotFound:
+			http.Error(w, "bond or funding account not found", http.StatusNotFound)
+		case store.ErrConflict:
+			http.Error(w, "bond has already matured or been redeemed", http.StatusConflict)
+		default:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, position)
+}
+
 func (s *Server) getBondProjection(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {

@@ -17,6 +17,7 @@ import { useUserCurrency } from "@/lib/use-user-currency";
 
 type InvestmentKind = "stock" | "bond";
 type StockMode = "existing" | "new";
+type BondMode = "existing" | "new";
 
 type Account = {
   id: string;
@@ -39,6 +40,16 @@ type Asset = {
   currency: string;
 };
 
+type BondPosition = {
+  assetId: string;
+  name: string;
+  symbol?: string | null;
+  currency: string;
+  issueDate: string;
+  maturityDate: string;
+  couponRateBps: number;
+};
+
 function today() {
   return new Date().toISOString().split("T")[0];
 }
@@ -53,8 +64,10 @@ export default function AddInvestmentPage() {
   const { currency: userCurrency } = useUserCurrency();
   const [kind, setKind] = useState<InvestmentKind>("stock");
   const [stockMode, setStockMode] = useState<StockMode>("existing");
+  const [bondMode, setBondMode] = useState<BondMode>("new");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [bonds, setBonds] = useState<BondPosition[]>([]);
   const [investmentTypes, setInvestmentTypes] = useState<InvestmentType[]>([]);
   const [stockDirectory, setStockDirectory] = useState<MarketStockDirectory | null>(null);
   const [loadingOptions, setLoadingOptions] = useState(true);
@@ -64,6 +77,7 @@ export default function AddInvestmentPage() {
     name: "",
     symbol: "",
     assetId: "",
+    bondAssetId: "",
     currency: userCurrency,
     accountId: "",
     quantity: "",
@@ -91,10 +105,11 @@ export default function AddInvestmentPage() {
     [assets],
   );
   const selectedStock = stockAssets.find((asset) => asset.id === form.assetId);
-  const historicalDate = kind === "stock" ? form.purchaseDate : form.issueDate;
+  const selectedBond = bonds.find((bond) => bond.assetId === form.bondAssetId);
+  const historicalDate = kind === "stock" || bondMode === "existing" ? form.purchaseDate : form.issueDate;
   const historicalEligible = isPastDate(historicalDate, today());
   const historicalBackfill = historicalEligible && form.historicalBackfill;
-  const accountRequired = kind === "bond" || !historicalBackfill;
+  const accountRequired = (kind === "bond" && bondMode === "new") || !historicalBackfill;
 
   useEffect(() => {
     if (!historicalEligible && form.historicalBackfill) {
@@ -115,18 +130,21 @@ export default function AddInvestmentPage() {
       apiCall<Account[]>("/v1/accounts"),
       apiCall<InvestmentType[]>("/v1/investment-types"),
       apiCall<Asset[]>("/v1/assets"),
+      apiCall<BondPosition[]>("/v1/bonds").catch(() => []),
     ])
-      .then(([nextAccounts, nextTypes, nextAssets]) => {
+      .then(([nextAccounts, nextTypes, nextAssets, nextBonds]) => {
         if (ignore) return;
         const availableAccounts = (nextAccounts ?? []).filter((account) => account.accountClass !== "liability");
         const availableStocks = (nextAssets ?? []).filter((asset) => asset.assetClass !== "bond");
         setAccounts(nextAccounts ?? []);
         setInvestmentTypes(nextTypes ?? []);
         setAssets(nextAssets ?? []);
+        setBonds(nextBonds ?? []);
         setForm((current) => ({
           ...current,
           accountId: current.accountId || availableAccounts[0]?.id || "",
           assetId: current.assetId || availableStocks[0]?.id || "",
+          bondAssetId: current.bondAssetId || nextBonds?.[0]?.assetId || "",
           currency: availableStocks[0]?.currency || current.currency,
         }));
       })
@@ -166,6 +184,15 @@ export default function AddInvestmentPage() {
         : { ...current, currency: selectedStock.currency },
     );
   }, [kind, selectedStock, stockMode]);
+
+  useEffect(() => {
+    if (kind !== "bond" || bondMode !== "existing" || !selectedBond) return;
+    setForm((current) =>
+      current.currency === selectedBond.currency
+        ? current
+        : { ...current, currency: selectedBond.currency },
+    );
+  }, [bondMode, kind, selectedBond]);
 
   function update<K extends keyof typeof form>(name: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -270,6 +297,25 @@ export default function AddInvestmentPage() {
   async function createBond() {
     const principalMinor = toMinor(form.principal);
     const purchaseFeeMinor = toMinor(form.bondFee);
+    if (bondMode === "existing") {
+      if (!form.bondAssetId) throw new Error("Select an existing government bond.");
+      if (principalMinor <= 0 || purchaseFeeMinor < 0) {
+        throw new Error("Enter a principal greater than zero and a non-negative fee.");
+      }
+      await apiCall(`/v1/bonds/${form.bondAssetId}/purchases`, {
+        method: "POST",
+        body: {
+          cashAccountId: historicalBackfill ? undefined : form.accountId,
+          principalMinor,
+          purchaseFeeMinor,
+          purchaseDate: form.purchaseDate,
+          note: form.note.trim() || undefined,
+          historicalBackfill: historicalBackfill || undefined,
+        },
+      });
+      return;
+    }
+
     const couponRate = Number.parseFloat(form.couponRate);
     const termYears = Number.parseInt(form.termYears, 10);
     if (principalMinor <= 0 || purchaseFeeMinor < 0 || !Number.isFinite(couponRate) || couponRate < 0) {
@@ -345,17 +391,27 @@ export default function AddInvestmentPage() {
             <div className="entryTypeGrid" aria-label="Stock purchase type">
               <button
                 type="button"
+                className={stockMode === "new" ? "entryTypeButton active" : "entryTypeButton"}
+                onClick={() => setStockMode("new")}
+              >
+                New stock
+              </button>
+              <button
+                type="button"
                 className={stockMode === "existing" ? "entryTypeButton active" : "entryTypeButton"}
                 onClick={() => setStockMode("existing")}
               >
                 Existing stock
               </button>
-              <button
-                type="button"
-                className={stockMode === "new" ? "entryTypeButton active" : "entryTypeButton"}
-                onClick={() => setStockMode("new")}
-              >
-                New stock
+            </div>
+          ) : null}
+          {kind === "bond" ? (
+            <div className="entryTypeGrid" aria-label="Government bond purchase type">
+              <button type="button" className={bondMode === "new" ? "entryTypeButton active" : "entryTypeButton"} onClick={() => setBondMode("new")}>
+                New bond
+              </button>
+              <button type="button" className={bondMode === "existing" ? "entryTypeButton active" : "entryTypeButton"} onClick={() => setBondMode("existing")}>
+                Existing bond
               </button>
             </div>
           ) : null}
@@ -381,6 +437,23 @@ export default function AddInvestmentPage() {
                 <span className="muted">No stocks exist yet. Choose New stock to create your first holding.</span>
               ) : (
                 <span className="muted">This purchase will be added as a new lot under the selected holding.</span>
+              )}
+            </div>
+          ) : kind === "bond" && bondMode === "existing" ? (
+            <div className="field">
+              <label htmlFor="bondAssetId">Government bond</label>
+              <select id="bondAssetId" value={form.bondAssetId} onChange={(event) => update("bondAssetId", event.target.value)} required disabled={loadingOptions || bonds.length === 0}>
+                <option value="">Select bond</option>
+                {bonds.map((bond) => (
+                  <option key={bond.assetId} value={bond.assetId}>
+                    {bond.name}{bond.symbol ? ` (${bond.symbol})` : ""} · matures {bond.maturityDate} · {bond.currency}
+                  </option>
+                ))}
+              </select>
+              {!loadingOptions && bonds.length === 0 ? (
+                <span className="muted">No government bonds exist yet. Choose New bond to create your first holding.</span>
+              ) : (
+                <span className="muted">The additional principal will update this bond&apos;s future coupons and maturity value.</span>
               )}
             </div>
           ) : (
@@ -426,7 +499,7 @@ export default function AddInvestmentPage() {
           )}
 
           <div className="splitFields">
-            {kind !== "stock" || stockMode === "new" ? (
+            {(kind === "stock" && stockMode === "new") || (kind === "bond" && bondMode === "new") ? (
               <div className="field">
                 <label htmlFor="symbol">{kind === "stock" ? "Ticker symbol (optional)" : "Bond code (optional)"}</label>
                 <input id="symbol" value={form.symbol} onChange={(event) => update("symbol", event.target.value.toUpperCase())} placeholder={kind === "stock" ? "e.g. ZCCM-IH" : "e.g. GRZ-BOND"} />
@@ -434,16 +507,16 @@ export default function AddInvestmentPage() {
             ) : null}
             <div className="field">
               <label htmlFor="currency">Currency</label>
-              <select id="currency" value={form.currency} onChange={(event) => update("currency", event.target.value)} disabled={kind === "stock" && stockMode === "existing"}>
+              <select id="currency" value={form.currency} onChange={(event) => update("currency", event.target.value)} disabled={(kind === "stock" && stockMode === "existing") || (kind === "bond" && bondMode === "existing")}>
                 {supportedCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
               </select>
-              {kind === "stock" && stockMode === "existing" ? (
-                <span className="muted">Uses the selected stock&apos;s currency.</span>
+              {(kind === "stock" && stockMode === "existing") || (kind === "bond" && bondMode === "existing") ? (
+                <span className="muted">Uses the selected {kind === "stock" ? "stock" : "bond"}&apos;s currency.</span>
               ) : null}
             </div>
           </div>
 
-          {historicalBackfill && kind === "stock" ? (
+          {historicalBackfill && (kind === "stock" || bondMode === "existing") ? (
             <div className="rounded-md border border-primary/30 bg-primary-softer p-4">
               <strong className="block text-sm text-on-surface">Funding account not required</strong>
               <span className="mt-1 block text-xs text-on-surface-soft">
@@ -453,13 +526,13 @@ export default function AddInvestmentPage() {
           ) : (
             <div className="field">
               <label htmlFor="accountId">
-                {kind === "stock" ? "Paid from account" : "Coupon and maturity account"}
+                {kind === "stock" || bondMode === "existing" ? "Paid from account" : "Coupon and maturity account"}
               </label>
               <select id="accountId" value={form.accountId} onChange={(event) => update("accountId", event.target.value)} required={accountRequired} disabled={loadingOptions || usableAccounts.length === 0}>
                 <option value="">Select an account</option>
                 {usableAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}
               </select>
-              {historicalBackfill && kind === "bond" ? (
+              {historicalBackfill && kind === "bond" && bondMode === "new" ? (
                 <span className="muted">
                   Used for coupons and maturity only; the historical purchase is not deducted.
                 </span>
@@ -512,6 +585,28 @@ export default function AddInvestmentPage() {
               <div className="field">
                 <label htmlFor="note">Note (optional)</label>
                 <input id="note" value={form.note} onChange={(event) => update("note", event.target.value)} placeholder="Broker, order reference, or context" />
+              </div>
+            </>
+          ) : bondMode === "existing" ? (
+            <>
+              <div className="splitFields">
+                <div className="field">
+                  <label htmlFor="principal">Additional principal ({form.currency})</label>
+                  <input id="principal" type="number" min="0" step="0.01" value={form.principal} onChange={(event) => update("principal", event.target.value)} required />
+                </div>
+                <div className="field">
+                  <label htmlFor="bondFee">Purchase charge / fee ({form.currency})</label>
+                  <input id="bondFee" type="number" min="0" step="0.01" value={form.bondFee} onChange={(event) => update("bondFee", event.target.value)} />
+                  <span className="muted">Total deducted: {formatMoney(toMinor(form.principal) + toMinor(form.bondFee), form.currency)}</span>
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="purchaseDate">Purchase date</label>
+                <input id="purchaseDate" type="date" value={form.purchaseDate} onChange={(event) => update("purchaseDate", event.target.value)} required />
+              </div>
+              <div className="field">
+                <label htmlFor="note">Note (optional)</label>
+                <input id="note" value={form.note} onChange={(event) => update("note", event.target.value)} placeholder="Broker, auction, order reference, or context" />
               </div>
             </>
           ) : (
@@ -571,14 +666,16 @@ export default function AddInvestmentPage() {
 
           {error ? <p className="muted">{error}</p> : null}
 
-          <button type="submit" className="btn btn-primary" disabled={saving || loadingOptions || (accountRequired && usableAccounts.length === 0) || (kind === "stock" && stockMode === "existing" && stockAssets.length === 0)}>
+          <button type="submit" className="btn btn-primary" disabled={saving || loadingOptions || (accountRequired && usableAccounts.length === 0) || (kind === "stock" && stockMode === "existing" && stockAssets.length === 0) || (kind === "bond" && bondMode === "existing" && bonds.length === 0)}>
             {saving
               ? "Saving..."
               : kind === "stock" && stockMode === "existing"
                 ? "Add purchase to stock"
                 : kind === "stock"
                   ? "Add stock holding"
-                  : "Add government bond"}
+                  : bondMode === "existing"
+                    ? "Add purchase to bond"
+                    : "Add government bond"}
           </button>
         </form>
 

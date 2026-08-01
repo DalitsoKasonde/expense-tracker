@@ -73,6 +73,15 @@ type CreateBondInput struct {
 	HistoricalBackfill     bool    `json:"historicalBackfill"`
 }
 
+type AddBondPurchaseInput struct {
+	CashAccountID      string `json:"cashAccountId"`
+	PrincipalMinor     int64  `json:"principalMinor"`
+	PurchaseFeeMinor   int64  `json:"purchaseFeeMinor"`
+	PurchaseDate       string `json:"purchaseDate"`
+	Note               string `json:"note"`
+	HistoricalBackfill bool   `json:"historicalBackfill"`
+}
+
 type ConfirmBondCouponInput struct {
 	CashflowID         string `json:"-"`
 	CashAccountID      string `json:"cashAccountId"`
@@ -217,6 +226,140 @@ func (s *BondStore) Create(ctx context.Context, userID string, input CreateBondI
 		return BondPosition{}, err
 	}
 
+	return position, nil
+}
+
+func (s *BondStore) AddPurchase(ctx context.Context, userID, assetID string, input AddBondPurchaseInput) (BondPosition, error) {
+	if err := validateAddBondPurchaseInput(input); err != nil {
+		return BondPosition{}, err
+	}
+
+	purchaseDate, _ := time.Parse(dateLayout, input.PurchaseDate)
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return BondPosition{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var position BondPosition
+	err = tx.QueryRow(ctx, `
+		select bp.asset_id, a.user_id, a.name, a.symbol, a.currency, bp.cash_account_id,
+		       bp.principal_minor, bp.purchase_fee_minor, bp.coupon_rate_bps,
+		       bp.issue_date::text, bp.maturity_date::text, bp.coupon_frequency_per_year,
+		       bp.reinvestment_cutoff_date::text, bp.created_at::text, bp.updated_at::text
+		from bond_positions bp
+		join assets a on a.id = bp.asset_id
+		where bp.asset_id = $1 and a.user_id = $2 and a.archived_at is null
+		for update
+	`, assetID, userID).Scan(
+		&position.AssetID, &position.UserID, &position.Name, &position.Symbol, &position.Currency,
+		&position.CashAccountID, &position.PrincipalMinor, &position.PurchaseFeeMinor,
+		&position.CouponRateBps, &position.IssueDate, &position.MaturityDate,
+		&position.CouponFrequencyPerYear, &position.ReinvestmentCutoffDate,
+		&position.CreatedAt, &position.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return BondPosition{}, ErrNotFound
+	}
+	if err != nil {
+		return BondPosition{}, err
+	}
+
+	issueDate, _ := time.Parse(dateLayout, position.IssueDate)
+	maturityDate, _ := time.Parse(dateLayout, position.MaturityDate)
+	if purchaseDate.Before(issueDate) {
+		return BondPosition{}, errors.New("purchaseDate must be on or after the bond issue date")
+	}
+	if !purchaseDate.Before(maturityDate) {
+		return BondPosition{}, errors.New("purchaseDate must be before the bond maturity date")
+	}
+
+	if !input.HistoricalBackfill {
+		var accountExists bool
+		if err := tx.QueryRow(ctx, `
+			select exists(
+				select 1 from accounts
+				where id = $1 and user_id = $2 and archived_at is null
+				  and account_class <> 'liability' and currency = $3
+			)
+		`, input.CashAccountID, userID, position.Currency).Scan(&accountExists); err != nil {
+			return BondPosition{}, err
+		}
+		if !accountExists {
+			return BondPosition{}, ErrNotFound
+		}
+	}
+
+	var redemptionProjected bool
+	if err := tx.QueryRow(ctx, `
+		select exists(
+			select 1 from bond_cashflows
+			where asset_id = $1 and event_type = 'principal_redemption' and status = 'projected'
+		)
+	`, assetID).Scan(&redemptionProjected); err != nil {
+		return BondPosition{}, err
+	}
+	if !redemptionProjected {
+		return BondPosition{}, ErrConflict
+	}
+
+	couponIncrease := roundedCouponMinor(input.PrincipalMinor, position.CouponRateBps, position.CouponFrequencyPerYear)
+	if _, err := tx.Exec(ctx, `
+		update bond_cashflows
+		set gross_amount_minor = gross_amount_minor + $2,
+		    net_amount_minor = net_amount_minor + $2,
+		    updated_at = now()
+		where asset_id = $1 and event_type = 'coupon' and status = 'projected' and scheduled_date >= $3
+	`, assetID, couponIncrease, input.PurchaseDate); err != nil {
+		return BondPosition{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+		update bond_cashflows
+		set gross_amount_minor = gross_amount_minor + $2,
+		    net_amount_minor = net_amount_minor + $2,
+		    updated_at = now()
+		where asset_id = $1 and event_type = 'principal_redemption' and status = 'projected'
+	`, assetID, input.PrincipalMinor); err != nil {
+		return BondPosition{}, err
+	}
+
+	purchaseAccountID := any(input.CashAccountID)
+	purchaseSource := "manual"
+	if input.HistoricalBackfill {
+		purchaseAccountID = nil
+		purchaseSource = "historical_backfill"
+	}
+	note := strings.TrimSpace(input.Note)
+	if note == "" {
+		note = fmt.Sprintf("Added to government bond %s", position.Name)
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into transactions (
+			user_id, transaction_date, entry_kind, amount, currency, account_id, asset_id,
+			quantity, unit_price, fees, note, source
+		) values ($1, $2, 'investment_buy', $3, $4, $5, $6, 1, $7, $8, $9, $10)
+	`, userID, input.PurchaseDate, input.PrincipalMinor+input.PurchaseFeeMinor, position.Currency,
+		purchaseAccountID, assetID, input.PrincipalMinor, input.PurchaseFeeMinor, note, purchaseSource); err != nil {
+		return BondPosition{}, err
+	}
+
+	err = tx.QueryRow(ctx, `
+		update bond_positions
+		set principal_minor = principal_minor + $2,
+		    purchase_fee_minor = purchase_fee_minor + $3,
+		    updated_at = now()
+		where asset_id = $1
+		returning principal_minor, purchase_fee_minor, updated_at::text
+	`, assetID, input.PrincipalMinor, input.PurchaseFeeMinor).Scan(
+		&position.PrincipalMinor, &position.PurchaseFeeMinor, &position.UpdatedAt,
+	)
+	if err != nil {
+		return BondPosition{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return BondPosition{}, err
+	}
 	return position, nil
 }
 
@@ -763,6 +906,25 @@ func validateBondInput(input CreateBondInput) error {
 		return errors.New("reinvestmentCutoffDate must be on or before maturityDate")
 	}
 
+	return nil
+}
+
+func validateAddBondPurchaseInput(input AddBondPurchaseInput) error {
+	if !input.HistoricalBackfill && strings.TrimSpace(input.CashAccountID) == "" {
+		return errors.New("cashAccountId is required")
+	}
+	if input.PrincipalMinor <= 0 {
+		return errors.New("principalMinor must be greater than zero")
+	}
+	if input.PurchaseFeeMinor < 0 {
+		return errors.New("purchaseFeeMinor must be zero or greater")
+	}
+	if input.PurchaseFeeMinor > int64(^uint64(0)>>1)-input.PrincipalMinor {
+		return errors.New("principalMinor plus purchaseFeeMinor is too large")
+	}
+	if _, err := time.Parse(dateLayout, input.PurchaseDate); err != nil {
+		return errors.New("purchaseDate must use YYYY-MM-DD")
+	}
 	return nil
 }
 

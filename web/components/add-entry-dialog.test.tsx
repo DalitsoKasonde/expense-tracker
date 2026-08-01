@@ -77,7 +77,7 @@ describe("AddEntryDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "I bought an investment" }));
 
     expect(screen.getByRole("button", { name: "New stock" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Government bond" }));
+    fireEvent.click(screen.getByRole("button", { name: "New government bond" }));
     expect(screen.getByLabelText("Bond name")).toBeInTheDocument();
     expect(screen.getByLabelText("Annual coupon rate (%)")).toBeInTheDocument();
     expect(screen.getByLabelText("Purchase charge / fee")).toBeInTheDocument();
@@ -101,11 +101,106 @@ describe("AddEntryDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "I bought an investment" }));
 
     fireEvent.change(screen.getByLabelText("Shares purchased"), { target: { value: "10" } });
-    fireEvent.change(screen.getByLabelText("Price per share"), { target: { value: "250" } });
-    fireEvent.change(screen.getByLabelText("Broker fees"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/Price per share/), { target: { value: "250" } });
+    fireEvent.change(screen.getByLabelText(/Broker fees/), { target: { value: "10" } });
 
     expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Calculated stock purchase total")).toHaveTextContent(/2,510\.00/);
+  });
+
+  it("mirrors the portfolio form's listed-stock picker and currency matching", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          { id: "zmw-account", name: "Kwacha account", accountType: "bank", accountClass: "asset", currency: "ZMW" },
+          { id: "usd-account", name: "Dollar account", accountType: "bank", accountClass: "asset", currency: "USD" },
+        ]);
+      }
+      if (path === "/v1/market-data/luse") {
+        return Promise.resolve({
+          stocks: [{ ticker: "TEST", name: "Test Holdings", currency: "USD", priceMinor: 1250 }],
+          updatedAt: "2026-08-01T00:00:00Z",
+          sourceName: "Mansa",
+          sourceUrl: "https://example.com",
+        });
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I bought an investment" }));
+
+    fireEvent.change(screen.getByLabelText("LuSE-listed stock (optional)"), {
+      target: { value: "TEST" },
+    });
+
+    expect(screen.getByLabelText("Company or fund name")).toHaveValue("Test Holdings");
+    expect(screen.getByLabelText("Ticker symbol (optional)")).toHaveValue("TEST");
+    await waitFor(() => expect(screen.getByLabelText("Currency")).toHaveValue("USD"));
+    expect(screen.getByLabelText("Paid from account")).toHaveValue("usd-account");
+  });
+
+  it("uses an existing stock's currency and adds the purchase as a new lot", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          { id: "zmw-account", name: "Kwacha account", accountType: "bank", accountClass: "asset", currency: "ZMW" },
+          { id: "usd-account", name: "Dollar account", accountType: "bank", accountClass: "asset", currency: "USD" },
+        ]);
+      }
+      if (path === "/v1/assets") {
+        return Promise.resolve([
+          { id: "stock-1", name: "Existing Holding", symbol: "EX", assetClass: "stock", currency: "USD" },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I bought an investment" }));
+
+    expect(screen.getByLabelText("Stock")).toHaveValue("stock-1");
+    expect(screen.getByLabelText("Currency")).toHaveValue("USD");
+    expect(screen.getByLabelText("Currency")).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText("Paid from account")).toHaveValue("usd-account"));
+    expect(screen.getByText(/new lot under the selected holding/i)).toBeInTheDocument();
+  });
+
+  it("adds principal to an existing government bond from quick add", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          { id: "account-1", name: "Main bank", accountType: "bank", accountClass: "asset", currency: "ZMW" },
+        ]);
+      }
+      if (path === "/v1/bonds") {
+        return Promise.resolve([
+          { assetId: "bond-1", name: "GRZ 3-year bond", symbol: "GRZ-3Y", currency: "ZMW", maturityDate: "2029-01-01" },
+        ]);
+      }
+      if (path === "/v1/bonds/bond-1/purchases") return Promise.resolve({});
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I bought an investment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Existing government bond" }));
+
+    expect(screen.getByLabelText("Government bond")).toHaveValue("bond-1");
+    fireEvent.change(screen.getByLabelText("Principal"), { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText("Purchase charge / fee (ZMW)"), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/bonds/bond-1/purchases", {
+        method: "POST",
+        body: expect.objectContaining({
+          cashAccountId: "account-1",
+          principalMinor: 100000,
+          purchaseFeeMinor: 1000,
+        }),
+      }),
+    );
   });
 
   it("moves money between active same-currency asset accounts", async () => {

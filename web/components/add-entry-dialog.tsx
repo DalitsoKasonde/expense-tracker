@@ -7,9 +7,11 @@ import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useApiCall } from "@/lib/client-api";
 import { buildCategoryRows, type Category } from "@/lib/category-tree";
+import { supportedCurrencies } from "@/lib/currencies";
 import { addYearsToDate, isPastDate } from "@/lib/date-terms";
 import { supportsHistoricalBackfill } from "@/lib/historical-entries";
 import { formatMoney } from "@/lib/format-money";
+import type { MarketStockDirectory } from "@/lib/market-data";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
 type EntryKind =
@@ -47,12 +49,21 @@ interface Asset {
   name: string;
   symbol?: string | null;
   assetClass: string;
+  currency: string;
 }
 
 interface InvestmentType {
   id: string;
   name: string;
   code: string;
+}
+
+interface BondPosition {
+  assetId: string;
+  name: string;
+  symbol?: string | null;
+  currency: string;
+  maturityDate: string;
 }
 
 interface LoanSummary {
@@ -193,8 +204,10 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [investmentTypes, setInvestmentTypes] = useState<InvestmentType[]>([]);
+  const [bonds, setBonds] = useState<BondPosition[]>([]);
+  const [stockDirectory, setStockDirectory] = useState<MarketStockDirectory | null>(null);
   const [loans, setLoans] = useState<LoanSummary[]>([]);
-  const [investmentMode, setInvestmentMode] = useState<"existing" | "stock" | "bond">("existing");
+  const [investmentMode, setInvestmentMode] = useState<"existing" | "stock" | "bond" | "bond_existing">("existing");
   const [newInvestment, setNewInvestment] = useState({
     name: "",
     symbol: "",
@@ -257,6 +270,8 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           loadedAssets,
           loadedInvestmentTypes,
           loadedLoans,
+          loadedStockDirectory,
+          loadedBonds,
         ] = await Promise.all([
           apiCall<Account[]>("/v1/accounts"),
           apiCall<Category[]>("/v1/categories"),
@@ -265,6 +280,8 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           apiCall<Asset[]>("/v1/assets").catch(() => []),
           apiCall<InvestmentType[]>("/v1/investment-types").catch(() => []),
           apiCall<LoanSummary[]>("/v1/loans").catch(() => []),
+          apiCall<MarketStockDirectory>("/v1/market-data/luse").catch(() => null),
+          apiCall<BondPosition[]>("/v1/bonds").catch(() => []),
         ]);
 
         if (ignore) {
@@ -290,6 +307,13 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
         setAssets(loadedAssets ?? []);
         setInvestmentTypes(loadedInvestmentTypes ?? []);
         setLoans(loadedLoans ?? []);
+        setStockDirectory(
+          loadedStockDirectory && Array.isArray(loadedStockDirectory.stocks)
+            ? loadedStockDirectory
+            : null,
+        );
+        setBonds(loadedBonds ?? []);
+        const firstStock = (loadedAssets ?? []).find((asset) => asset.assetClass !== "bond");
         setFormData({
           transactionDate: today(),
           entryKind: "",
@@ -304,14 +328,14 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           incomeSourceId: "",
           businessId: "",
           loanId: loadedLoans?.[0]?.id ?? "",
-          assetId: loadedAssets?.[0]?.id ?? "",
+          assetId: firstStock?.id ?? "",
           quantity: "",
           unitPrice: "",
           fees: "0",
           note: "",
           historicalBackfill: false,
         });
-        setInvestmentMode((loadedAssets ?? []).some((asset) => asset.assetClass !== "bond") ? "existing" : "stock");
+        setInvestmentMode(firstStock ? "existing" : "stock");
         setNewInvestment({
           name: "",
           symbol: "",
@@ -354,6 +378,22 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
   const spendableAccounts = useMemo(
     () => cashAccounts.filter((account) => account.accountType !== "receivable"),
     [cashAccounts],
+  );
+  const investmentAccounts = useMemo(
+    () => spendableAccounts.filter((account) => account.currency === formData.currency),
+    [formData.currency, spendableAccounts],
+  );
+  const stockAssets = useMemo(
+    () => assets.filter((asset) => asset.assetClass !== "bond"),
+    [assets],
+  );
+  const selectedStock = useMemo(
+    () => stockAssets.find((asset) => asset.id === formData.assetId),
+    [formData.assetId, stockAssets],
+  );
+  const selectedBond = useMemo(
+    () => bonds.find((bond) => bond.assetId === formData.assetId),
+    [bonds, formData.assetId],
   );
   const receivableAccounts = useMemo(
     () => cashAccounts.filter((account) => account.accountType === "receivable"),
@@ -401,12 +441,15 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     ? "Received into"
     : formData.entryKind === "saving_transfer"
       ? "From account"
-    : formData.entryKind === "debt_principal_payment"
+      : formData.entryKind === "debt_principal_payment"
       ? "Paid from"
       : formData.entryKind === "investment_buy" && investmentMode === "bond"
         ? "Coupon and maturity account"
+        : formData.entryKind === "investment_buy"
+          ? "Paid from account"
         : "Paid from";
-  const isStockPurchase = formData.entryKind === "investment_buy" && investmentMode !== "bond";
+  const isBondPurchase = formData.entryKind === "investment_buy" && (investmentMode === "bond" || investmentMode === "bond_existing");
+  const isStockPurchase = formData.entryKind === "investment_buy" && !isBondPurchase;
   const stockQuantity = Number.parseFloat(formData.quantity || "0") || 0;
   const stockUnitPriceMinor = toMinor(formData.unitPrice);
   const stockFeesMinor = toMinor(formData.fees);
@@ -424,12 +467,36 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
   const sourceAccountRequired =
     !historicalBackfill ||
     (formData.entryKind === "investment_buy" && investmentMode === "bond");
+  const availableSourceAccounts =
+    formData.entryKind === "investment_buy" ? investmentAccounts : spendableAccounts;
 
   useEffect(() => {
     if (!historicalEligible && formData.historicalBackfill) {
       setFormData((current) => ({ ...current, historicalBackfill: false }));
     }
   }, [formData.historicalBackfill, historicalEligible]);
+
+  useEffect(() => {
+    if (formData.entryKind !== "investment_buy") return;
+    setFormData((current) => {
+      const holdingCurrency = investmentMode === "existing"
+        ? selectedStock?.currency
+        : investmentMode === "bond_existing"
+          ? selectedBond?.currency
+          : undefined;
+      const currency = holdingCurrency ?? current.currency;
+      const accountStillMatches = spendableAccounts.some(
+        (account) => account.id === current.accountId && account.currency === currency,
+      );
+      if (currency === current.currency && accountStillMatches) return current;
+      const matchingAccount = spendableAccounts.find((account) => account.currency === currency);
+      return {
+        ...current,
+        currency,
+        accountId: accountStillMatches ? current.accountId : matchingAccount?.id ?? "",
+      };
+    });
+  }, [formData.entryKind, formData.currency, investmentMode, selectedBond?.currency, selectedStock?.currency, spendableAccounts]);
 
   useEffect(() => {
     if (!formData.categoryId) return;
@@ -484,7 +551,22 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
         throw new Error("Amount must be greater than zero");
       }
 
-      if (formData.entryKind === "investment_buy" && investmentMode === "bond") {
+      if (formData.entryKind === "investment_buy" && investmentMode === "bond_existing") {
+        if (!formData.assetId) throw new Error("Select an existing government bond");
+        const purchaseFeeMinor = toMinor(newInvestment.purchaseFee);
+        if (purchaseFeeMinor < 0) throw new Error("Purchase fee cannot be negative");
+        await apiCall(`/v1/bonds/${formData.assetId}/purchases`, {
+          method: "POST",
+          body: {
+            cashAccountId: historicalBackfill ? undefined : formData.accountId,
+            principalMinor: amountMinor,
+            purchaseFeeMinor,
+            purchaseDate: formData.transactionDate,
+            note: formData.note.trim() || undefined,
+            historicalBackfill: historicalBackfill || undefined,
+          },
+        });
+      } else if (formData.entryKind === "investment_buy" && investmentMode === "bond") {
         const couponRate = Number.parseFloat(newInvestment.couponRate);
         const purchaseFeeMinor = toMinor(newInvestment.purchaseFee);
         const termYears = Number.parseInt(newInvestment.termYears, 10);
@@ -835,9 +917,9 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                 </div>
               ) : (
               <div className="quickAddAmountBlock mt-1">
-                <span className="sectionKicker">{formData.entryKind === "investment_buy" && investmentMode === "bond" ? "Principal" : "Amount"}</span>
+                <span className="sectionKicker">{isBondPurchase ? "Principal" : "Amount"}</span>
                 <label htmlFor="amount" className="srOnlyLabel">
-                  {formData.entryKind === "investment_buy" && investmentMode === "bond" ? "Principal" : "Amount"}
+                  {isBondPurchase ? "Principal" : "Amount"}
                 </label>
                 <div className="quickAddCurrency">{formData.currency}</div>
                 <input
@@ -885,8 +967,8 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                       onChange={handleAccountChange}
                       required={sourceAccountRequired}
                     >
-                      <option value="">Select account</option>
-                      {spendableAccounts.map((account) => (
+                      <option value="">Select an account</option>
+                      {availableSourceAccounts.map((account) => (
                         <option key={account.id} value={account.id}>
                           {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}
                         </option>
@@ -897,6 +979,11 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     investmentMode === "bond" ? (
                       <span className="muted">
                         Used only for future coupons and maturity; the historical purchase will not be deducted.
+                      </span>
+                    ) : null}
+                    {formData.entryKind === "investment_buy" && availableSourceAccounts.length === 0 ? (
+                      <span className="muted">
+                        No {formData.currency} cash or bank account exists yet. <Link href="/settings/accounts">Create one in Settings</Link>.
                       </span>
                     ) : null}
                   </div>
@@ -1092,11 +1179,34 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
 
                 <div className="entryTypeGrid">
                   {([
-                    ["existing", "Existing stock"],
                     ["stock", "New stock"],
-                    ["bond", "Government bond"],
+                    ["existing", "Existing stock"],
+                    ["bond", "New government bond"],
+                    ["bond_existing", "Existing government bond"],
                   ] as const).map(([value, label]) => (
-                    <button key={value} type="button" className={investmentMode === value ? "entryTypeButton active" : "entryTypeButton"} onClick={() => setInvestmentMode(value)}>
+                    <button
+                      key={value}
+                      type="button"
+                      className={investmentMode === value ? "entryTypeButton active" : "entryTypeButton"}
+                      onClick={() => {
+                        setInvestmentMode(value);
+                        if (value === "existing") {
+                          const stock = selectedStock ?? stockAssets[0];
+                          setFormData((current) => ({
+                            ...current,
+                            assetId: stock?.id ?? "",
+                            currency: stock?.currency ?? current.currency,
+                          }));
+                        } else if (value === "bond_existing") {
+                          const bond = selectedBond ?? bonds[0];
+                          setFormData((current) => ({
+                            ...current,
+                            assetId: bond?.assetId ?? "",
+                            currency: bond?.currency ?? current.currency,
+                          }));
+                        }
+                      }}
+                    >
                       {label}
                     </button>
                   ))}
@@ -1105,34 +1215,125 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                 {investmentMode === "existing" ? (
                   <div className="field">
                     <label htmlFor="assetId">Stock</label>
-                    <select id="assetId" name="assetId" value={formData.assetId} onChange={handleChange} required>
+                    <select
+                      id="assetId"
+                      name="assetId"
+                      value={formData.assetId}
+                      onChange={(event) => {
+                        const stock = stockAssets.find((asset) => asset.id === event.target.value);
+                        setFormData((current) => ({
+                          ...current,
+                          assetId: event.target.value,
+                          currency: stock?.currency ?? current.currency,
+                        }));
+                      }}
+                      required
+                      disabled={stockAssets.length === 0}
+                    >
                       <option value="">Select stock</option>
-                      {assets.filter((asset) => asset.assetClass !== "bond").map((asset) => (
+                      {stockAssets.map((asset) => (
                         <option key={asset.id} value={asset.id}>
-                          {asset.name}{asset.symbol ? ` (${asset.symbol})` : ""}
+                          {asset.name}{asset.symbol ? ` (${asset.symbol})` : ""} · {asset.currency}
                         </option>
                       ))}
                     </select>
+                    {stockAssets.length === 0 ? (
+                      <span className="muted">No stocks exist yet. Choose New stock to create your first holding.</span>
+                    ) : (
+                      <span className="muted">This purchase will be added as a new lot under the selected holding.</span>
+                    )}
+                  </div>
+                ) : investmentMode === "bond_existing" ? (
+                  <div className="field">
+                    <label htmlFor="assetId">Government bond</label>
+                    <select
+                      id="assetId"
+                      name="assetId"
+                      value={formData.assetId}
+                      onChange={(event) => {
+                        const bond = bonds.find((item) => item.assetId === event.target.value);
+                        setFormData((current) => ({
+                          ...current,
+                          assetId: event.target.value,
+                          currency: bond?.currency ?? current.currency,
+                        }));
+                      }}
+                      required
+                      disabled={bonds.length === 0}
+                    >
+                      <option value="">Select bond</option>
+                      {bonds.map((bond) => (
+                        <option key={bond.assetId} value={bond.assetId}>
+                          {bond.name}{bond.symbol ? ` (${bond.symbol})` : ""} · matures {bond.maturityDate} · {bond.currency}
+                        </option>
+                      ))}
+                    </select>
+                    {bonds.length === 0 ? (
+                      <span className="muted">No government bonds exist yet. Choose New government bond to create your first holding.</span>
+                    ) : (
+                      <span className="muted">The additional principal will update this bond&apos;s future coupons and maturity value.</span>
+                    )}
                   </div>
                 ) : (
-                  <div className="field">
-                    <label htmlFor="investmentName">{investmentMode === "bond" ? "Bond name" : "Company or fund name"}</label>
-                    <input id="investmentName" value={newInvestment.name} onChange={(event) => setNewInvestment((current) => ({ ...current, name: event.target.value }))} required />
-                  </div>
+                  <>
+                    {investmentMode === "stock" ? (
+                      <div className="field">
+                        <label htmlFor="listedStock">LuSE-listed stock (optional)</label>
+                        <select
+                          id="listedStock"
+                          value={stockDirectory?.stocks.some((stock) => stock.ticker === newInvestment.symbol) ? newInvestment.symbol : ""}
+                          onChange={(event) => {
+                            const stock = stockDirectory?.stocks.find((item) => item.ticker === event.target.value);
+                            if (!stock) return;
+                            setNewInvestment((current) => ({
+                              ...current,
+                              name: stock.name,
+                              symbol: stock.ticker,
+                            }));
+                            setFormData((current) => ({ ...current, currency: stock.currency }));
+                          }}
+                        >
+                          <option value="">Select a listed stock or enter it manually</option>
+                          {(stockDirectory?.stocks ?? []).map((stock) => (
+                            <option key={stock.ticker} value={stock.ticker}>
+                              {stock.ticker} — {stock.name}
+                            </option>
+                          ))}
+                        </select>
+                        {stockDirectory ? (
+                          <span className="muted">
+                            Listings by <a href={stockDirectory.sourceUrl} target="_blank" rel="noreferrer">{stockDirectory.sourceName}</a>. Selecting one fills the name, ticker, and currency.
+                          </span>
+                        ) : (
+                          <span className="muted">Enter the company and ticker manually if the directory is unavailable.</span>
+                        )}
+                      </div>
+                    ) : null}
+                    <div className="field">
+                      <label htmlFor="investmentName">{investmentMode === "bond" ? "Bond name" : "Company or fund name"}</label>
+                      <input id="investmentName" value={newInvestment.name} onChange={(event) => setNewInvestment((current) => ({ ...current, name: event.target.value }))} required />
+                    </div>
+                  </>
                 )}
 
-                {investmentMode !== "existing" ? <div className="field">
+                {investmentMode === "stock" || investmentMode === "bond" ? <div className="field">
                   <label htmlFor="investmentSymbol">{investmentMode === "bond" ? "Bond code (optional)" : "Ticker symbol (optional)"}</label>
                   <input id="investmentSymbol" value={newInvestment.symbol} onChange={(event) => setNewInvestment((current) => ({ ...current, symbol: event.target.value.toUpperCase() }))} />
                 </div> : null}
 
-                {investmentMode !== "bond" ? <>
+                {investmentMode === "existing" || investmentMode === "stock" ? <>
                   <div className="splitFields">
                     <div className="field"><label htmlFor="quantity">Shares purchased</label><input id="quantity" name="quantity" type="number" min="0" step="0.000001" value={formData.quantity} onChange={handleChange} required /></div>
-                    <div className="field"><label htmlFor="unitPrice">Price per share</label><input id="unitPrice" name="unitPrice" type="number" min="0" step="0.01" value={formData.unitPrice} onChange={handleChange} required /></div>
+                    <div className="field"><label htmlFor="unitPrice">Price per share ({formData.currency})</label><input id="unitPrice" name="unitPrice" type="number" min="0" step="0.01" value={formData.unitPrice} onChange={handleChange} required /></div>
                   </div>
-                  <div className="field"><label htmlFor="fees">Broker fees</label><input id="fees" name="fees" type="number" min="0" step="0.01" value={formData.fees} onChange={handleChange} /><span className="muted">Included automatically in the total purchase cost.</span></div>
-                </> : <>
+                  <div className="field"><label htmlFor="fees">Broker fees ({formData.currency})</label><input id="fees" name="fees" type="number" min="0" step="0.01" value={formData.fees} onChange={handleChange} /><span className="muted">Included automatically in the total purchase cost.</span></div>
+                </> : investmentMode === "bond_existing" ? (
+                  <div className="field">
+                    <label htmlFor="purchaseFee">Purchase charge / fee ({formData.currency})</label>
+                    <input id="purchaseFee" type="number" min="0" step="0.01" value={newInvestment.purchaseFee} onChange={(event) => setNewInvestment((current) => ({ ...current, purchaseFee: event.target.value }))} />
+                    <span className="muted">Total deducted: {formatMoney(toMinor(formData.amount) + bondPurchaseFeeMinor, formData.currency)}</span>
+                  </div>
+                ) : <>
                   <div className="splitFields">
                     <div className="field"><label htmlFor="couponRate">Annual coupon rate (%)</label><input id="couponRate" type="number" min="0" step="0.01" value={newInvestment.couponRate} onChange={(event) => setNewInvestment((current) => ({ ...current, couponRate: event.target.value }))} required /></div>
                     <div className="field"><label htmlFor="couponFrequency">Coupon frequency</label><select id="couponFrequency" value={newInvestment.couponFrequency} onChange={(event) => setNewInvestment((current) => ({ ...current, couponFrequency: event.target.value }))}><option value="1">Annually</option><option value="2">Semi-annually</option><option value="4">Quarterly</option><option value="12">Monthly</option></select></div>
@@ -1290,7 +1491,20 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
 
                 <div className="field">
                   <label htmlFor="currency">Currency</label>
-                  <input id="currency" name="currency" value={formData.currency} onChange={handleChange} />
+                  <select
+                    id="currency"
+                    name="currency"
+                    value={formData.currency}
+                    onChange={handleChange}
+                    disabled={formData.entryKind === "investment_buy" && (investmentMode === "existing" || investmentMode === "bond_existing")}
+                  >
+                    {supportedCurrencies.map((currency) => (
+                      <option key={currency} value={currency}>{currency}</option>
+                    ))}
+                  </select>
+                  {formData.entryKind === "investment_buy" && (investmentMode === "existing" || investmentMode === "bond_existing") ? (
+                    <span className="muted">Uses the selected {investmentMode === "existing" ? "stock" : "bond"}&apos;s currency.</span>
+                  ) : null}
                 </div>
               </div>
 
@@ -1312,7 +1526,16 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
               <button type="button" className="btn btn-ghost" onClick={onClose}>
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={
+                  loading ||
+                  (sourceAccountRequired && availableSourceAccounts.length === 0) ||
+                  (formData.entryKind === "investment_buy" && investmentMode === "existing" && stockAssets.length === 0) ||
+                  (formData.entryKind === "investment_buy" && investmentMode === "bond_existing" && bonds.length === 0)
+                }
+              >
                 {loading ? "Saving..." : "Save entry"}
               </button>
             </div> : null}

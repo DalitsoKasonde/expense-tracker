@@ -57,3 +57,27 @@ func TestValidateCouponConfirmation(t *testing.T) {
 		t.Fatal("confirmation with tax above gross returned no error")
 	}
 }
+
+func TestValidateAddBondPurchaseInput(t *testing.T) {
+	valid := AddBondPurchaseInput{
+		CashAccountID:    "cash-account",
+		PrincipalMinor:   100000,
+		PurchaseFeeMinor: 500,
+		PurchaseDate:     "2026-08-01",
+	}
+	if err := validateAddBondPurchaseInput(valid); err != nil {
+		t.Fatalf("valid purchase returned an error: %v", err)
+	}
+
+	missingAccount := valid
+	missingAccount.CashAccountID = ""
+	if err := validateAddBondPurchaseInput(missingAccount); err == nil {
+		t.Fatal("purchase without an account returned no error")
+	}
+
+	historical := missingAccount
+	historical.HistoricalBackfill = true
+	if err := validateAddBondPurchaseInput(historical); err != nil {
+		t.Fatalf("historical purchase without an account returned an error: %v", err)
+	}
+}
