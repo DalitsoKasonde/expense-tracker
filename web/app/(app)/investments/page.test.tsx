@@ -2,6 +2,10 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import InvestmentsPage from "./page";
 
+const mocks = vi.hoisted(() => ({ apiCall: vi.fn() }));
+
+vi.mock("@/lib/client-api", () => ({ useApiCall: () => mocks.apiCall }));
+
 vi.mock("@/lib/use-unified-dashboard", () => ({
   useUnifiedDashboard: () => ({
     loading: false,
@@ -43,16 +47,24 @@ vi.mock("@/lib/use-unified-dashboard", () => ({
 }));
 
 describe("InvestmentsPage", () => {
-  it("keeps the portfolio summary focused and avoids repeated analysis panels", () => {
+  it("lists savings groups as portfolio holdings", async () => {
+    mocks.apiCall.mockResolvedValue([{
+      id: "group-1",
+      name: "SL Savings",
+      currentBalance: 5_000,
+      contributedMinor: 4_500,
+    }]);
     render(<InvestmentsPage />);
 
-    expect(screen.getByText("ZMW 150.00")).toBeInTheDocument();
-    expect(screen.getByText("ZMW 130.00")).toBeInTheDocument();
-    expect(screen.getByText("+ZMW 20.00")).toBeInTheDocument();
-    expect(screen.getByText("Holdings", { selector: ".metricCardLabel" }).parentElement).toHaveTextContent("2");
+    expect(await screen.findByText("SL Savings")).toBeInTheDocument();
+    expect(screen.getByText("ZMW 200.00")).toBeInTheDocument();
+    expect(screen.getByText("ZMW 175.00")).toBeInTheDocument();
+    expect(screen.getByText("+ZMW 25.00")).toBeInTheDocument();
+    expect(screen.getByText("Holdings", { selector: ".metricCardLabel" }).parentElement).toHaveTextContent("3");
     expect(screen.getByRole("heading", { name: "Your investments" })).toBeInTheDocument();
     expect(screen.getByText("Zanaco")).toBeInTheDocument();
     expect(screen.getByText("GRZ Bond")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Your share-out groups" })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Add investment" })).toHaveLength(1);
 
     expect(screen.queryByText("Portfolio weight")).not.toBeInTheDocument();

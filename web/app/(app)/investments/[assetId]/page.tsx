@@ -14,6 +14,7 @@ import { useApiCall } from "@/lib/client-api";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { formatMoney } from "@/lib/format-money";
 import type { MarketStockDirectory } from "@/lib/market-data";
+import { isSpendableAccount } from "@/lib/spendable-accounts";
 
 type BondCashflowProjection = {
   id: string;
@@ -51,6 +52,7 @@ interface Account {
   accountType: string;
   accountClass: string;
   currency: string;
+  isSavingsGroupAccount?: boolean;
 }
 
 interface AssetHolding {
@@ -201,8 +203,7 @@ export default function AssetDetailPage() {
   const asset = data?.assets.find((item) => item.assetId === assetId) ?? null;
   const cashAccounts = accounts.filter(
     (account) =>
-      account.accountClass !== "liability" &&
-      account.accountType !== "receivable" &&
+      isSpendableAccount(account) &&
       account.currency === asset?.currency,
   );
   const destinationStocks = (data?.assets ?? []).filter(
@@ -245,7 +246,7 @@ export default function AssetDetailPage() {
           const firstCash =
             accountsResult?.find(
               (account) =>
-                account.accountClass !== "liability" &&
+                isSpendableAccount(account) &&
                 (!asset?.currency || account.currency === asset.currency),
             )?.id ?? "";
           setSellForm((current) => ({ ...current, cashAccountId: current.cashAccountId || firstCash }));
@@ -1386,7 +1387,7 @@ function ActionAccountSelect({
       <select id={inputId} value={value} onChange={(event) => onChange(event.target.value)} required>
         <option value="">Select account</option>
         {accounts
-          .filter((account) => account.accountClass !== "liability")
+          .filter(isSpendableAccount)
           .map((account) => (
             <option key={account.id} value={account.id}>
               {[account.name, account.accountType?.replaceAll("_", " "), account.currency].filter(Boolean).join(" · ")}

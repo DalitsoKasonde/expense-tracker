@@ -9,12 +9,15 @@ import {
   PageShell,
 } from "@/components/ui";
 import { getApiBaseUrl } from "@/lib/client-api";
+import { spendableAccounts } from "@/lib/spendable-accounts";
 
 type Account = {
   id: string;
   name: string;
   accountClass: string;
+  accountType?: string;
   currency: string;
+  isSavingsGroupAccount?: boolean;
 };
 
 export default function UploadPage() {
@@ -48,7 +51,7 @@ export default function UploadPage() {
         }
 
         const rows = (await response.json()) as Account[];
-        const assetAccounts = (rows ?? []).filter((account) => account.accountClass !== "liability");
+        const assetAccounts = spendableAccounts(rows ?? []);
         setAccounts(assetAccounts);
         setAccountId(assetAccounts[0]?.id ?? "");
       } catch (err) {

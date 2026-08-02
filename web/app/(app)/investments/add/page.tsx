@@ -13,6 +13,7 @@ import { supportedCurrencies } from "@/lib/currencies";
 import { addYearsToDate, isPastDate } from "@/lib/date-terms";
 import { formatMoney } from "@/lib/format-money";
 import type { MarketStockDirectory } from "@/lib/market-data";
+import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
 type InvestmentKind = "stock" | "bond";
@@ -23,7 +24,9 @@ type Account = {
   id: string;
   name: string;
   accountClass: string;
+  accountType?: string;
   currency: string;
+  isSavingsGroupAccount?: boolean;
 };
 
 type InvestmentType = {
@@ -97,7 +100,7 @@ export default function AddInvestmentPage() {
   });
 
   const usableAccounts = useMemo(
-    () => accounts.filter((account) => account.accountClass !== "liability" && account.currency === form.currency),
+    () => spendableAccounts(accounts).filter((account) => account.currency === form.currency),
     [accounts, form.currency]
   );
   const stockAssets = useMemo(
@@ -134,7 +137,7 @@ export default function AddInvestmentPage() {
     ])
       .then(([nextAccounts, nextTypes, nextAssets, nextBonds]) => {
         if (ignore) return;
-        const availableAccounts = (nextAccounts ?? []).filter((account) => account.accountClass !== "liability");
+        const availableAccounts = spendableAccounts(nextAccounts ?? []);
         const availableStocks = (nextAssets ?? []).filter((asset) => asset.assetClass !== "bond");
         setAccounts(nextAccounts ?? []);
         setInvestmentTypes(nextTypes ?? []);
@@ -166,11 +169,11 @@ export default function AddInvestmentPage() {
   useEffect(() => {
     setForm((current) => {
       const accountStillMatches = accounts.some(
-        (account) => account.id === current.accountId && account.accountClass !== "liability" && account.currency === current.currency
+        (account) => account.id === current.accountId && isSpendableAccount(account) && account.currency === current.currency
       );
       if (accountStillMatches) return current;
       const matchingAccount = accounts.find(
-        (account) => account.accountClass !== "liability" && account.currency === current.currency
+        (account) => isSpendableAccount(account) && account.currency === current.currency
       );
       return { ...current, accountId: matchingAccount?.id ?? "" };
     });

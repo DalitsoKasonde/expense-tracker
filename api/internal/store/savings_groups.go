@@ -24,12 +24,13 @@ type SavingsGroup struct {
 }
 
 type CreateSavingsGroupInput struct {
-	Name              string `json:"name"`
-	IsShareoutGroup   bool   `json:"isShareoutGroup"`
-	CycleStart        string `json:"cycleStart"`
-	CycleLengthMonths int    `json:"cycleLengthMonths"`
-	TargetMinor       *int64 `json:"targetMinor"`
-	Currency          string `json:"currency"`
+	Name                     string `json:"name"`
+	IsShareoutGroup          bool   `json:"isShareoutGroup"`
+	CycleStart               string `json:"cycleStart"`
+	CycleLengthMonths        int    `json:"cycleLengthMonths"`
+	TargetMinor              *int64 `json:"targetMinor"`
+	OpeningContributionMinor int64  `json:"openingContributionMinor"`
+	Currency                 string `json:"currency"`
 }
 
 type CloseSavingsGroupInput struct {
@@ -106,6 +107,9 @@ func (s *SavingsGroupStore) Create(ctx context.Context, userID string, input Cre
 	if input.CycleLengthMonths == 0 {
 		input.CycleLengthMonths = 12
 	}
+	if input.OpeningContributionMinor < 0 {
+		return SavingsGroup{}, errors.New("opening contribution cannot be negative")
+	}
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -145,6 +149,22 @@ func (s *SavingsGroupStore) Create(ctx context.Context, userID string, input Cre
 	)
 	if err != nil {
 		return SavingsGroup{}, normalizeWriteError(err)
+	}
+	if input.OpeningContributionMinor > 0 {
+		destinationAccountID := accountID
+		note := "Savings recorded before Expenses"
+		if _, err := createTransaction(ctx, tx, Transaction{
+			UserID:               userID,
+			TransactionDate:      group.CycleStart,
+			EntryKind:            "saving_transfer",
+			Amount:               input.OpeningContributionMinor,
+			Currency:             input.Currency,
+			DestinationAccountID: &destinationAccountID,
+			Note:                 &note,
+			Source:               "historical_backfill",
+		}); err != nil {
+			return SavingsGroup{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return SavingsGroup{}, err

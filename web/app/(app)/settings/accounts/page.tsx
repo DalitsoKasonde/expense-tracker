@@ -17,6 +17,7 @@ type Account = {
   currency: string;
   openingBalanceMinor: number;
   hasTransactions: boolean;
+  isSavingsGroupAccount?: boolean;
 };
 
 type DashboardAccountBalance = {
@@ -58,7 +59,7 @@ export default function AccountsSettingsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({ name: "", accountType: "cash", currency: userCurrency, openingBalance: "" });
-  const assetAccounts = accounts.filter((account) => account.accountClass !== "liability");
+  const assetAccounts = accounts.filter((account) => account.accountClass !== "liability" && !account.isSavingsGroupAccount);
   const liabilityAccounts = accounts.filter((account) => account.accountClass === "liability");
   const accountPendingDeletion = accounts.find((account) => account.id === deleteId);
   const editingAccount = accounts.find((account) => account.id === editingId);

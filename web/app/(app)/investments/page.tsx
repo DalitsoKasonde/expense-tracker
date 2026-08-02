@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Breadcrumbs,
@@ -10,9 +10,31 @@ import {
 } from "@/components/ui";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { formatMoney } from "@/lib/format-money";
+import { useApiCall } from "@/lib/client-api";
+
+type SavingsGroup = {
+  id: string;
+  name: string;
+  currentBalance: number;
+  contributedMinor: number;
+};
 
 export default function InvestmentsPage() {
+  const apiCall = useApiCall();
   const { data, loading } = useUnifiedDashboard();
+  const [savingsGroups, setSavingsGroups] = useState<SavingsGroup[]>([]);
+
+  useEffect(() => {
+    let ignore = false;
+    void apiCall<SavingsGroup[]>("/v1/savings-groups")
+      .then((groups) => {
+        if (!ignore) setSavingsGroups(groups ?? []);
+      })
+      .catch(() => {
+        // Stocks and bonds remain usable if savings-group data is unavailable.
+      });
+    return () => { ignore = true; };
+  }, [apiCall]);
 
   const {
     assets,
@@ -42,16 +64,27 @@ export default function InvestmentsPage() {
       }
     }
 
+    if (savingsGroups.length) {
+      const total = totals.get(nextPrimaryCurrency) ?? { current: 0, invested: 0 };
+      for (const group of savingsGroups) {
+        total.current += group.currentBalance;
+        total.invested += group.contributedMinor;
+        nextTotalCurrentValue += group.currentBalance;
+        nextTotalInvested += group.contributedMinor;
+      }
+      totals.set(nextPrimaryCurrency, total);
+    }
+
     return {
       assets: nextAssets,
       currencyTotals: [...totals.entries()],
       missingPositionCount: nextAssets.length - positionedAssets.length,
-      positionedAssetCount: positionedAssets.length,
+      positionedAssetCount: positionedAssets.length + savingsGroups.length,
       primaryCurrency: nextPrimaryCurrency,
       totalCurrentValue: nextTotalCurrentValue,
       totalInvested: nextTotalInvested,
     };
-  }, [data?.assets, data?.currency]);
+  }, [data?.assets, data?.currency, savingsGroups]);
   const performanceDifference = totalCurrentValue - totalInvested;
 
   if (loading) return <div className="page-shell">Loading...</div>;
@@ -64,14 +97,13 @@ export default function InvestmentsPage() {
           eyebrow="Portfolio"
           title="Portfolio"
           subtitle="See what you own, what you invested, and what it is worth now."
-          actions={
-            <Link href="/investments/add" className="btn btn-primary">
-              Add investment
-            </Link>
-          }
+          actions={<div className="flex flex-wrap gap-2">
+            <Link href="/settings/savings-groups" className="btn btn-ghost">Add savings group</Link>
+            <Link href="/investments/add" className="btn btn-primary">Add investment</Link>
+          </div>}
         />
 
-        {assets.length === 0 ? (
+        {assets.length === 0 && savingsGroups.length === 0 ? (
           <EmptyState
             title="No investments yet"
             description="Add a stock, bond, or other holding and Expenses will track cost, current value, allocation, and concentration for you."
@@ -126,7 +158,7 @@ export default function InvestmentsPage() {
           </div>
         </section>
 
-        <section className="pageSection">
+        {assets.length ? <section className="pageSection">
           <div className="sectionHeaderCopy">
             <p className="sectionKicker">Holdings</p>
             <h2 className="sectionHeading">Your investments</h2>
@@ -163,7 +195,30 @@ export default function InvestmentsPage() {
               </Link>
             ))}
           </div>
-        </section>
+        </section> : null}
+
+        {savingsGroups.length ? <section className="pageSection">
+          <div className="sectionHeaderCopy">
+            <p className="sectionKicker">Savings groups</p>
+            <h2 className="sectionHeading">Your share-out groups</h2>
+          </div>
+          <div className="portfolioHoldingList">
+            {savingsGroups.map((group) => (
+              <Link key={group.id} href="/settings/savings-groups" className="portfolioHoldingRow">
+                <div className="portfolioHoldingTop">
+                  <div className="resourceBody">
+                    <strong>{group.name}</strong>
+                    <span className="muted">Savings group · share-out investment</span>
+                  </div>
+                  <div className="ledgerAmountBlock">
+                    <span className="ledgerAmount positive">{formatMoney(group.currentBalance, primaryCurrency)}</span>
+                    <span className="muted">Contributed {formatMoney(group.contributedMinor, primaryCurrency)}</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section> : null}
         </>
         )}
       </section>

@@ -5,6 +5,7 @@ import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FormDialog } from "@/components/ui/dialogs";
+import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
 
 type Account = {
   id: string;
@@ -12,6 +13,7 @@ type Account = {
   accountType: string;
   accountClass: string;
   currency: string;
+  isSavingsGroupAccount?: boolean;
 };
 
 type SavingsGroup = {
@@ -49,8 +51,7 @@ export default function SavingsGroupsSettingsPage() {
     name: "",
     cycleStart: today(),
     cycleLengthMonths: "12",
-    target: "",
-    isShareoutGroup: true,
+    openingContribution: "",
   });
   const [shareout, setShareout] = useState({
     groupId: "",
@@ -60,7 +61,7 @@ export default function SavingsGroupsSettingsPage() {
     note: "",
   });
 
-  const cashAccounts = useMemo(() => accounts.filter((account) => account.accountClass !== "liability"), [accounts]);
+  const cashAccounts = useMemo(() => spendableAccounts(accounts), [accounts]);
 
   const loadData = useCallback(async () => {
     const [loadedGroups, loadedAccounts] = await Promise.all([
@@ -73,7 +74,7 @@ export default function SavingsGroupsSettingsPage() {
     setShareout((current) => ({
       ...current,
       groupId: current.groupId || shareoutGroups[0]?.id || "",
-      cashAccountId: current.cashAccountId || loadedAccounts?.find((account) => account.accountClass !== "liability")?.id || "",
+      cashAccountId: current.cashAccountId || loadedAccounts?.find(isSpendableAccount)?.id || "",
     }));
   }, [apiCall]);
 
@@ -85,7 +86,7 @@ export default function SavingsGroupsSettingsPage() {
 
   function resetCreateForm() {
     setCreateOpen(false);
-    setForm({ name: "", cycleStart: today(), cycleLengthMonths: "12", target: "", isShareoutGroup: true });
+    setForm({ name: "", cycleStart: today(), cycleLengthMonths: "12", openingContribution: "" });
   }
 
   function resetShareoutForm() {
@@ -104,8 +105,8 @@ export default function SavingsGroupsSettingsPage() {
           name: form.name,
           cycleStart: form.cycleStart,
           cycleLengthMonths: Number(form.cycleLengthMonths) || 12,
-          targetMinor: form.target ? toMinor(form.target) : undefined,
-          isShareoutGroup: form.isShareoutGroup,
+          openingContributionMinor: form.openingContribution ? toMinor(form.openingContribution) : 0,
+          isShareoutGroup: true,
           currency: userCurrency,
         },
       });
@@ -200,7 +201,7 @@ export default function SavingsGroupsSettingsPage() {
       <FormDialog
         open={createOpen}
         title="Create group"
-        description="A savings account is created automatically for the group."
+        description="Create a share-out cycle. A savings account is created automatically for the group."
         submitLabel="Create group"
         pending={saving}
         error={status.startsWith("Failed") ? status : undefined}
@@ -209,27 +210,33 @@ export default function SavingsGroupsSettingsPage() {
       >
         <div className="grid gap-4">
           <div className="field">
-            <label>Name</label>
-            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+            <label htmlFor="group-name">Group name</label>
+            <input id="group-name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
           </div>
           <div className="splitFields">
             <div className="field">
-              <label>Cycle start</label>
-              <input type="date" value={form.cycleStart} onChange={(event) => setForm((current) => ({ ...current, cycleStart: event.target.value }))} required />
+              <label htmlFor="group-cycle-start">Cycle start</label>
+              <input id="group-cycle-start" type="date" value={form.cycleStart} onChange={(event) => setForm((current) => ({ ...current, cycleStart: event.target.value }))} required />
             </div>
             <div className="field">
-              <label>Cycle months</label>
-              <input type="number" min="1" value={form.cycleLengthMonths} onChange={(event) => setForm((current) => ({ ...current, cycleLengthMonths: event.target.value }))} />
+              <label htmlFor="group-cycle-months">Months before share-out</label>
+              <input id="group-cycle-months" type="number" min="1" value={form.cycleLengthMonths} onChange={(event) => setForm((current) => ({ ...current, cycleLengthMonths: event.target.value }))} />
+              <span className="muted">How long members contribute before the group pays out.</span>
             </div>
           </div>
           <div className="field">
-            <label>Target</label>
-            <input type="number" step="0.01" value={form.target} onChange={(event) => setForm((current) => ({ ...current, target: event.target.value }))} />
+            <label htmlFor="group-opening-contribution">Amount already contributed (optional)</label>
+            <input
+              id="group-opening-contribution"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.openingContribution}
+              placeholder="0.00"
+              onChange={(event) => setForm((current) => ({ ...current, openingContribution: event.target.value }))}
+            />
+            <span className="muted">Records savings from before Expenses without reducing any cash account.</span>
           </div>
-          <label className="checkboxRow">
-            <input type="checkbox" checked={form.isShareoutGroup} onChange={(event) => setForm((current) => ({ ...current, isShareoutGroup: event.target.checked }))} />
-            Share-out group
-          </label>
         </div>
       </FormDialog>
 

@@ -45,6 +45,23 @@ describe("AddEntryDialog", () => {
     expect(screen.queryByText("Destination")).not.toBeInTheDocument();
   });
 
+  it("does not offer a savings-group ledger as a payment account", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") return Promise.resolve([
+        { id: "group", name: "SL Savings", accountType: "savings", accountClass: "asset", currency: "ZMW", isSavingsGroupAccount: true },
+        { id: "cash", name: "Cash", accountType: "cash", accountClass: "asset", currency: "ZMW" },
+      ]);
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+
+    const source = screen.getByRole("combobox", { name: "Paid from" });
+    expect(source).toHaveTextContent("Cash");
+    expect(source).not.toHaveTextContent("SL Savings");
+  });
+
   it("shows category hierarchy as readable paths", async () => {
     mocks.apiCall.mockImplementation((path: string) => {
       if (path === "/v1/accounts") {

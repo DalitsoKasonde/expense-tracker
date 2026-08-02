@@ -11,6 +11,7 @@ import { supportedCurrencies } from "@/lib/currencies";
 import { addYearsToDate, isPastDate } from "@/lib/date-terms";
 import { supportsHistoricalBackfill } from "@/lib/historical-entries";
 import { formatMoney } from "@/lib/format-money";
+import { spendableAccounts as filterSpendableAccounts } from "@/lib/spendable-accounts";
 import type { MarketStockDirectory } from "@/lib/market-data";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
@@ -31,6 +32,7 @@ interface Account {
   accountType: string;
   accountClass: string;
   currency: string;
+  isSavingsGroupAccount?: boolean;
 }
 
 interface Business {
@@ -281,11 +283,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           return;
         }
 
-        const spendableLoadedAccounts = (loadedAccounts ?? []).filter(
-          (account) =>
-            account.accountClass !== "liability" &&
-            account.accountType !== "receivable",
-        );
+        const spendableLoadedAccounts = filterSpendableAccounts(loadedAccounts ?? []);
         const defaultSourceAccount = spendableLoadedAccounts[0];
         const defaultDestinationAccount = spendableLoadedAccounts.find(
           (account) =>
@@ -369,7 +367,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     [accounts],
   );
   const spendableAccounts = useMemo(
-    () => cashAccounts.filter((account) => account.accountType !== "receivable"),
+    () => filterSpendableAccounts(cashAccounts),
     [cashAccounts],
   );
   const investmentAccounts = useMemo(

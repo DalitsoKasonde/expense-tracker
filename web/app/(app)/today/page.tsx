@@ -121,7 +121,9 @@ export default function TodayPage() {
   // missing field from throwing during render and blanking the whole page.
   const accountBalances = data.accountBalances ?? [];
   const assets = data.assets ?? [];
-  const assetAccounts = accountBalances.filter((account) => account.accountClass !== "liability");
+  const savingsGroupAccountIds = new Set(groups.map((group) => group.accountId));
+  const visibleAccountBalances = accountBalances.filter((account) => !savingsGroupAccountIds.has(account.accountId));
+  const assetAccounts = visibleAccountBalances.filter((account) => account.accountClass !== "liability");
   const liabilityAccounts = accountBalances.filter((account) => account.accountClass === "liability");
   const setupTasks: Array<{ label: string; href: Route }> = [];
   if (onboardingInterests.includes("loans") && liabilityAccounts.length === 0) {
@@ -190,7 +192,7 @@ export default function TodayPage() {
 
         <section>
           <div className="mb-4 flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Accounts</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Your balances</h2></div><Link href="/settings/accounts" className="text-sm font-semibold text-accent hover:underline">Manage</Link></div>
-          {accountBalances.length ? (
+          {visibleAccountBalances.length ? (
             <div className="grid gap-5">
               <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
