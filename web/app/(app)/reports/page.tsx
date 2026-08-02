@@ -504,7 +504,7 @@ export default function ReportsPage() {
               </ChartCard>
             </div>
 
-            <section className="card">
+            <section className="card min-w-0 max-w-full overflow-hidden">
               <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Year highlights</p>
               <h2 className="mt-1 text-lg font-semibold text-on-surface">What stands out</h2>
               {reportAnalysis.activeMonthCount ? (
@@ -512,11 +512,11 @@ export default function ReportsPage() {
                   <div className="pb-4">
                     <dt className="text-xs font-semibold text-on-surface-soft">Best cash-flow month</dt>
                     {reportAnalysis.strongestMonth ? (
-                      <dd className="mt-1 flex items-baseline justify-between gap-3">
-                        <span className="font-semibold text-on-surface">
+                      <dd className="mt-1 flex min-w-0 flex-wrap items-baseline justify-between gap-3">
+                        <span className="min-w-0 break-words font-semibold text-on-surface">
                           {reportAnalysis.strongestMonth.monthLabel}
                         </span>
-                        <span className="font-semibold tabular-nums text-positive">
+                        <span className="max-w-full break-words font-semibold tabular-nums text-positive">
                           {formatMoney(reportAnalysis.strongestMonth.freeCashFlow, currency)}
                         </span>
                       </dd>
@@ -528,11 +528,11 @@ export default function ReportsPage() {
                   </div>
                   <div className="py-4">
                     <dt className="text-xs font-semibold text-on-surface-soft">Highest commitments</dt>
-                    <dd className="mt-1 flex items-baseline justify-between gap-3">
-                      <span className="font-semibold text-on-surface">
+                    <dd className="mt-1 flex min-w-0 flex-wrap items-baseline justify-between gap-3">
+                      <span className="min-w-0 break-words font-semibold text-on-surface">
                         {reportAnalysis.highestCommitmentMonth?.monthLabel}
                       </span>
-                      <span className="font-semibold tabular-nums text-expense">
+                      <span className="max-w-full break-words font-semibold tabular-nums text-expense">
                         {formatMoney(
                           reportAnalysis.highestCommitmentMonth
                             ? cashCommitments(reportAnalysis.highestCommitmentMonth)
@@ -948,6 +948,7 @@ function BalanceTrendChart({
     <ChartCard
       title="Balance and net-worth trend"
       subtitle="Track liquid cash against your broader financial position through the year."
+      visualsAccessible
       summary={`${annual.year} balance trend. Latest cash balance is ${formatMoney(
         latestMonth?.endingCashBalance ?? 0,
         currency,
@@ -965,24 +966,34 @@ function BalanceTrendChart({
               Cash balance
             </span>
           </div>
+          <p className="mb-2 text-xs font-medium text-on-surface-soft sm:hidden">
+            Swipe sideways to see later months
+          </p>
           {/* The axis labels sit outside the SVG so they keep a fixed type size
               instead of scaling with the viewBox. The tick column must span the
               plot and nothing else, so the month labels live below the row and
               are indented by the tick column width plus the gap. */}
-          <div className="flex gap-2">
-            <div className="relative w-16 shrink-0">
-              {ticks.map((tick) => (
-                <span
-                  key={tick.value}
-                  className="absolute right-0 -translate-y-1/2 text-[11px] tabular-nums text-on-surface-soft"
-                  style={{ top: `${(tick.y / 180) * 100}%` }}
-                >
-                  {formatMoney(tick.value, currency, compact)}
-                </span>
-              ))}
-            </div>
-            <div className="min-w-0 flex-1">
-              <svg viewBox="0 0 600 180" className="w-full">
+          <div
+            className="max-w-full overflow-x-auto pb-2"
+            role="region"
+            aria-label="Scrollable balance and net-worth chart"
+            tabIndex={0}
+          >
+            <div className="min-w-[680px] sm:min-w-0">
+              <div className="flex gap-2">
+                <div className="relative w-16 shrink-0">
+                  {ticks.map((tick) => (
+                    <span
+                      key={tick.value}
+                      className="absolute right-0 -translate-y-1/2 text-[11px] tabular-nums text-on-surface-soft"
+                      style={{ top: `${(tick.y / 180) * 100}%` }}
+                    >
+                      {formatMoney(tick.value, currency, compact)}
+                    </span>
+                  ))}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <svg viewBox="0 0 600 180" className="w-full">
                 <title>{annual.year} cash balance and net-worth trend</title>
                 <desc>
                   Net worth and ending cash balance plotted for each available month.
@@ -1033,23 +1044,25 @@ function BalanceTrendChart({
                     vectorEffect="non-scaling-stroke"
                   />
                 ))}
-              </svg>
+                  </svg>
+                </div>
+              </div>
+              {/* 4.5rem = the w-16 tick column plus the gap-2 between columns, so a
+                  label lands under the point it belongs to. */}
+              <div className="relative ml-[4.5rem] mt-1 h-4">
+                {months.map((month, index) => (
+                  <span
+                    key={month.month}
+                    className="absolute -translate-x-1/2 text-xs font-semibold text-on-surface-soft"
+                    style={{
+                      left: `${((netWorthGeometry.points[index]?.x ?? 0) / 600) * 100}%`,
+                    }}
+                  >
+                    {month.monthLabel}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
-          {/* 4.5rem = the w-16 tick column plus the gap-2 between columns, so a
-              label lands under the point it belongs to. */}
-          <div className="relative ml-[4.5rem] mt-1 h-4">
-            {months.map((month, index) => (
-              <span
-                key={month.month}
-                className="absolute -translate-x-1/2 text-xs font-semibold text-on-surface-soft"
-                style={{
-                  left: `${((netWorthGeometry.points[index]?.x ?? 0) / 600) * 100}%`,
-                }}
-              >
-                {month.monthLabel}
-              </span>
-            ))}
           </div>
           <div className="mt-4 grid gap-3 border-t border-outline pt-4 sm:grid-cols-2">
             <div>

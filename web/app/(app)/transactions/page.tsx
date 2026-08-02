@@ -82,7 +82,7 @@ export default function TransactionsPage() {
   return (
     <PageShell>
       <PageHeader eyebrow="Activity" title="Money activity" subtitle="Find every payment, deposit, transfer, loan movement, and investment purchase." actions={<AddEntryButton className="btn btn-primary">Add entry</AddEntryButton>} />
-      <section className="card"><TransactionFilters value={filters} onChange={setFilters} accounts={accounts} categories={categories} /></section>
+      <section className="card min-w-0 max-w-full overflow-hidden"><TransactionFilters value={filters} onChange={setFilters} accounts={accounts} categories={categories} /></section>
       {error ? <div role="alert" className="rounded-md border border-negative/30 bg-negative-soft p-4 text-sm text-negative">{error}</div> : null}
       {groups.length ? <div className="grid gap-7">{groups.map(([label, rows]) => <section key={label}><div className="mb-3 flex items-center gap-4"><h2 className="shrink-0 text-sm font-semibold text-on-surface">{label}</h2><div className="h-px flex-1 bg-outline" /></div><div className="rounded-lg border border-outline bg-surface px-4 shadow-sm">{rows.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</div></section>)}</div> : <EmptyState title="No matching transactions" description="Adjust your filters or add a new entry to see activity here." action={<button type="button" className="btn btn-ghost" onClick={() => setFilters({ query: "", direction: "all" })}>Clear filters</button>} />}
     </PageShell>

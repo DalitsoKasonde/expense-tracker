@@ -802,9 +802,9 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
         onClose();
       }}
       onClose={onClose}
-      className="w-[min(94vw,760px)] rounded-2xl border border-outline bg-surface p-0 text-on-surface shadow-md backdrop:bg-[#071225]/55"
+      className="m-auto w-[min(94vw,760px)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-outline bg-surface p-0 text-on-surface shadow-md backdrop:bg-[#071225]/55"
     >
-      <div className="max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+      <div className="max-h-[90vh] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-4 sm:p-6">
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-outline pb-4">
           <div className="grid gap-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -846,7 +846,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
         ) : null}
 
         {session && !initializing && hasAccounts ? (
-          <form className="grid gap-5" onSubmit={handleSubmit}>
+          <form className="grid min-w-0 max-w-full gap-5" onSubmit={handleSubmit}>
             {!selectedEntryType ? (
               <section className="rounded-xl border border-outline bg-[linear-gradient(145deg,var(--surface-soft),var(--surface))] p-4 sm:p-5">
                 <div className="mb-5 grid gap-1">

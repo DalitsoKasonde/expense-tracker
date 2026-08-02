@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNav } from "./bottom-nav";
 import { SidebarNav } from "./sidebar-nav";
 import MorePage from "@/app/(app)/more/page";
+import { SettingsNav } from "./settings-nav";
 
 const mocks = vi.hoisted(() => ({
   path: "/transactions",
@@ -21,7 +22,10 @@ vi.mock("@/lib/browser-auth", () => ({ signOutEverywhere: mocks.signOut }));
 vi.mock("./add-entry-dialog", () => ({ AddEntryDialog: () => null }));
 
 describe("Expenses navigation", () => {
-  beforeEach(() => mocks.signOut.mockClear());
+  beforeEach(() => {
+    mocks.path = "/transactions";
+    mocks.signOut.mockClear();
+  });
 
   it("marks the current mobile destination and exposes quick add", () => {
     render(<BottomNav />);
@@ -46,5 +50,15 @@ describe("Expenses navigation", () => {
       expect(screen.getByRole("link", { name: new RegExp(destination) })).toBeInTheDocument();
     }
     expect(screen.getByRole("link", { name: /Goals/ })).toHaveAttribute("href", "/goals");
+  });
+
+  it("makes every settings section discoverable in the mobile tab scroller", () => {
+    mocks.path = "/settings/accounts";
+    render(<SettingsNav />);
+
+    expect(screen.getByRole("navigation", { name: "Settings sections" })).toHaveClass("overflow-x-auto", "settingsTabScroller");
+    expect(screen.getByText("Swipe sideways for more settings")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Categories" })).toHaveAttribute("href", "/settings/categories");
+    expect(screen.getByRole("link", { name: "Import" })).toHaveAttribute("href", "/settings/imports");
   });
 });

@@ -283,6 +283,13 @@ svg {
   padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
 }
 
+.page-shell,
+.workspaceStack,
+.pageSection {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .page-shell-narrow {
   --page-max: 768px;
 }
@@ -338,6 +345,8 @@ svg {
 .heroCard,
 .spotlightCard,
 .metricCard {
+  min-width: 0;
+  max-width: 100%;
   border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
   background: var(--surface);
@@ -583,6 +592,8 @@ svg {
 .field select,
 .field textarea {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: var(--control-h);
   padding: 11px 14px;
   border-radius: var(--radius-md);
@@ -1187,9 +1198,26 @@ textarea.control {
 
 .formSectionCard {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: var(--space-sm);
   padding-top: var(--space-md);
   border-top: 1px solid var(--border);
+}
+
+.formSectionHeader,
+.formSectionHeader > *,
+.resourceBody,
+.resourceBody > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.settingsTabScroller {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  overscroll-behavior-inline: contain;
 }
 
 .entryTypeGrid {
@@ -1745,6 +1773,7 @@ textarea.control {
 
 @media (max-width: 699px) {
   .settingsHeaderRow,
+  .formSectionHeader,
   .settingsOverviewCardHeader,
   .portfolioHoldingTop,
   .utilityRow,

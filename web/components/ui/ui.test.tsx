@@ -38,6 +38,20 @@ describe("Expenses UI primitives", () => {
     expect(onChange).toHaveBeenCalledWith({ query: "rent", direction: "all" });
   });
 
+  it("keeps transaction filters constrained to a mobile viewport", () => {
+    render(<TransactionFilters
+      value={{ query: "", direction: "all" }}
+      onChange={vi.fn()}
+      accounts={[{ id: "cash", name: "A very long account name", currency: "ZMW" }]}
+      categories={[{ id: "food", name: "Food" }]}
+    />);
+
+    expect(screen.getByLabelText("Transaction filters")).toHaveClass("min-w-0", "w-full", "grid-cols-1");
+    for (const field of screen.getAllByRole("combobox")) {
+      expect(field).toHaveClass("w-full", "min-w-0", "max-w-full");
+    }
+  });
+
   it("renders empty state actions", () => {
     render(<EmptyState title="Nothing here" description="Add your first item." action={<button>Add item</button>} />);
     expect(screen.getByRole("button", { name: "Add item" })).toBeInTheDocument();

@@ -36,6 +36,7 @@ describe("AddEntryDialog", () => {
 
   it("asks what happened before showing transaction details", async () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
+    expect(screen.getByRole("dialog")).toHaveClass("max-w-[calc(100vw-1rem)]", "overflow-hidden");
     expect(await screen.findByRole("heading", { name: "What happened?" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
 

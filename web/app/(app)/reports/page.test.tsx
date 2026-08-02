@@ -142,6 +142,13 @@ describe("ReportsPage", () => {
     }
   });
 
+  it("exposes the balance trend as a labelled horizontal scroller on mobile", async () => {
+    await renderReports();
+
+    expect(screen.getByRole("region", { name: "Scrollable balance and net-worth chart" })).toHaveClass("overflow-x-auto", "max-w-full");
+    expect(screen.getByText("Swipe sideways to see later months")).toBeInTheDocument();
+  });
+
   it("still renders every month in the annual matrix", async () => {
     await renderReports();
 
