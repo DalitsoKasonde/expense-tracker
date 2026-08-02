@@ -46,6 +46,59 @@ describe("AddEntryDialog", () => {
     expect(screen.queryByText("Destination")).not.toBeInTheDocument();
   });
 
+  it("adds an optional categorized transaction fee to spending", async () => {
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/Transaction fee \(optional\)/), {
+      target: { value: "2.50" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/transactions", {
+        method: "POST",
+        body: expect.objectContaining({
+          entryKind: "expense_living",
+          amount: 10000,
+          transactionFee: 250,
+        }),
+      }),
+    );
+  });
+
+  it("keeps a transfer's amount separate from its transaction fee", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") return Promise.resolve([
+        { id: "source", name: "Mobile Money", accountClass: "asset", currency: "ZMW" },
+        { id: "destination", name: "Bank", accountClass: "asset", currency: "ZMW" },
+      ]);
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I transferred money" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/Transaction fee \(optional\)/), {
+      target: { value: "2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/transactions", {
+        method: "POST",
+        body: expect.objectContaining({
+          entryKind: "saving_transfer",
+          amount: 10000,
+          transactionFee: 200,
+          accountId: "source",
+          destinationAccountId: "destination",
+        }),
+      }),
+    );
+  });
+
   it("does not offer a savings-group ledger as a payment account", async () => {
     mocks.apiCall.mockImplementation((path: string) => {
       if (path === "/v1/accounts") return Promise.resolve([

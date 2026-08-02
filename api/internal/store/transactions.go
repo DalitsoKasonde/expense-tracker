@@ -88,6 +88,34 @@ func (s *TransactionStore) CreateWithTx(ctx context.Context, dbTx pgx.Tx, tx Tra
 	return createTransaction(ctx, dbTx, tx)
 }
 
+// CreateMovementFeeWithTx records a movement's service charge as its own
+// categorized expense. Keeping it separate preserves the principal movement
+// amount and lets transfers credit the full amount to their destination.
+func (s *TransactionStore) CreateMovementFeeWithTx(ctx context.Context, dbTx pgx.Tx, movement Transaction, accountID string, feeMinor int64) (Transaction, error) {
+	categoryID, err := ensureTransactionFeeCategory(ctx, dbTx, movement.UserID)
+	if err != nil {
+		return Transaction{}, err
+	}
+
+	note := "Transaction fee"
+	if movement.Note != nil && *movement.Note != "" {
+		note += " - " + *movement.Note
+	}
+	return createTransaction(ctx, dbTx, Transaction{
+		UserID:          movement.UserID,
+		TransactionDate: movement.TransactionDate,
+		EntryKind:       "expense_living",
+		Amount:          feeMinor,
+		Currency:        movement.Currency,
+		AccountID:       accountID,
+		CategoryID:      &categoryID,
+		Note:            &note,
+		Source:          movement.Source,
+		OriginEventID:   movement.OriginEventID,
+		OriginEventType: movement.OriginEventType,
+	})
+}
+
 type transactionRowQuerier interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }

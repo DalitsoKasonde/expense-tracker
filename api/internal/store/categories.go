@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -25,6 +26,41 @@ func NewCategoryStore(db *pgxpool.Pool) *CategoryStore {
 }
 
 var ErrInvalidCategoryParent = errors.New("invalid category parent")
+
+const transactionFeeCategoryName = "Transaction fees"
+
+// ensureTransactionFeeCategory returns the user's expense category used for
+// movement fees. The transaction-scoped advisory lock prevents two concurrent
+// first-time fee entries from creating case variants of the same category.
+func ensureTransactionFeeCategory(ctx context.Context, tx pgx.Tx, userID string) (string, error) {
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, "transaction-fee-category:"+userID); err != nil {
+		return "", err
+	}
+
+	var categoryID string
+	err := tx.QueryRow(ctx, `
+		select id
+		from categories
+		where user_id = $1
+		  and category_group = 'expense'
+		  and lower(btrim(name)) = lower($2)
+		order by created_at, id
+		limit 1
+	`, userID, transactionFeeCategoryName).Scan(&categoryID)
+	if err == nil {
+		return categoryID, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+
+	err = tx.QueryRow(ctx, `
+		insert into categories (user_id, name, category_group)
+		values ($1, $2, 'expense')
+		returning id
+	`, userID, transactionFeeCategoryName).Scan(&categoryID)
+	return categoryID, err
+}
 
 func (s *CategoryStore) ListByUser(ctx context.Context, userID string) ([]Category, error) {
 	rows, err := s.db.Query(ctx, `

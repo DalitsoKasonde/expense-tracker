@@ -537,6 +537,7 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		Quantity             *float64 `json:"quantity"`
 		UnitPrice            *int64   `json:"unitPrice"`
 		Fees                 *int64   `json:"fees"`
+		TransactionFee       *int64   `json:"transactionFee"`
 		Note                 *string  `json:"note"`
 		Source               string   `json:"source"`
 		ImportID             *string  `json:"importId"`
@@ -643,6 +644,18 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Amount = calculateInvestmentTotal(*req.Quantity, *req.UnitPrice, fees)
+	}
+	transactionFee := int64(0)
+	if req.TransactionFee != nil {
+		transactionFee = *req.TransactionFee
+	}
+	if transactionFee < 0 {
+		http.Error(w, "transactionFee cannot be negative", http.StatusBadRequest)
+		return
+	}
+	if entryKind == "investment_buy" && transactionFee > 0 {
+		http.Error(w, "use the investment fee field for investment purchases", http.StatusBadRequest)
+		return
 	}
 
 	// Check idempotency
@@ -773,6 +786,41 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, r, "transactions.investment.commit", "could not record the investment purchase", err)
 			return
 		}
+	} else if transactionFee > 0 {
+		dbTx, beginErr := s.db.Begin(r.Context())
+		if beginErr != nil {
+			writeInternalError(w, r, "transactions.fee.begin", "could not record the transaction", beginErr)
+			return
+		}
+		defer dbTx.Rollback(r.Context())
+
+		var originEventID string
+		if transaction.OriginEventID != nil && strings.TrimSpace(*transaction.OriginEventID) != "" {
+			originEventID = *transaction.OriginEventID
+		} else if beginErr = dbTx.QueryRow(r.Context(), `select gen_random_uuid()::text`).Scan(&originEventID); beginErr != nil {
+			writeInternalError(w, r, "transactions.fee.origin", "could not record the transaction", beginErr)
+			return
+		}
+		originEventType := "transaction_with_fee"
+		transaction.OriginEventID = &originEventID
+		if transaction.OriginEventType == nil {
+			transaction.OriginEventType = &originEventType
+		}
+
+		result, err = s.transactions.CreateWithTx(r.Context(), dbTx, transaction)
+		if err != nil {
+			writeInternalError(w, r, "transactions.fee.create_movement", "could not record the transaction", err)
+			return
+		}
+		feeAccountID := movementFeeAccountID(entryKind, transaction.AccountID, transaction.DestinationAccountID)
+		if _, err = s.transactions.CreateMovementFeeWithTx(r.Context(), dbTx, transaction, feeAccountID, transactionFee); err != nil {
+			writeInternalError(w, r, "transactions.fee.create_expense", "could not record the transaction fee", err)
+			return
+		}
+		if err = dbTx.Commit(r.Context()); err != nil {
+			writeInternalError(w, r, "transactions.fee.commit", "could not record the transaction", err)
+			return
+		}
 	} else {
 		result, err = s.transactions.Create(r.Context(), transaction)
 		if err != nil {
@@ -788,6 +836,13 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, result)
+}
+
+func movementFeeAccountID(entryKind, sourceAccountID string, destinationAccountID *string) string {
+	if entryKind == "loan_receivable_repayment" && destinationAccountID != nil {
+		return *destinationAccountID
+	}
+	return sourceAccountID
 }
 
 func validateTransferAccounts(source, destination store.Account, currency string) error {

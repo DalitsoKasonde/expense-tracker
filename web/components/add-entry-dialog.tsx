@@ -234,6 +234,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     quantity: "",
     unitPrice: "",
     fees: "0",
+    transactionFee: "0",
     note: "",
     historicalBackfill: false,
   });
@@ -321,6 +322,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           quantity: "",
           unitPrice: "",
           fees: "0",
+          transactionFee: "0",
           note: "",
           historicalBackfill: false,
         });
@@ -444,6 +446,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
   const stockQuantity = Number.parseFloat(formData.quantity || "0") || 0;
   const stockUnitPriceMinor = toMinor(formData.unitPrice);
   const stockFeesMinor = toMinor(formData.fees);
+  const transactionFeeMinor = toMinor(formData.transactionFee);
   const stockSubtotalMinor = Math.round(stockQuantity * stockUnitPriceMinor);
   const stockTotalMinor = stockSubtotalMinor + stockFeesMinor;
   const bondPurchaseFeeMinor = toMinor(newInvestment.purchaseFee);
@@ -567,6 +570,9 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
       if (amountMinor <= 0) {
         throw new Error("Amount must be greater than zero");
       }
+      if (transactionFeeMinor < 0) {
+        throw new Error("Transaction fee cannot be negative");
+      }
 
       if (formData.entryKind === "investment_buy" && investmentMode === "bond_existing") {
         if (!formData.assetId) throw new Error("Select an existing government bond");
@@ -616,6 +622,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             loanId: formData.loanId,
             cashAccountId: formData.accountId,
             amountMinor,
+            transactionFeeMinor: transactionFeeMinor || undefined,
             currency: formData.currency,
             transactionDate: formData.transactionDate,
             note: formData.note || undefined,
@@ -628,6 +635,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           body: {
             cashAccountId: formData.accountId,
             amountMinor,
+            transactionFeeMinor: transactionFeeMinor || undefined,
             currency: formData.currency,
             transactionDate: formData.transactionDate,
             note: formData.note || undefined,
@@ -667,6 +675,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
               transactionDate: formData.transactionDate,
               entryKind: "loan_receivable_advance",
               amount: amountMinor,
+              transactionFee: transactionFeeMinor || undefined,
               currency: formData.currency,
               accountId: formData.accountId,
               destinationAccountId: receivableAccount.id,
@@ -696,6 +705,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             transactionDate: formData.transactionDate,
             entryKind: "loan_receivable_repayment",
             amount: amountMinor,
+            transactionFee: transactionFeeMinor || undefined,
             currency: formData.currency,
             accountId: receivableAccount.id,
             destinationAccountId: formData.accountId,
@@ -766,6 +776,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                 ? unitPrice
                 : undefined,
             fees: formData.entryKind === "investment_buy" && fees > 0 ? fees : undefined,
+            transactionFee: formData.entryKind !== "investment_buy" && transactionFeeMinor > 0 ? transactionFeeMinor : undefined,
             note: formData.note || undefined,
             source: "manual",
             historicalBackfill: historicalBackfill || undefined,
@@ -956,6 +967,24 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                 />
               </div>
               )}
+
+              {formData.entryKind !== "investment_buy" ? (
+                <div className="field mt-5">
+                  <label htmlFor="transactionFee">Transaction fee (optional) ({formData.currency})</label>
+                  <input
+                    id="transactionFee"
+                    name="transactionFee"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.transactionFee}
+                    onChange={handleChange}
+                  />
+                  <span className="muted">
+                    Recorded separately under Transaction fees; the movement amount stays unchanged.
+                  </span>
+                </div>
+              ) : null}
 
               <div className={`${investmentMode === "bond" && formData.entryKind === "investment_buy" ? "" : "splitFields"} mt-5`}>
                 {historicalBackfill ? (

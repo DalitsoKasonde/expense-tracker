@@ -82,6 +82,16 @@ func TestValidateLendingAccounts(t *testing.T) {
 	}
 }
 
+func TestMovementFeeAccountID(t *testing.T) {
+	destination := "cash-destination"
+	if got := movementFeeAccountID("saving_transfer", "cash-source", &destination); got != "cash-source" {
+		t.Fatalf("transfer fee account = %q, want source account", got)
+	}
+	if got := movementFeeAccountID("loan_receivable_repayment", "receivable", &destination); got != destination {
+		t.Fatalf("receivable repayment fee account = %q, want destination cash account", got)
+	}
+}
+
 func TestNormalizeOptionalSymbol(t *testing.T) {
 	blank := "  "
 	if got := normalizeOptionalSymbol(&blank); got != nil {

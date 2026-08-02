@@ -59,21 +59,23 @@ type CreateLoanInput struct {
 }
 
 type RecordBorrowedInput struct {
-	LoanID          string `json:"loanId"`
-	CashAccountID   string `json:"cashAccountId"`
-	AmountMinor     int64  `json:"amountMinor"`
-	Currency        string `json:"currency"`
-	TransactionDate string `json:"transactionDate"`
-	Note            string `json:"note"`
+	LoanID              string `json:"loanId"`
+	CashAccountID       string `json:"cashAccountId"`
+	AmountMinor         int64  `json:"amountMinor"`
+	TransactionFeeMinor int64  `json:"transactionFeeMinor"`
+	Currency            string `json:"currency"`
+	TransactionDate     string `json:"transactionDate"`
+	Note                string `json:"note"`
 }
 
 type RecordRepaymentInput struct {
-	LoanID          string `json:"loanId"`
-	CashAccountID   string `json:"cashAccountId"`
-	AmountMinor     int64  `json:"amountMinor"`
-	Currency        string `json:"currency"`
-	TransactionDate string `json:"transactionDate"`
-	Note            string `json:"note"`
+	LoanID              string `json:"loanId"`
+	CashAccountID       string `json:"cashAccountId"`
+	AmountMinor         int64  `json:"amountMinor"`
+	TransactionFeeMinor int64  `json:"transactionFeeMinor"`
+	Currency            string `json:"currency"`
+	TransactionDate     string `json:"transactionDate"`
+	Note                string `json:"note"`
 }
 
 type LoanRepaymentResult struct {
@@ -228,6 +230,9 @@ func (s *LoanStore) RecordBorrowed(ctx context.Context, userID string, input Rec
 	if input.AmountMinor <= 0 {
 		return LoanRepaymentResult{}, errors.New("amount must be greater than zero")
 	}
+	if input.TransactionFeeMinor < 0 {
+		return LoanRepaymentResult{}, errors.New("transaction fee cannot be negative")
+	}
 	if input.TransactionDate == "" {
 		return LoanRepaymentResult{}, errors.New("transaction date is required")
 	}
@@ -256,7 +261,7 @@ func (s *LoanStore) RecordBorrowed(ctx context.Context, userID string, input Rec
 		note = "Borrowed from " + loan.CreditorName
 	}
 
-	created := make([]Transaction, 0, 2)
+	created := make([]Transaction, 0, 3)
 	cashTx, err := insertLoanTransaction(ctx, tx, Transaction{
 		UserID:          userID,
 		TransactionDate: input.TransactionDate,
@@ -293,6 +298,13 @@ func (s *LoanStore) RecordBorrowed(ctx context.Context, userID string, input Rec
 		return LoanRepaymentResult{}, err
 	}
 	created = append(created, liabilityTx)
+	if input.TransactionFeeMinor > 0 {
+		feeTx, err := NewTransactionStore(s.db).CreateMovementFeeWithTx(ctx, tx, cashTx, input.CashAccountID, input.TransactionFeeMinor)
+		if err != nil {
+			return LoanRepaymentResult{}, err
+		}
+		created = append(created, feeTx)
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return LoanRepaymentResult{}, err
@@ -313,6 +325,9 @@ func (s *LoanStore) RecordBorrowed(ctx context.Context, userID string, input Rec
 func (s *LoanStore) RecordRepayment(ctx context.Context, userID string, input RecordRepaymentInput) (LoanRepaymentResult, error) {
 	if input.AmountMinor <= 0 {
 		return LoanRepaymentResult{}, errors.New("amount must be greater than zero")
+	}
+	if input.TransactionFeeMinor < 0 {
+		return LoanRepaymentResult{}, errors.New("transaction fee cannot be negative")
 	}
 	if input.TransactionDate == "" {
 		return LoanRepaymentResult{}, errors.New("transaction date is required")
@@ -420,6 +435,18 @@ func (s *LoanStore) RecordRepayment(ctx context.Context, userID string, input Re
 			return LoanRepaymentResult{}, err
 		}
 		created = append(created, item)
+	}
+	if input.TransactionFeeMinor > 0 {
+		feeMovement := Transaction{
+			UserID: userID, TransactionDate: input.TransactionDate, Currency: input.Currency,
+			AccountID: input.CashAccountID, Note: &note, Source: "manual",
+			OriginEventID: &originEventID, OriginEventType: &originType,
+		}
+		feeTx, err := NewTransactionStore(s.db).CreateMovementFeeWithTx(ctx, tx, feeMovement, input.CashAccountID, input.TransactionFeeMinor)
+		if err != nil {
+			return LoanRepaymentResult{}, err
+		}
+		created = append(created, feeTx)
 	}
 
 	if feesPaid == summary.OutstandingFees && interestPaid == summary.OutstandingInterest && principalPaid == summary.RemainingPrincipal {
