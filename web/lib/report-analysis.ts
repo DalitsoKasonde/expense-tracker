@@ -35,8 +35,12 @@ export function hasReportMovement(month: ReportMonthSnapshot) {
 
 export function analyzeReportMonths(months: ReportMonthSnapshot[]) {
   const activeMonths = months.filter(hasReportMovement);
+  // Only a month that actually finished ahead can be "best". Naming a month
+  // that cleared zero — or lost the least — reads as a broken report rather
+  // than a highlight.
   const strongestMonth = activeMonths.reduce<ReportMonthSnapshot | null>(
-    (best, month) => (!best || month.freeCashFlow > best.freeCashFlow ? month : best),
+    (best, month) =>
+      month.freeCashFlow > 0 && (!best || month.freeCashFlow > best.freeCashFlow) ? month : best,
     null,
   );
   const highestCommitmentMonth = activeMonths.reduce<ReportMonthSnapshot | null>(

@@ -343,6 +343,44 @@ describe("AddEntryDialog", () => {
     );
   });
 
+  it("records a bond issued in the past without a funding account", async () => {
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "I bought an investment" })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "I bought an investment" }));
+    fireEvent.click(screen.getByRole("button", { name: "New government bond" }));
+
+    fireEvent.change(screen.getByLabelText("Bond name"), { target: { value: "2019 GRZ bond" } });
+    fireEvent.change(screen.getByLabelText("Annual coupon rate (%)"), { target: { value: "13" } });
+    fireEvent.change(screen.getByLabelText("Issue date"), { target: { value: "2019-06-01" } });
+    fireEvent.change(screen.getByLabelText("Term (years)"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Principal"), { target: { value: "10000" } });
+
+    // The bond used to demand a coupon account even when historical, which
+    // blocked recording bonds bought before any account was tracked.
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /record as historical without a funding account/i,
+      }),
+    );
+    expect(screen.queryByLabelText("Coupon and maturity account")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/bonds", {
+        method: "POST",
+        body: expect.objectContaining({
+          name: "2019 GRZ bond",
+          issueDate: "2019-06-01",
+          cashAccountId: undefined,
+          historicalBackfill: true,
+        }),
+      }),
+    );
+  });
+
   it("records a past expense without a funding account", async () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));

@@ -1,6 +1,5 @@
 "use client";
 
-import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -9,6 +8,7 @@ import { getPendingTransactions } from "@/lib/offline-db";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { adaptSavingsGoals, type SavingsGoal } from "@/lib/dashboard-adapters";
 import { formatMoney } from "@/lib/format-money";
+import { buildNextSteps } from "@/lib/next-steps";
 import {
   AccountCard,
   Button,
@@ -125,16 +125,16 @@ export default function TodayPage() {
   const visibleAccountBalances = accountBalances.filter((account) => !savingsGroupAccountIds.has(account.accountId));
   const assetAccounts = visibleAccountBalances.filter((account) => account.accountClass !== "liability");
   const liabilityAccounts = accountBalances.filter((account) => account.accountClass === "liability");
-  const setupTasks: Array<{ label: string; href: Route }> = [];
-  if (onboardingInterests.includes("loans") && liabilityAccounts.length === 0) {
-    setupTasks.push({ label: "Add the first loan you want Expenses to track", href: "/loans" });
-  }
-  if (onboardingInterests.includes("stocks") && !assets.some((asset) => asset.assetClass === "stock")) {
-    setupTasks.push({ label: "Add your first stock holding", href: "/investments/add" });
-  }
-  if (onboardingInterests.includes("bonds") && !assets.some((asset) => asset.assetClass === "bond")) {
-    setupTasks.push({ label: "Add your first government bond", href: "/investments/add" });
-  }
+  const setupTasks = buildNextSteps({
+    interests: onboardingInterests,
+    hasLiabilityAccount: liabilityAccounts.length > 0,
+    hasStock: assets.some((asset) => asset.assetClass === "stock"),
+    hasBond: assets.some((asset) => asset.assetClass === "bond"),
+    accountCount: accountBalances.length,
+    goalCount: goals.length,
+    incomeMinor: data.income,
+    expenseMinor: data.expense,
+  });
 
   return (
     <PageShell>
@@ -147,7 +147,7 @@ export default function TodayPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Financial summary">
         <MetricCard label="Available balance" value={formatMoney(data.cashBalance, currency)} detail={`As of ${new Date(data.asOfDate).toLocaleDateString()}`} />
-        <MetricCard label="Monthly cash flow" value={formatMoney(data.netCashFlow, currency)} tone={data.netCashFlow >= 0 ? "income" : "expense"} detail="Inflow less monthly movement" />
+        <MetricCard label="Net cash flow" value={formatMoney(data.netCashFlow, currency)} tone={data.netCashFlow >= 0 ? "income" : "expense"} detail="Income minus expenses this month" />
         <MetricCard label="Income" value={formatMoney(data.income, currency)} tone="income" detail="Earned this month" />
         <MetricCard label="Expenses" value={formatMoney(data.expense, currency)} tone="expense" detail="Spent this month" />
       </section>

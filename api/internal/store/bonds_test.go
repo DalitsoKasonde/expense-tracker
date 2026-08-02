@@ -20,6 +20,35 @@ func TestValidateBondInputRejectsNegativePurchaseFee(t *testing.T) {
 	}
 }
 
+func TestValidateBondInputAccountRequirement(t *testing.T) {
+	valid := CreateBondInput{
+		Name:                   "Three-year bond",
+		CashAccountID:          "cash-account",
+		PrincipalMinor:         100000,
+		CouponRateBps:          1300,
+		IssueDate:              "2026-01-01",
+		MaturityDate:           "2029-01-01",
+		CouponFrequencyPerYear: 2,
+		ReinvestmentCutoffDate: "2029-01-01",
+	}
+	if err := validateBondInput(valid); err != nil {
+		t.Fatalf("valid bond returned an error: %v", err)
+	}
+
+	missingAccount := valid
+	missingAccount.CashAccountID = ""
+	if err := validateBondInput(missingAccount); err == nil {
+		t.Fatal("bond without an account returned no error")
+	}
+
+	// A bond bought years ago may have left an account that was never tracked.
+	historical := missingAccount
+	historical.HistoricalBackfill = true
+	if err := validateBondInput(historical); err != nil {
+		t.Fatalf("historical bond without an account returned an error: %v", err)
+	}
+}
+
 func TestValidateCouponConfirmation(t *testing.T) {
 	base := ConfirmBondCouponInput{
 		CashflowID:       "cashflow-1",

@@ -106,7 +106,15 @@ export default function GoalsPage() {
         eyebrow="Plan"
         title="Savings goals"
         subtitle="Create personal targets and track how close you are to reaching them."
-        actions={<button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>New goal</button>}
+        // With no goals yet the empty state carries the call to action, so the
+        // header button would just be a second place to click for one thing.
+        actions={
+          groups.length ? (
+            <button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>
+              New goal
+            </button>
+          ) : null
+        }
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-outline bg-primary-softer p-4">

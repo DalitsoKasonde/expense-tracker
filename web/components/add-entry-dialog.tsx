@@ -455,9 +455,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     supportsHistoricalBackfill(formData.entryKind) &&
     isPastDate(historicalDate, today());
   const historicalBackfill = historicalEligible && formData.historicalBackfill;
-  const sourceAccountRequired =
-    !historicalBackfill ||
-    (formData.entryKind === "investment_buy" && investmentMode === "bond");
+  const sourceAccountRequired = !historicalBackfill;
   const availableSourceAccounts =
     formData.entryKind === "investment_buy" ? investmentAccounts : spendableAccounts;
 
@@ -599,7 +597,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             name: newInvestment.name.trim(),
             symbol: newInvestment.symbol.trim() || undefined,
             currency: formData.currency,
-            cashAccountId: formData.accountId,
+            cashAccountId: historicalBackfill ? undefined : formData.accountId,
             principalMinor: amountMinor,
             purchaseFeeMinor,
             couponRateBps: Math.round(couponRate * 100),
@@ -960,26 +958,21 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
               )}
 
               <div className={`${investmentMode === "bond" && formData.entryKind === "investment_buy" ? "" : "splitFields"} mt-5`}>
-                {historicalBackfill &&
-                !(formData.entryKind === "investment_buy" && investmentMode === "bond") ? (
+                {historicalBackfill ? (
                   <div className="rounded-md border border-primary/30 bg-primary-softer p-4">
                     <strong className="block text-sm text-on-surface">
                       Source account not required
                     </strong>
                     <span className="mt-1 block text-xs text-on-surface-soft">
-                      This past entry will not reduce any cash account.
+                      {formData.entryKind === "investment_buy" && investmentMode === "bond"
+                        ? "This past bond will not reduce any cash account. Coupons and maturity stay projected until you confirm one against an account."
+                        : "This past entry will not reduce any cash account."}
                     </span>
                   </div>
                 ) : (
                   <div className="field">
                     <label htmlFor="accountId">
-                      {historicalBackfill &&
-                      formData.entryKind === "investment_buy" &&
-                      investmentMode === "bond"
-                        ? "Coupon and maturity account"
-                        : isDebtWorkflow
-                          ? "Cash account"
-                          : accountLabel}
+                      {isDebtWorkflow ? "Cash account" : accountLabel}
                     </label>
                     <select
                       id="accountId"
@@ -995,13 +988,6 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                         </option>
                       ))}
                     </select>
-                    {historicalBackfill &&
-                    formData.entryKind === "investment_buy" &&
-                    investmentMode === "bond" ? (
-                      <span className="muted">
-                        Used only for future coupons and maturity; the historical purchase will not be deducted.
-                      </span>
-                    ) : null}
                     {formData.entryKind === "investment_buy" && availableSourceAccounts.length === 0 ? (
                       <span className="muted">
                         No {formData.currency} cash or bank account exists yet. <Link href="/settings/accounts">Create one in Settings</Link>.
@@ -1521,6 +1507,9 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                         </option>
                       ))}
                     </select>
+                    <span className="muted">
+                      Optional. Link this entry to a business to report on it separately.
+                    </span>
                   </div>
                 ) : null}
 

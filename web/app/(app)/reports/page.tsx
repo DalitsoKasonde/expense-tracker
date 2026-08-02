@@ -390,7 +390,17 @@ export default function ReportsPage() {
             <MetricCard
               label="Free cash flow"
               value={formatMoney(annual.ytd.freeCashFlow, currency)}
-              detail={`${formatBps(annual.ytd.wealthBuildRateBps)} wealth build rate`}
+              // Pairing a negative flow with a triple-digit "wealth build rate"
+              // reads as a bug. The rate divides by earned income, so it says
+              // nothing useful once spending has outrun what was earned.
+              detail={
+                annual.ytd.freeCashFlow < 0
+                  ? `${formatMoney(
+                      Math.abs(annual.ytd.freeCashFlow),
+                      currency,
+                    )} more went out than was earned`
+                  : `${formatBps(annual.ytd.wealthBuildRateBps)} wealth build rate`
+              }
               tone={annual.ytd.freeCashFlow >= 0 ? "savings" : "expense"}
             />
             <MetricCard
@@ -501,19 +511,20 @@ export default function ReportsPage() {
                 <dl className="mt-5 divide-y divide-outline">
                   <div className="pb-4">
                     <dt className="text-xs font-semibold text-on-surface-soft">Best cash-flow month</dt>
-                    <dd className="mt-1 flex items-baseline justify-between gap-3">
-                      <span className="font-semibold text-on-surface">
-                        {reportAnalysis.strongestMonth?.monthLabel}
-                      </span>
-                      <span
-                        className={`font-semibold tabular-nums ${signedValueClass(
-                          reportAnalysis.strongestMonth?.freeCashFlow ?? 0,
-                          true,
-                        )}`}
-                      >
-                        {formatMoney(reportAnalysis.strongestMonth?.freeCashFlow ?? 0, currency)}
-                      </span>
-                    </dd>
+                    {reportAnalysis.strongestMonth ? (
+                      <dd className="mt-1 flex items-baseline justify-between gap-3">
+                        <span className="font-semibold text-on-surface">
+                          {reportAnalysis.strongestMonth.monthLabel}
+                        </span>
+                        <span className="font-semibold tabular-nums text-positive">
+                          {formatMoney(reportAnalysis.strongestMonth.freeCashFlow, currency)}
+                        </span>
+                      </dd>
+                    ) : (
+                      <dd className="mt-1 text-sm text-on-surface-soft">
+                        No month finished ahead this year yet.
+                      </dd>
+                    )}
                   </div>
                   <div className="py-4">
                     <dt className="text-xs font-semibold text-on-surface-soft">Highest commitments</dt>

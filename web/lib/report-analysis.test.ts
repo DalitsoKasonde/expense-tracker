@@ -122,6 +122,15 @@ describe("report analysis", () => {
     expect(ticks).toEqual([{ value: 250, y: 50 }]);
   });
 
+  it("names no best month when nothing finished ahead", () => {
+    const flatMonths = months.map((month) => ({ ...month, freeCashFlow: 0 }));
+    const losingMonths = months.map((month) => ({ ...month, freeCashFlow: -500 }));
+
+    // "Best month: ZMW 0.00" reads as a broken report, not a highlight.
+    expect(analyzeReportMonths(flatMonths).strongestMonth).toBeNull();
+    expect(analyzeReportMonths(losingMonths).strongestMonth).toBeNull();
+  });
+
   it("finds the highest spending month", () => {
     expect(peakSpendingMonth([0, 300, 900, 900, 0])).toEqual({ index: 2, amount: 900 });
   });

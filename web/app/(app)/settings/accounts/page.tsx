@@ -47,6 +47,13 @@ function fromMinor(amountMinor: number) {
   return (amountMinor / 100).toFixed(2);
 }
 
+// Migration 027 appended "(duplicate <id>)" to clashing account names so the
+// unique index could be created. Those names are unreadable, so surface them
+// rather than leaving the user to wonder where the hex came from.
+function wasAutoRenamed(name: string) {
+  return / \(duplicate [0-9a-f]{8}\)$/.test(name);
+}
+
 export default function AccountsSettingsPage() {
   const apiCall = useApiCall();
   const { currency: userCurrency } = useUserCurrency();
@@ -208,10 +215,29 @@ export default function AccountsSettingsPage() {
                 <tbody>
                   {assetAccounts.map((account) => (
                     <tr key={account.id}>
-                      <td data-label="Name" className="font-semibold text-on-surface">{account.name}</td>
+                      <td data-label="Name" className="font-semibold text-on-surface">
+                        {account.name}
+                        {wasAutoRenamed(account.name) ? (
+                          <span className="mt-1 block text-xs font-medium text-warning">
+                            Auto-renamed to keep names unique. Rename it to something you will recognise.
+                          </span>
+                        ) : null}
+                      </td>
                       <td data-label="Type" className="text-on-surface-soft">{account.accountType.replaceAll("_", " ")}</td>
-                      <td data-label="Balance" className="text-on-surface">
+                      <td
+                        data-label="Balance"
+                        className={
+                          (balancesByAccountId[account.id] ?? 0) < 0
+                            ? "font-semibold text-negative"
+                            : "text-on-surface"
+                        }
+                      >
                         {formatMoney(balancesByAccountId[account.id] ?? 0, account.currency)}
+                        {(balancesByAccountId[account.id] ?? 0) < 0 ? (
+                          <span className="ml-2 rounded-pill bg-negative-soft px-2 py-0.5 text-xs font-semibold text-negative">
+                            Overdrawn
+                          </span>
+                        ) : null}
                       </td>
                       <td data-label="Currency" className="text-on-surface-soft">{account.currency}</td>
                       <td data-label="Actions">

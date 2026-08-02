@@ -112,7 +112,7 @@ export default function AddInvestmentPage() {
   const historicalDate = kind === "stock" || bondMode === "existing" ? form.purchaseDate : form.issueDate;
   const historicalEligible = isPastDate(historicalDate, today());
   const historicalBackfill = historicalEligible && form.historicalBackfill;
-  const accountRequired = (kind === "bond" && bondMode === "new") || !historicalBackfill;
+  const accountRequired = !historicalBackfill;
 
   useEffect(() => {
     if (!historicalEligible && form.historicalBackfill) {
@@ -334,7 +334,7 @@ export default function AddInvestmentPage() {
         name: form.name,
         symbol: form.symbol.trim() || undefined,
         currency: form.currency,
-        cashAccountId: form.accountId,
+        cashAccountId: historicalBackfill ? undefined : form.accountId,
         principalMinor,
         purchaseFeeMinor,
         couponRateBps: Math.round(couponRate * 100),
@@ -519,11 +519,13 @@ export default function AddInvestmentPage() {
             </div>
           </div>
 
-          {historicalBackfill && (kind === "stock" || bondMode === "existing") ? (
+          {historicalBackfill ? (
             <div className="rounded-md border border-primary/30 bg-primary-softer p-4">
               <strong className="block text-sm text-on-surface">Funding account not required</strong>
               <span className="mt-1 block text-xs text-on-surface-soft">
-                This historical holding will not reduce a cash-account balance.
+                {kind === "bond" && bondMode === "new"
+                  ? "This historical bond will not reduce a cash-account balance. Coupons and maturity stay projected until you confirm one against an account."
+                  : "This historical holding will not reduce a cash-account balance."}
               </span>
             </div>
           ) : (
@@ -535,11 +537,6 @@ export default function AddInvestmentPage() {
                 <option value="">Select an account</option>
                 {usableAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}
               </select>
-              {historicalBackfill && kind === "bond" && bondMode === "new" ? (
-                <span className="muted">
-                  Used for coupons and maturity only; the historical purchase is not deducted.
-                </span>
-              ) : null}
               {!loadingOptions && usableAccounts.length === 0 ? <span className="muted">No {form.currency} cash or bank account exists yet. <Link href="/settings/accounts">Create one in Settings</Link>.</span> : null}
             </div>
           )}

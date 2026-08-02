@@ -1,6 +1,7 @@
 "use client";
 
 import { useApiCall } from "@/lib/client-api";
+import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
 import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
 import type { Dispatch, SetStateAction } from "react";
@@ -12,6 +13,7 @@ type Account = {
   accountType: string;
   accountClass: string;
   currency: string;
+  isSavingsGroupAccount?: boolean;
 };
 
 type LoanSummary = {
@@ -73,7 +75,7 @@ export function LoansWorkspace() {
   });
 
   const cashAccounts = useMemo(
-    () => accounts.filter((account) => account.accountClass !== "liability"),
+    () => spendableAccounts(accounts),
     [accounts]
   );
 
@@ -89,7 +91,7 @@ export function LoansWorkspace() {
     setLoans(loadedLoans ?? []);
     setAccounts(loadedAccounts ?? []);
     const firstLoan = loadedLoans?.[0]?.id ?? "";
-    const firstCash = loadedAccounts?.find((account) => account.accountClass !== "liability")?.id ?? "";
+    const firstCash = loadedAccounts?.find(isSpendableAccount)?.id ?? "";
     setBorrowForm((current) => ({ ...current, loanId: current.loanId || firstLoan, cashAccountId: current.cashAccountId || firstCash }));
     setRepayForm((current) => ({ ...current, loanId: current.loanId || firstLoan, cashAccountId: current.cashAccountId || firstCash }));
   }, [apiCall]);
@@ -244,7 +246,7 @@ export function LoansWorkspace() {
             <strong>Record borrowed money</strong>
             <span className="muted">Adds money to your chosen account and updates what you owe.</span>
           </div>
-          <LoanAccountFields loans={loans} cashAccounts={cashAccounts} form={borrowForm} setForm={setBorrowForm} />
+          <LoanAccountFields idPrefix="borrow" loans={loans} cashAccounts={cashAccounts} form={borrowForm} setForm={setBorrowForm} />
           <button className="btn btn-primary" type="submit" disabled={saving || loans.length === 0 || cashAccounts.length === 0}>
             Record borrowed
           </button>
@@ -255,7 +257,7 @@ export function LoansWorkspace() {
             <strong>Record repayment</strong>
             <span className="muted">Your payment goes to fees first, then interest, then the amount borrowed.</span>
           </div>
-          <LoanAccountFields loans={loans} cashAccounts={cashAccounts} form={repayForm} setForm={setRepayForm} />
+          <LoanAccountFields idPrefix="repay" loans={loans} cashAccounts={cashAccounts} form={repayForm} setForm={setRepayForm} />
           <button className="btn btn-primary" type="submit" disabled={saving || loans.length === 0 || cashAccounts.length === 0}>
             Record repayment
           </button>
@@ -268,11 +270,13 @@ export function LoansWorkspace() {
 }
 
 function LoanAccountFields({
+  idPrefix,
   loans,
   cashAccounts,
   form,
   setForm,
 }: {
+  idPrefix: string;
   loans: LoanSummary[];
   cashAccounts: Account[];
   form: { loanId: string; cashAccountId: string; amount: string; transactionDate: string; note: string };
@@ -282,8 +286,8 @@ function LoanAccountFields({
     <>
       <div className="splitFields">
         <div className="field">
-          <label>Loan</label>
-          <select value={form.loanId} onChange={(event) => setForm((current) => ({ ...current, loanId: event.target.value }))} required>
+          <label htmlFor={`${idPrefix}-loan`}>Loan</label>
+          <select id={`${idPrefix}-loan`} value={form.loanId} onChange={(event) => setForm((current) => ({ ...current, loanId: event.target.value }))} required>
             <option value="">Select loan</option>
             {loans.map((loan) => (
               <option key={loan.id} value={loan.id}>
@@ -293,8 +297,8 @@ function LoanAccountFields({
           </select>
         </div>
         <div className="field">
-          <label>Cash account</label>
-          <select value={form.cashAccountId} onChange={(event) => setForm((current) => ({ ...current, cashAccountId: event.target.value }))} required>
+          <label htmlFor={`${idPrefix}-cash-account`}>Cash account</label>
+          <select id={`${idPrefix}-cash-account`} value={form.cashAccountId} onChange={(event) => setForm((current) => ({ ...current, cashAccountId: event.target.value }))} required>
             <option value="">Select account</option>
             {cashAccounts.map((account) => (
               <option key={account.id} value={account.id}>
@@ -306,17 +310,17 @@ function LoanAccountFields({
       </div>
       <div className="splitFields">
         <div className="field">
-          <label>Amount</label>
-          <input type="number" step="0.01" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} required />
+          <label htmlFor={`${idPrefix}-amount`}>Amount</label>
+          <input id={`${idPrefix}-amount`} type="number" step="0.01" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} required />
         </div>
         <div className="field">
-          <label>Date</label>
-          <input type="date" value={form.transactionDate} onChange={(event) => setForm((current) => ({ ...current, transactionDate: event.target.value }))} required />
+          <label htmlFor={`${idPrefix}-date`}>Date</label>
+          <input id={`${idPrefix}-date`} type="date" value={form.transactionDate} onChange={(event) => setForm((current) => ({ ...current, transactionDate: event.target.value }))} required />
         </div>
       </div>
       <div className="field">
-        <label>Note</label>
-        <input value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} />
+        <label htmlFor={`${idPrefix}-note`}>Note</label>
+        <input id={`${idPrefix}-note`} value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} />
       </div>
     </>
   );

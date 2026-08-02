@@ -14,6 +14,7 @@ export default function CategoriesSettingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     name: "",
     categoryGroup: "expense",
@@ -25,6 +26,19 @@ export default function CategoriesSettingsPage() {
     () => new Map(categories.map((category) => [category.id, category])),
     [categories],
   );
+  // A long flat list is unscannable, so searching matches a category's own name
+  // or its parent's — typing "transport" should still surface "Fuel" beneath it.
+  const visibleCategories = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return orderedCategories;
+    return orderedCategories.filter((category) => {
+      if (category.name.toLowerCase().includes(term)) return true;
+      const parent = category.parentId ? categoriesById.get(category.parentId) : undefined;
+      return parent ? parent.name.toLowerCase().includes(term) : false;
+    });
+  }, [categoriesById, orderedCategories, search]);
+  const searching = search.trim().length > 0;
+
   const parentOptions = useMemo(
     () =>
       orderedCategories.filter(
@@ -124,13 +138,33 @@ export default function CategoriesSettingsPage() {
           </button>
         </div>
 
+        {!loading && categories.length > 15 ? (
+          <div className="field">
+            <label htmlFor="categorySearch">Search categories</label>
+            <input
+              id="categorySearch"
+              type="search"
+              value={search}
+              placeholder="Filter by name"
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <span className="muted" role="status">
+              {searching
+                ? `${visibleCategories.length} of ${orderedCategories.length} categories match`
+                : `${orderedCategories.length} categories`}
+            </span>
+          </div>
+        ) : null}
+
         {loading ? <div className="card settingsListPanel muted">Loading categories...</div> : null}
         {!loading ? (
           <div className="grid gap-4">
             {categoryGroups.map((group) => {
-              const groupCategories = orderedCategories.filter(
+              const groupCategories = visibleCategories.filter(
                 (category) => category.categoryGroup === group.value,
               );
+              // While searching, a group with no matches is noise.
+              if (searching && groupCategories.length === 0) return null;
               return (
                 <section key={group.value} className="card overflow-hidden p-0" aria-labelledby={`category-group-${group.value}`}>
                   <div className="flex items-center justify-between gap-3 border-b border-outline bg-surface-soft p-4">

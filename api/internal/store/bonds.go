@@ -124,18 +124,22 @@ func (s *BondStore) Create(ctx context.Context, userID string, input CreateBondI
 	}
 	defer tx.Rollback(ctx)
 
-	var accountExists bool
-	if err := tx.QueryRow(ctx, `
-		select exists(
-			select 1
-			from accounts
-			where id = $1 and user_id = $2 and archived_at is null
-		)
-	`, input.CashAccountID, userID).Scan(&accountExists); err != nil {
-		return BondPosition{}, err
-	}
-	if !accountExists {
-		return BondPosition{}, ErrNotFound
+	// A historical bond may name no account at all; validateBondInput has
+	// already refused an empty account for every other case.
+	if input.CashAccountID != "" {
+		var accountExists bool
+		if err := tx.QueryRow(ctx, `
+			select exists(
+				select 1
+				from accounts
+				where id = $1 and user_id = $2 and archived_at is null
+			)
+		`, input.CashAccountID, userID).Scan(&accountExists); err != nil {
+			return BondPosition{}, err
+		}
+		if !accountExists {
+			return BondPosition{}, ErrNotFound
+		}
 	}
 
 	bondTypeID, err := findOrCreateBondInvestmentType(ctx, tx, userID)
@@ -164,7 +168,7 @@ func (s *BondStore) Create(ctx context.Context, userID string, input CreateBondI
 		          $3::text as name,
 		          $4::text as symbol,
 		          $5::text as currency,
-		          cash_account_id,
+		          coalesce(cash_account_id::text, '') as cash_account_id,
 		          principal_minor,
 		          purchase_fee_minor,
 		          coupon_rate_bps,
@@ -174,7 +178,7 @@ func (s *BondStore) Create(ctx context.Context, userID string, input CreateBondI
 		          reinvestment_cutoff_date::text,
 		          created_at::text,
 		          updated_at::text
-	`, userID, bondTypeID, strings.TrimSpace(input.Name), symbol, input.Currency, input.CashAccountID, input.PrincipalMinor, input.PurchaseFeeMinor, input.CouponRateBps, input.IssueDate, input.MaturityDate, input.CouponFrequencyPerYear, input.ReinvestmentCutoffDate).Scan(
+	`, userID, bondTypeID, strings.TrimSpace(input.Name), symbol, input.Currency, nullableAccountID(input.CashAccountID), input.PrincipalMinor, input.PurchaseFeeMinor, input.CouponRateBps, input.IssueDate, input.MaturityDate, input.CouponFrequencyPerYear, input.ReinvestmentCutoffDate).Scan(
 		&position.AssetID,
 		&position.UserID,
 		&position.Name,
@@ -217,7 +221,7 @@ func (s *BondStore) Create(ctx context.Context, userID string, input CreateBondI
 			insert into bond_cashflows (
 				asset_id, cash_account_id, event_type, disposition, scheduled_date, gross_amount_minor, net_amount_minor, status
 			) values ($1, $2, $3, $4, $5, $6, $7, 'projected')
-		`, cashflow.AssetID, cashflow.CashAccountID, cashflow.EventType, cashflow.Disposition, cashflow.ScheduledDate, cashflow.GrossAmountMinor, cashflow.NetAmountMinor); err != nil {
+		`, cashflow.AssetID, nullableAccountID(cashflow.CashAccountID), cashflow.EventType, cashflow.Disposition, cashflow.ScheduledDate, cashflow.GrossAmountMinor, cashflow.NetAmountMinor); err != nil {
 			return BondPosition{}, err
 		}
 	}
@@ -243,7 +247,7 @@ func (s *BondStore) AddPurchase(ctx context.Context, userID, assetID string, inp
 
 	var position BondPosition
 	err = tx.QueryRow(ctx, `
-		select bp.asset_id, a.user_id, a.name, a.symbol, a.currency, bp.cash_account_id,
+		select bp.asset_id, a.user_id, a.name, a.symbol, a.currency, coalesce(bp.cash_account_id::text, '') as cash_account_id,
 		       bp.principal_minor, bp.purchase_fee_minor, bp.coupon_rate_bps,
 		       bp.issue_date::text, bp.maturity_date::text, bp.coupon_frequency_per_year,
 		       bp.reinvestment_cutoff_date::text, bp.created_at::text, bp.updated_at::text
@@ -365,7 +369,7 @@ func (s *BondStore) AddPurchase(ctx context.Context, userID, assetID string, inp
 
 func (s *BondStore) ListByUser(ctx context.Context, userID string) ([]BondPosition, error) {
 	rows, err := s.db.Query(ctx, `
-		select bp.asset_id, a.user_id, a.name, a.symbol, a.currency, bp.cash_account_id, bp.principal_minor, bp.purchase_fee_minor,
+		select bp.asset_id, a.user_id, a.name, a.symbol, a.currency, coalesce(bp.cash_account_id::text, '') as cash_account_id, bp.principal_minor, bp.purchase_fee_minor,
 		       bp.coupon_rate_bps, bp.issue_date::text, bp.maturity_date::text, bp.coupon_frequency_per_year,
 		       bp.reinvestment_cutoff_date::text, bp.created_at::text, bp.updated_at::text
 		from bond_positions bp
@@ -409,7 +413,7 @@ func (s *BondStore) ListByUser(ctx context.Context, userID string) ([]BondPositi
 func (s *BondStore) GetProjection(ctx context.Context, userID, assetID string) (BondProjection, error) {
 	var projection BondProjection
 	err := s.db.QueryRow(ctx, `
-		select bp.asset_id, a.user_id, a.name, a.symbol, a.currency, bp.cash_account_id, bp.principal_minor, bp.purchase_fee_minor,
+		select bp.asset_id, a.user_id, a.name, a.symbol, a.currency, coalesce(bp.cash_account_id::text, '') as cash_account_id, bp.principal_minor, bp.purchase_fee_minor,
 		       bp.coupon_rate_bps, bp.issue_date::text, bp.maturity_date::text, bp.coupon_frequency_per_year,
 		       bp.reinvestment_cutoff_date::text, bp.created_at::text, bp.updated_at::text
 		from bond_positions bp
@@ -437,7 +441,7 @@ func (s *BondStore) GetProjection(ctx context.Context, userID, assetID string) (
 	}
 
 	rows, err := s.db.Query(ctx, `
-		select id, asset_id, cash_account_id, event_type, disposition, scheduled_date::text, gross_amount_minor,
+		select id, asset_id, coalesce(cash_account_id::text, '') as cash_account_id, event_type, disposition, scheduled_date::text, gross_amount_minor,
 		       tax_amount_minor, net_amount_minor, status, posted_transaction_id, destination_asset_id,
 		       reinvest_transaction_id, payment_date::text, confirmed_at::text
 		from bond_cashflows
@@ -622,7 +626,7 @@ func (s *BondStore) ConfirmCoupon(ctx context.Context, userID, assetID string, i
 		    confirmed_at = now(),
 		    updated_at = now()
 		where id = $10 and status = 'projected'
-		returning id, asset_id, cash_account_id, event_type, disposition, scheduled_date::text,
+		returning id, asset_id, coalesce(cash_account_id::text, '') as cash_account_id, event_type, disposition, scheduled_date::text,
 		          gross_amount_minor, tax_amount_minor, net_amount_minor, status, posted_transaction_id,
 		          destination_asset_id, reinvest_transaction_id, payment_date::text, confirmed_at::text
 	`, input.CashAccountID, disposition, input.GrossAmountMinor, input.TaxAmountMinor, netAmountMinor,
@@ -663,6 +667,9 @@ func (s *BondStore) PostDueCashflows(ctx context.Context, userID string, asOf ti
 		  and bc.status = 'projected'
 		  and bc.scheduled_date <= $2
 		  and bc.event_type = 'principal_redemption'
+		  -- A historical bond may have no account to credit. Its redemption stays
+		  -- projected until one is chosen rather than posting to nowhere.
+		  and bc.cash_account_id is not null
 		order by bc.scheduled_date asc, bc.created_at asc
 	`, userID, asOf.Format(dateLayout))
 	if err != nil {
@@ -862,7 +869,7 @@ func validateBondInput(input CreateBondInput) error {
 	if name == "" {
 		return errors.New("name is required")
 	}
-	if strings.TrimSpace(input.CashAccountID) == "" {
+	if !input.HistoricalBackfill && strings.TrimSpace(input.CashAccountID) == "" {
 		return errors.New("cashAccountId is required")
 	}
 	if input.PrincipalMinor <= 0 {

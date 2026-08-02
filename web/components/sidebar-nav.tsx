@@ -6,7 +6,9 @@ import { useSession } from "next-auth/react";
 import { AddEntryButton } from "@/components/add-entry-button";
 import { signOutEverywhere } from "@/lib/browser-auth";
 import { Brand } from "@/components/brand";
-import { isNavigationItemActive, primaryNavigation } from "./app-navigation";
+import { addNavigationItem, isNavigationItemActive, sidebarNavigation } from "./app-navigation";
+
+const AddActionIcon = addNavigationItem.icon;
 
 export function SidebarNav() {
   const pathname = usePathname();
@@ -19,23 +21,23 @@ export function SidebarNav() {
         <Brand compact priority />
       </div>
 
-      <nav className="mt-7 grid gap-2">
-        {primaryNavigation.map((item) => {
+      {/* Adding an entry is the one thing here that is not a place to go, so it
+          sits above the list as a filled action rather than a fourth link. */}
+      <div className="mt-7 border-b border-outline pb-5">
+        <AddEntryButton className="btn btn-primary w-full justify-center">
+          <span className="mr-2 grid size-5 place-items-center" aria-hidden="true">
+            <AddActionIcon />
+          </span>
+          {addNavigationItem.label}
+        </AddEntryButton>
+      </div>
+
+      <nav className="mt-5 grid gap-2">
+        {sidebarNavigation.map((item) => {
           const isActive = isNavigationItemActive(currentPath, item);
           const Icon = item.icon;
           const navClassName = `relative flex min-h-11 items-center gap-3 rounded-md px-3 py-2.5 text-sm font-semibold transition-colors ${isActive ? "bg-primary-softer text-primary before:absolute before:left-0 before:h-6 before:w-1 before:rounded-r before:bg-accent" : "text-on-surface-soft hover:bg-surface-soft hover:text-on-surface"}`;
           const iconClassName = `grid size-8 place-items-center rounded-md ${isActive ? "bg-primary-soft" : "bg-surface-soft"}`;
-
-          if (item.action === "add") {
-            return (
-              <AddEntryButton key={item.href} className={navClassName}>
-                <span className={iconClassName} aria-hidden="true">
-                  <Icon />
-                </span>
-                <span>{item.label}</span>
-              </AddEntryButton>
-            );
-          }
 
           return (
             <Link
