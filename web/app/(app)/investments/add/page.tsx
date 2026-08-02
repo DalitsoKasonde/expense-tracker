@@ -16,7 +16,7 @@ import type { MarketStockDirectory } from "@/lib/market-data";
 import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
-type InvestmentKind = "stock" | "bond";
+type InvestmentKind = "stock" | "bond" | "group";
 type StockMode = "existing" | "new";
 type BondMode = "existing" | "new";
 
@@ -97,6 +97,11 @@ export default function AddInvestmentPage() {
     reinvestmentCutoffDate: addYearsToDate(today(), 1),
     note: "",
     historicalBackfill: false,
+    cycleStart: today(),
+    cycleLengthMonths: "12",
+    target: "",
+    openingContribution: "0",
+    isShareoutGroup: true,
   });
 
   const usableAccounts = useMemo(
@@ -109,10 +114,13 @@ export default function AddInvestmentPage() {
   );
   const selectedStock = stockAssets.find((asset) => asset.id === form.assetId);
   const selectedBond = bonds.find((bond) => bond.assetId === form.bondAssetId);
+  // A savings group opens its own savings account and is funded by transfers
+  // afterwards, so it has no purchase, no funding account, and no backfill flag.
+  const isSavingsGroup = kind === "group";
   const historicalDate = kind === "stock" || bondMode === "existing" ? form.purchaseDate : form.issueDate;
-  const historicalEligible = isPastDate(historicalDate, today());
+  const historicalEligible = !isSavingsGroup && isPastDate(historicalDate, today());
   const historicalBackfill = historicalEligible && form.historicalBackfill;
-  const accountRequired = !historicalBackfill;
+  const accountRequired = !historicalBackfill && !isSavingsGroup;
 
   useEffect(() => {
     if (!historicalEligible && form.historicalBackfill) {
@@ -347,6 +355,33 @@ export default function AddInvestmentPage() {
     });
   }
 
+  async function createSavingsGroup() {
+    const name = form.name.trim();
+    if (!name) throw new Error("Enter a name for the savings group.");
+    const cycleLengthMonths = Number.parseInt(form.cycleLengthMonths, 10);
+    if (!Number.isInteger(cycleLengthMonths) || cycleLengthMonths <= 0) {
+      throw new Error("Enter a cycle length of at least one month.");
+    }
+    const targetMinor = toMinor(form.target);
+    const openingContributionMinor = toMinor(form.openingContribution);
+    if (openingContributionMinor < 0) {
+      throw new Error("Contributions so far cannot be negative.");
+    }
+
+    await apiCall("/v1/savings-groups", {
+      method: "POST",
+      body: {
+        name,
+        currency: form.currency,
+        isShareoutGroup: form.isShareoutGroup,
+        cycleStart: form.cycleStart,
+        cycleLengthMonths,
+        targetMinor: targetMinor > 0 ? targetMinor : undefined,
+        openingContributionMinor,
+      },
+    });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (accountRequired && !form.accountId) {
@@ -358,6 +393,7 @@ export default function AddInvestmentPage() {
     setError("");
     try {
       if (kind === "stock") await createStock();
+      else if (kind === "group") await createSavingsGroup();
       else await createBond();
       router.push("/investments");
       router.refresh();
@@ -378,7 +414,10 @@ export default function AddInvestmentPage() {
             { label: "Add investment" },
           ]}
         />
-        <PageHeader title="Add investment" subtitle="Track a stock holding or a government bond in its original currency." />
+        <PageHeader
+          title="Add investment"
+          subtitle="Track a stock holding, a government bond, or a savings group in its own currency."
+        />
 
         <div className="rangeSwitcher" role="tablist" aria-label="Investment type">
           <button type="button" className={kind === "stock" ? "rangeChip active" : "rangeChip"} onClick={() => setKind("stock")}>
@@ -386,6 +425,9 @@ export default function AddInvestmentPage() {
           </button>
           <button type="button" className={kind === "bond" ? "rangeChip active" : "rangeChip"} onClick={() => setKind("bond")}>
             Government bond
+          </button>
+          <button type="button" className={kind === "group" ? "rangeChip active" : "rangeChip"} onClick={() => setKind("group")}>
+            Savings group
           </button>
         </div>
 
@@ -495,8 +537,26 @@ export default function AddInvestmentPage() {
                 </div>
               ) : null}
               <div className="field">
-                <label htmlFor="name">{kind === "stock" ? "Company or fund name" : "Bond name"}</label>
-                <input id="name" value={form.name} onChange={(event) => update("name", event.target.value)} placeholder={kind === "stock" ? "e.g. ZCCM Investments Holdings" : "e.g. GRZ 15-year bond"} required />
+                <label htmlFor="name">
+                  {kind === "stock"
+                    ? "Company or fund name"
+                    : kind === "group"
+                      ? "Savings group name"
+                      : "Bond name"}
+                </label>
+                <input
+                  id="name"
+                  value={form.name}
+                  onChange={(event) => update("name", event.target.value)}
+                  placeholder={
+                    kind === "stock"
+                      ? "e.g. ZCCM Investments Holdings"
+                      : kind === "group"
+                        ? "e.g. Month-end chilimba"
+                        : "e.g. GRZ 15-year bond"
+                  }
+                  required
+                />
               </div>
             </>
           )}
@@ -519,7 +579,15 @@ export default function AddInvestmentPage() {
             </div>
           </div>
 
-          {historicalBackfill ? (
+          {isSavingsGroup ? (
+            <div className="rounded-md border border-primary/30 bg-primary-softer p-4">
+              <strong className="block text-sm text-on-surface">Its own savings account</strong>
+              <span className="mt-1 block text-xs text-on-surface-soft">
+                Creating the group opens a savings account in its name. Fund it afterwards by
+                transferring money into that account, and each transfer counts as a contribution.
+              </span>
+            </div>
+          ) : historicalBackfill ? (
             <div className="rounded-md border border-primary/30 bg-primary-softer p-4">
               <strong className="block text-sm text-on-surface">Funding account not required</strong>
               <span className="mt-1 block text-xs text-on-surface-soft">
@@ -541,7 +609,7 @@ export default function AddInvestmentPage() {
             </div>
           )}
 
-          {historicalEligible ? (
+          {historicalEligible && !isSavingsGroup ? (
             <label className="flex cursor-pointer items-start gap-3 rounded-md border border-outline bg-surface-soft p-4">
               <input
                 type="checkbox"
@@ -560,7 +628,81 @@ export default function AddInvestmentPage() {
             </label>
           ) : null}
 
-          {kind === "stock" ? (
+          {isSavingsGroup ? (
+            <>
+              <div className="splitFields">
+                <div className="field">
+                  <label htmlFor="cycleStart">Cycle start</label>
+                  <input
+                    id="cycleStart"
+                    type="date"
+                    value={form.cycleStart}
+                    onChange={(event) => update("cycleStart", event.target.value)}
+                    required
+                  />
+                  <span className="muted">Contributions are counted from this date.</span>
+                </div>
+                <div className="field">
+                  <label htmlFor="cycleLengthMonths">Cycle length (months)</label>
+                  <input
+                    id="cycleLengthMonths"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.cycleLengthMonths}
+                    onChange={(event) => update("cycleLengthMonths", event.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="splitFields">
+                <div className="field">
+                  <label htmlFor="target">Target ({form.currency}, optional)</label>
+                  <input
+                    id="target"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.target}
+                    onChange={(event) => update("target", event.target.value)}
+                  />
+                  <span className="muted">Leave blank if the group has no set goal.</span>
+                </div>
+                <div className="field">
+                  <label htmlFor="openingContribution">Contributed so far ({form.currency})</label>
+                  <input
+                    id="openingContribution"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.openingContribution}
+                    onChange={(event) => update("openingContribution", event.target.value)}
+                  />
+                  <span className="muted">
+                    What you had already put in before tracking it here. Recorded as historical, so
+                    it does not come out of any account.
+                  </span>
+                </div>
+              </div>
+              <label className="flex cursor-pointer items-start gap-3 rounded-md border border-outline bg-surface-soft p-4">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4 accent-primary"
+                  checked={form.isShareoutGroup}
+                  onChange={(event) => update("isShareoutGroup", event.target.checked)}
+                />
+                <span>
+                  <strong className="block text-sm text-on-surface">
+                    Pays out at the end of a cycle
+                  </strong>
+                  <span className="mt-1 block text-xs text-on-surface-soft">
+                    Chilimba and similar groups share out the pot at the end of each cycle. Leave
+                    unticked for a group you simply save into.
+                  </span>
+                </span>
+              </label>
+            </>
+          ) : kind === "stock" ? (
             <>
               <div className="splitFields">
                 <div className="field">
@@ -669,13 +811,15 @@ export default function AddInvestmentPage() {
           <button type="submit" className="btn btn-primary" disabled={saving || loadingOptions || (accountRequired && usableAccounts.length === 0) || (kind === "stock" && stockMode === "existing" && stockAssets.length === 0) || (kind === "bond" && bondMode === "existing" && bonds.length === 0)}>
             {saving
               ? "Saving..."
-              : kind === "stock" && stockMode === "existing"
-                ? "Add purchase to stock"
-                : kind === "stock"
-                  ? "Add stock holding"
-                  : bondMode === "existing"
-                    ? "Add purchase to bond"
-                    : "Add government bond"}
+              : isSavingsGroup
+                ? "Add savings group"
+                : kind === "stock" && stockMode === "existing"
+                  ? "Add purchase to stock"
+                  : kind === "stock"
+                    ? "Add stock holding"
+                    : bondMode === "existing"
+                      ? "Add purchase to bond"
+                      : "Add government bond"}
           </button>
         </form>
 

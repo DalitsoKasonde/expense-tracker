@@ -28,7 +28,18 @@ describe("Expenses UI primitives", () => {
 
   it("shows pending transaction state", () => {
     render(<TransactionRow transaction={{ id: "1", transactionDate: "2026-06-19", entryKind: "expense_living", amount: 5000, currency: "ZMW", isPending: true }} />);
-    expect(screen.getByText("Pending sync")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText("Living expense")).toBeInTheDocument();
+    expect(screen.getByText("Money out")).toBeInTheDocument();
+    expect(screen.getByText(/50\.00/)).toBeInTheDocument();
+  });
+
+  it("uses a note as the transaction description without repeating its type", () => {
+    render(<TransactionRow transaction={{ id: "2", transactionDate: "2026-08-02", entryKind: "income_earned", amount: 12500, currency: "ZMW", note: "Consulting" }} />);
+
+    expect(screen.getByText("Consulting")).toBeInTheDocument();
+    expect(screen.getByText("Income")).toBeInTheDocument();
+    expect(screen.getByText("Money in")).toBeInTheDocument();
   });
 
   it("emits controlled filter changes", () => {

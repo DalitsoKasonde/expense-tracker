@@ -20,7 +20,10 @@ type SavingsGroup struct {
 	TargetMinor       *int64 `json:"targetMinor"`
 	ContributedMinor  int64  `json:"contributedMinor"`
 	CurrentBalance    int64  `json:"currentBalance"`
-	CreatedAt         string `json:"createdAt"`
+	// Currency of the group's account. Without it the portfolio has to assume
+	// every group is in the reporting currency and would sum across currencies.
+	Currency  string `json:"currency"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type CreateSavingsGroupInput struct {
@@ -327,7 +330,9 @@ func (s *SavingsGroupStore) decorate(ctx context.Context, group *SavingsGroup) e
 	}
 	group.ContributedMinor = contributed
 	return s.db.QueryRow(ctx, `
-		select (
+		select
+		a.currency,
+		(
 			coalesce(a.opening_balance, 0)::bigint
 			+ coalesce(sum(
 				case
@@ -349,8 +354,8 @@ func (s *SavingsGroupStore) decorate(ctx context.Context, group *SavingsGroup) e
 			and t.currency = a.currency
 			and (t.account_id = a.id or t.destination_account_id = a.id)
 		where a.id = $1 and a.user_id = $2
-		group by a.id, a.opening_balance
-	`, group.AccountID, group.UserID).Scan(&group.CurrentBalance)
+		group by a.id, a.opening_balance, a.currency
+	`, group.AccountID, group.UserID).Scan(&group.Currency, &group.CurrentBalance)
 }
 
 func (s *SavingsGroupStore) contributedSince(ctx context.Context, userID, accountID, start string) (int64, error) {

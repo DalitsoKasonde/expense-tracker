@@ -182,12 +182,16 @@ export default function TodayPage() {
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-        <section className="card">
-          <div className="flex items-center justify-between gap-4 border-b border-outline pb-4">
-            <div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Activity</p><h2 className="mt-1 text-lg font-semibold text-on-surface">Recent transactions</h2></div>
-            <Link href="/transactions" className="text-sm font-semibold text-accent hover:underline">View history</Link>
+        <section className="card min-w-0 overflow-hidden" aria-labelledby="latest-activity-heading">
+          <div className="flex min-w-0 items-end justify-between gap-4 border-b border-outline pb-4">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Activity</p>
+              <h2 id="latest-activity-heading" className="mt-1 text-lg font-semibold text-on-surface">Latest activity</h2>
+              <p className="mt-1 text-xs text-on-surface-soft">Your five most recent money movements.</p>
+            </div>
+            <Link href="/transactions" className="shrink-0 text-sm font-semibold text-accent hover:underline">See all <span aria-hidden="true">→</span></Link>
           </div>
-          {transactions.length ? <div>{transactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</div> : <div className="pt-5"><EmptyState title="No transactions yet" description="Add your first entry and recent activity will appear here." /></div>}
+          {transactions.length ? <div className="min-w-0">{transactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</div> : <div className="pt-5"><EmptyState title="No activity yet" description="Add your first entry and it will appear here." /></div>}
         </section>
 
         <section>

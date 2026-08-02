@@ -59,6 +59,7 @@ describe("AddInvestmentPage", () => {
         });
       }
       if (path === "/v1/bonds/bond-1/purchases" && options?.method === "POST") return Promise.resolve({});
+      if (path === "/v1/savings-groups" && options?.method === "POST") return Promise.resolve({});
       if (path === "/v1/transactions" && options?.method === "POST") return Promise.resolve({});
       return Promise.reject(new Error(`unexpected path ${path}`));
     });
@@ -127,5 +128,81 @@ describe("AddInvestmentPage", () => {
       }),
     );
     expect(mocks.push).toHaveBeenCalledWith("/investments");
+  });
+});
+
+describe("AddInvestmentPage savings groups", () => {
+  beforeEach(() => {
+    mocks.apiCall.mockReset();
+    mocks.push.mockReset();
+    mocks.refresh.mockReset();
+    mocks.apiCall.mockImplementation((path: string, options?: { method?: string }) => {
+      if (path === "/v1/savings-groups" && options?.method === "POST") return Promise.resolve({});
+      if (path === "/v1/market-data/luse") return Promise.reject(new Error("offline"));
+      return Promise.resolve([]);
+    });
+  });
+
+  async function openSavingsGroupTab() {
+    render(<AddInvestmentPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Savings group" }));
+  }
+
+  it("creates a savings group from the same form as stocks and bonds", async () => {
+    await openSavingsGroupTab();
+
+    fireEvent.change(screen.getByLabelText("Savings group name"), {
+      target: { value: "Month-end chilimba" },
+    });
+    fireEvent.change(screen.getByLabelText("Cycle start"), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText("Cycle length (months)"), { target: { value: "6" } });
+    fireEvent.change(screen.getByLabelText(/Contributed so far/), { target: { value: "1500" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add savings group" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/savings-groups", {
+        method: "POST",
+        body: {
+          name: "Month-end chilimba",
+          currency: "ZMW",
+          isShareoutGroup: true,
+          cycleStart: "2026-01-01",
+          cycleLengthMonths: 6,
+          targetMinor: undefined,
+          openingContributionMinor: 150_000,
+        },
+      }),
+    );
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/investments"));
+  });
+
+  it("asks for no funding account, because the group opens its own", async () => {
+    await openSavingsGroupTab();
+
+    // Stocks and bonds pay out of an existing account; a group is funded by
+    // transfers after it exists, so the picker would be a dead end here.
+    expect(screen.queryByLabelText("Paid from account")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Coupon and maturity account")).not.toBeInTheDocument();
+    expect(screen.getByText("Its own savings account")).toBeInTheDocument();
+  });
+
+  it("sends a target only when one is entered", async () => {
+    await openSavingsGroupTab();
+
+    fireEvent.change(screen.getByLabelText("Savings group name"), {
+      target: { value: "School fees pool" },
+    });
+    fireEvent.change(screen.getByLabelText(/Target/), { target: { value: "5000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add savings group" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith(
+        "/v1/savings-groups",
+        expect.objectContaining({
+          body: expect.objectContaining({ targetMinor: 500_000 }),
+        }),
+      ),
+    );
   });
 });
