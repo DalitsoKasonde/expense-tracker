@@ -33,12 +33,6 @@ interface Account {
   currency: string;
 }
 
-interface IncomeSource {
-  id: string;
-  name: string;
-  sourceType: string;
-}
-
 interface Business {
   id: string;
   name: string;
@@ -200,13 +194,15 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
   const [error, setError] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [incomeSources, setIncomeSources] = useState<IncomeSource[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [investmentTypes, setInvestmentTypes] = useState<InvestmentType[]>([]);
   const [bonds, setBonds] = useState<BondPosition[]>([]);
   const [stockDirectory, setStockDirectory] = useState<MarketStockDirectory | null>(null);
   const [loans, setLoans] = useState<LoanSummary[]>([]);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [savingCategory, setSavingCategory] = useState(false);
   const [investmentMode, setInvestmentMode] = useState<"existing" | "stock" | "bond" | "bond_existing">("existing");
   const [newInvestment, setNewInvestment] = useState({
     name: "",
@@ -230,7 +226,6 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     receivableAccountId: "",
     counterpartyName: "",
     categoryId: "",
-    incomeSourceId: "",
     businessId: "",
     loanId: "",
     assetId: "",
@@ -265,7 +260,6 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
         const [
           loadedAccounts,
           loadedCategories,
-          loadedIncomeSources,
           loadedBusinesses,
           loadedAssets,
           loadedInvestmentTypes,
@@ -275,7 +269,6 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
         ] = await Promise.all([
           apiCall<Account[]>("/v1/accounts"),
           apiCall<Category[]>("/v1/categories"),
-          apiCall<IncomeSource[]>("/v1/income-sources").catch(() => []),
           apiCall<Business[]>("/v1/businesses").catch(() => []),
           apiCall<Asset[]>("/v1/assets").catch(() => []),
           apiCall<InvestmentType[]>("/v1/investment-types").catch(() => []),
@@ -302,7 +295,6 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
 
         setAccounts(loadedAccounts ?? []);
         setCategories(loadedCategories ?? []);
-        setIncomeSources(loadedIncomeSources ?? []);
         setBusinesses(loadedBusinesses ?? []);
         setAssets(loadedAssets ?? []);
         setInvestmentTypes(loadedInvestmentTypes ?? []);
@@ -325,7 +317,6 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             (loadedAccounts ?? []).find((account) => account.accountType === "receivable")?.id ?? "",
           counterpartyName: "",
           categoryId: "",
-          incomeSourceId: "",
           businessId: "",
           loanId: loadedLoans?.[0]?.id ?? "",
           assetId: firstStock?.id ?? "",
@@ -336,6 +327,8 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
           historicalBackfill: false,
         });
         setInvestmentMode(firstStock ? "existing" : "stock");
+        setCreatingCategory(false);
+        setNewCategoryName("");
         setNewInvestment({
           name: "",
           symbol: "",
@@ -529,6 +522,34 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
         destinationAccountId: keepDestination ? current.destinationAccountId : "",
       };
     });
+  };
+
+  const createCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      setError("Enter a category name");
+      return;
+    }
+    setSavingCategory(true);
+    setError("");
+    try {
+      const category = await apiCall<Category>("/v1/categories", {
+        method: "POST",
+        body: {
+          name,
+          categoryGroup: categoryGroupForEntryKind(formData.entryKind),
+        },
+      });
+      if (!category) throw new Error("Could not create category");
+      setCategories((current) => [...current, category]);
+      setFormData((current) => ({ ...current, categoryId: category.id }));
+      setNewCategoryName("");
+      setCreatingCategory(false);
+    } catch (categoryError) {
+      setError(categoryError instanceof Error ? categoryError.message : "Could not create category");
+    } finally {
+      setSavingCategory(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -741,10 +762,6 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
             accountId: historicalBackfill ? undefined : formData.accountId,
             destinationAccountId: formData.destinationAccountId || undefined,
             categoryId: showCategories ? formData.categoryId || undefined : undefined,
-            incomeSourceId:
-              formData.entryKind === "income_earned"
-                ? formData.incomeSourceId || undefined
-                : undefined,
             businessId: showBusiness ? formData.businessId || undefined : undefined,
             assetId: formData.entryKind === "investment_buy" ? investmentAssetId || undefined : undefined,
             quantity: formData.entryKind === "investment_buy" ? quantity : undefined,
@@ -854,13 +871,15 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                             type="button"
                             aria-label={item.label}
                             className="group flex min-h-[76px] items-center gap-3 rounded-lg border border-outline bg-surface p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md"
-                            onClick={() =>
+                            onClick={() => {
+                              setCreatingCategory(false);
+                              setNewCategoryName("");
                               setFormData((current) => ({
                                 ...current,
                                 entryKind: item.value,
                                 categoryId: "",
-                              }))
-                            }
+                              }));
+                            }}
                           >
                             <span aria-hidden="true" className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg text-xl font-bold ${item.tone}`}>
                               {item.symbol}
@@ -889,7 +908,11 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                 <button
                   type="button"
                   className="rounded-md border border-outline bg-surface px-3 py-2 text-xs font-bold text-primary transition hover:border-primary"
-                  onClick={() => setFormData((current) => ({ ...current, entryKind: "", categoryId: "" }))}
+                  onClick={() => {
+                    setCreatingCategory(false);
+                    setNewCategoryName("");
+                    setFormData((current) => ({ ...current, entryKind: "", categoryId: "" }));
+                  }}
                 >
                   Change
                 </button>
@@ -1437,10 +1460,43 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                   </select>
                   <span className="muted">
                     {filteredCategories.length
-                      ? "Subcategories include their parent path so similar names stay clear."
-                      : "Create categories in Settings when you want more detailed reporting."}
+                      ? "Choose the label that best describes this entry."
+                      : "No categories yet. Add one here if you want to classify this entry."}
                   </span>
                 </div>
+
+                {creatingCategory ? (
+                  <div className="field rounded-md border border-outline bg-surface-soft p-4">
+                    <label htmlFor="newCategoryName">New category</label>
+                    <input
+                      id="newCategoryName"
+                      value={newCategoryName}
+                      placeholder={formData.entryKind === "income_earned" ? "e.g. Salary" : "e.g. Transport"}
+                      onChange={(event) => setNewCategoryName(event.target.value)}
+                      autoFocus
+                    />
+                    <div className="formActions">
+                      <button type="button" className="btn btn-primary" disabled={savingCategory} onClick={() => void createCategory()}>
+                        {savingCategory ? "Creating..." : "Create category"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        disabled={savingCategory}
+                        onClick={() => {
+                          setCreatingCategory(false);
+                          setNewCategoryName("");
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="btn btn-ghost justify-self-start" onClick={() => setCreatingCategory(true)}>
+                    + Add category
+                  </button>
+                )}
               </div>
             ) : null}
 
@@ -1449,25 +1505,6 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                 <h2 className="formSectionTitle">Context</h2>
                 <span className="muted">Add the details you will want later.</span>
               </div>
-
-              {formData.entryKind === "income_earned" ? (
-                <div className="field">
-                  <label htmlFor="incomeSourceId">Income source</label>
-                  <select
-                    id="incomeSourceId"
-                    name="incomeSourceId"
-                    value={formData.incomeSourceId}
-                    onChange={handleChange}
-                  >
-                    <option value="">No income source</option>
-                    {incomeSources.map((source) => (
-                      <option key={source.id} value={source.id}>
-                        {source.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
 
               <div className="splitFields">
                 {showBusiness ? (

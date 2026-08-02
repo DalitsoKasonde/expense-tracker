@@ -71,6 +71,51 @@ describe("AddEntryDialog", () => {
     expect(picker).not.toHaveTextContent("Salary");
   });
 
+  it("creates and selects an income category inline without asking for an income source", async () => {
+    mocks.apiCall.mockImplementation((path: string, options?: { method?: string }) => {
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          { id: "account-1", name: "Cash", accountType: "cash", accountClass: "asset", currency: "ZMW" },
+        ]);
+      }
+      if (path === "/v1/categories" && options?.method === "POST") {
+        return Promise.resolve({ id: "salary", name: "Salary", categoryGroup: "income", parentId: null });
+      }
+      if (path === "/v1/categories") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I received money" }));
+
+    expect(screen.queryByLabelText("Income source")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+ Add category" }));
+    fireEvent.change(screen.getByLabelText("New category"), { target: { value: "Salary" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create category" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/categories", {
+        method: "POST",
+        body: { name: "Salary", categoryGroup: "income" },
+      }),
+    );
+    expect(screen.getByLabelText("Choose category")).toHaveValue("salary");
+
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/transactions", {
+        method: "POST",
+        body: expect.objectContaining({
+          entryKind: "income_earned",
+          categoryId: "salary",
+        }),
+      }),
+    );
+    const transactionCall = mocks.apiCall.mock.calls.find(([path]) => path === "/v1/transactions");
+    expect(transactionCall?.[1]?.body).not.toHaveProperty("incomeSourceId");
+  });
+
   it("creates stocks and government bonds without leaving quick add", async () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "I bought an investment" })).toBeInTheDocument());

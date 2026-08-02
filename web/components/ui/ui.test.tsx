@@ -13,6 +13,14 @@ describe("Expenses UI primitives", () => {
     expect(screen.getByText(/123\.45/)).toBeInTheDocument();
   });
 
+  it("keeps the primary account card readable on its tinted background", () => {
+    render(<AccountCard name="Cash" type="cash" balanceMinor={800} currency="ZMW" primary />);
+
+    expect(screen.getByRole("article")).toHaveClass("bg-primary-softer");
+    expect(screen.getByText("Cash", { selector: "h3" })).toHaveClass("text-on-surface");
+    expect(screen.getByText(/8\.00/)).toHaveClass("text-on-surface");
+  });
+
   it("exposes savings progress accessibly", () => {
     render(<SavingsGoalCard name="Emergency fund" currentMinor={2500} targetMinor={10000} currency="ZMW" />);
     expect(screen.getByRole("progressbar", { name: /Emergency fund/i })).toHaveAttribute("aria-valuenow", "25");

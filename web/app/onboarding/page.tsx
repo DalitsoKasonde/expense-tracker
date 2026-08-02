@@ -30,6 +30,7 @@ type OnboardingDraft = {
   step: number;
   currency: string;
   accounts: AccountDraft[];
+  incomeCategoryName?: string;
   interests: string[];
 };
 
@@ -98,6 +99,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [currency, setCurrency] = useState("ZMW");
   const [accounts, setAccounts] = useState<AccountDraft[]>([]);
+  const [incomeCategoryName, setIncomeCategoryName] = useState("");
   const [interests, setInterests] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -119,6 +121,7 @@ export default function OnboardingPage() {
           setStep(Math.min(2, Math.max(1, parsed.step)));
           setCurrency(parsed.currency);
           setAccounts(parsed.accounts);
+          setIncomeCategoryName(parsed.incomeCategoryName ?? "");
           setInterests(parsed.interests);
         }
       } catch {
@@ -172,10 +175,11 @@ export default function OnboardingPage() {
       step,
       currency,
       accounts,
+      incomeCategoryName,
       interests,
     };
     window.localStorage.setItem(draftKey, JSON.stringify(draft));
-  }, [accounts, currency, draftKey, hydrated, interests, step]);
+  }, [accounts, currency, draftKey, hydrated, incomeCategoryName, interests, step]);
 
   const namedAccounts = useMemo(
     () => accounts.filter((account) => account.name.trim()),
@@ -224,6 +228,7 @@ export default function OnboardingPage() {
       }
       const completionBody = {
         defaultCurrency: currency,
+        incomeCategoryName: incomeCategoryName.trim(),
         accounts: namedAccounts.map((account) => ({
           name: account.name.trim(),
           accountType: account.accountType,
@@ -254,6 +259,7 @@ export default function OnboardingPage() {
 
   async function completeWithLegacyApi(body: {
     defaultCurrency: string;
+    incomeCategoryName: string;
     accounts: Array<{
       name: string;
       accountType: AccountType;
@@ -285,6 +291,16 @@ export default function OnboardingPage() {
           ...account,
           accountClass: "asset",
           currency: body.defaultCurrency,
+        },
+      });
+    }
+
+    if (body.incomeCategoryName) {
+      await apiCall("/v1/categories", {
+        method: "POST",
+        body: {
+          name: body.incomeCategoryName,
+          categoryGroup: "income",
         },
       });
     }
@@ -476,6 +492,25 @@ export default function OnboardingPage() {
                   </p>
                 </div>
               </details>
+            </div>
+
+            <div className="grid gap-3 border-t border-outline pt-5">
+              <div>
+                <h2 className="text-lg font-semibold text-on-surface">What do you usually call your income?</h2>
+                <p className="text-sm text-on-surface-soft">
+                  Optional—set up a category once, then select it when adding income.
+                </p>
+              </div>
+              <div className="field">
+                <label htmlFor="income-category-name">Income category (optional)</label>
+                <input
+                  id="income-category-name"
+                  value={incomeCategoryName}
+                  placeholder="e.g. Salary"
+                  onChange={(event) => setIncomeCategoryName(event.target.value)}
+                />
+                <span className="muted">You can add more income categories later while entering money.</span>
+              </div>
             </div>
 
             <div className="grid gap-3 border-t border-outline pt-5">

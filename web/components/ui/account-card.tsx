@@ -5,24 +5,24 @@ export function AccountCard({ name, type, accountClass = "asset", balanceMinor, 
   name: string; type: string; accountClass?: "asset" | "liability"; balanceMinor: number; currency: string; primary?: boolean;
 }) {
   const liability = accountClass === "liability";
-  // Filled cards use the action/expense tokens with their matching contrast
-  // colour: the fills invert in dark mode, so a hard-coded white label would
-  // become unreadable.
-  const fill = primary
+  // Keep the leading card visually distinct without relying on an inverted
+  // gradient. If a gradient token fails to render, contrast text can otherwise
+  // become invisible against the card's white background.
+  const emphasis = primary
     ? liability
-      ? "border-transparent bg-gradient-to-br from-expense to-negative text-action-contrast"
-      : "border-transparent bg-gradient-to-br from-action to-action-hover text-action-contrast"
+      ? "border-negative/30 bg-negative-soft"
+      : "border-primary/30 bg-primary-softer"
     : "";
 
   return (
-    <article className={cardClass({ className: `grid min-h-40 content-between gap-6 ${fill}` })}>
+    <article className={cardClass({ className: `grid min-h-40 content-between gap-6 ${emphasis}` })}>
       <div>
-        <p className={`text-xs font-semibold uppercase tracking-wider ${primary ? "opacity-80" : "text-on-surface-soft"}`}>
+        <p className="text-xs font-semibold uppercase tracking-wider text-on-surface-soft">
           {liability ? "Money you owe" : type.replaceAll("_", " ")}
         </p>
-        <h3 className="mt-2 text-lg font-semibold">{name}</h3>
+        <h3 className="mt-2 text-lg font-semibold text-on-surface">{name}</h3>
       </div>
-      <p className="font-display text-2xl font-semibold tabular-nums">{formatMoney(balanceMinor, currency)}</p>
+      <p className="font-display text-2xl font-semibold tabular-nums text-on-surface">{formatMoney(balanceMinor, currency)}</p>
     </article>
   );
 }

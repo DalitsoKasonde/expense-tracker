@@ -65,6 +65,7 @@ describe("guided onboarding", () => {
     fireEvent.click(screen.getByRole("button", { name: "Main bank" }));
     fireEvent.click(screen.getByText(/Edit account details or add a custom account/));
     fireEvent.change(screen.getByLabelText("Main bank opening balance"), { target: { value: "125.50" } });
+    fireEvent.change(screen.getByLabelText("Income category (optional)"), { target: { value: "Salary" } });
     fireEvent.click(screen.getByRole("button", { name: "Stocks" }));
     fireEvent.click(screen.getByRole("button", { name: "Finish setup" }));
 
@@ -73,6 +74,7 @@ describe("guided onboarding", () => {
       method: "POST",
       body: {
         defaultCurrency: "USD",
+        incomeCategoryName: "Salary",
         accounts: [{
           name: "Main bank",
           accountType: "bank",
@@ -121,6 +123,7 @@ describe("guided onboarding", () => {
       method: "POST",
       body: {
         defaultCurrency: "ZMW",
+        incomeCategoryName: "",
         accounts: [],
         interests: [],
       },

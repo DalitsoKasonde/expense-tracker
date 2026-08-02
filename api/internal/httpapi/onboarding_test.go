@@ -8,7 +8,8 @@ import (
 func TestNormalizeOnboardingRequest(t *testing.T) {
 	t.Run("normalizes valid setup and removes duplicate interests", func(t *testing.T) {
 		request, err := normalizeOnboardingRequest(completeOnboardingRequest{
-			DefaultCurrency: " zmw ",
+			DefaultCurrency:    " zmw ",
+			IncomeCategoryName: " Salary ",
 			Accounts: []onboardingAccountRequest{
 				{Name: " Airtel Money ", AccountType: "mobile_money", OpeningBalanceMinor: 12550},
 			},
@@ -23,6 +24,9 @@ func TestNormalizeOnboardingRequest(t *testing.T) {
 		}
 		if request.Accounts[0].Name != "Airtel Money" {
 			t.Fatalf("account name = %q, want Airtel Money", request.Accounts[0].Name)
+		}
+		if request.IncomeCategoryName != "Salary" {
+			t.Fatalf("income category = %q, want Salary", request.IncomeCategoryName)
 		}
 		if len(request.Interests) != 2 {
 			t.Fatalf("interest count = %d, want 2", len(request.Interests))

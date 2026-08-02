@@ -24,9 +24,10 @@ type onboardingAccountRequest struct {
 }
 
 type completeOnboardingRequest struct {
-	DefaultCurrency string                     `json:"defaultCurrency"`
-	Accounts        []onboardingAccountRequest `json:"accounts"`
-	Interests       []string                   `json:"interests"`
+	DefaultCurrency    string                     `json:"defaultCurrency"`
+	IncomeCategoryName string                     `json:"incomeCategoryName"`
+	Accounts           []onboardingAccountRequest `json:"accounts"`
+	Interests          []string                   `json:"interests"`
 }
 
 type onboardingStatusResponse struct {
@@ -81,11 +82,19 @@ func normalizeOnboardingRequest(request completeOnboardingRequest) (completeOnbo
 		seenInterests[interest] = struct{}{}
 		interests = append(interests, interest)
 	}
+	incomeCategoryName := strings.TrimSpace(request.IncomeCategoryName)
+	if incomeCategoryName != "" {
+		incomeCategoryName, err = normalizeRequiredName(incomeCategoryName)
+		if err != nil {
+			return completeOnboardingRequest{}, errors.New("income category name is invalid")
+		}
+	}
 
 	return completeOnboardingRequest{
-		DefaultCurrency: currency,
-		Accounts:        accounts,
-		Interests:       interests,
+		DefaultCurrency:    currency,
+		IncomeCategoryName: incomeCategoryName,
+		Accounts:           accounts,
+		Interests:          interests,
 	}, nil
 }
 
@@ -202,6 +211,17 @@ func (s *Server) completeOnboarding(w http.ResponseWriter, r *http.Request) {
 		`, claims.UserID, account.Name, account.AccountType, request.DefaultCurrency, account.OpeningBalanceMinor)
 		if err != nil {
 			http.Error(w, "could not create onboarding accounts", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if request.IncomeCategoryName != "" {
+		_, err = tx.Exec(r.Context(), `
+			insert into categories (user_id, name, category_group)
+			values ($1, $2, 'income')
+		`, claims.UserID, request.IncomeCategoryName)
+		if err != nil {
+			http.Error(w, "could not create onboarding income category", http.StatusInternalServerError)
 			return
 		}
 	}

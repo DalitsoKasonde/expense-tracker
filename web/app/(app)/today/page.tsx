@@ -144,7 +144,7 @@ export default function TodayPage() {
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Financial summary">
-        <MetricCard label="Cash balance" value={formatMoney(data.cashBalance, currency)} detail={`As of ${new Date(data.asOfDate).toLocaleDateString()}`} />
+        <MetricCard label="Available balance" value={formatMoney(data.cashBalance, currency)} detail={`As of ${new Date(data.asOfDate).toLocaleDateString()}`} />
         <MetricCard label="Monthly cash flow" value={formatMoney(data.netCashFlow, currency)} tone={data.netCashFlow >= 0 ? "income" : "expense"} detail="Inflow less monthly movement" />
         <MetricCard label="Income" value={formatMoney(data.income, currency)} tone="income" detail="Earned this month" />
         <MetricCard label="Expenses" value={formatMoney(data.expense, currency)} tone="expense" detail="Spent this month" />
