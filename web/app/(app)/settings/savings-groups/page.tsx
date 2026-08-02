@@ -4,7 +4,7 @@ import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
 import { useUserCurrency } from "@/lib/use-user-currency";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FormDialog } from "@/components/ui/dialogs";
+import { ConfirmationDialog, FormDialog } from "@/components/ui/dialogs";
 import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
 
 type Account = {
@@ -46,6 +46,7 @@ export default function SavingsGroupsSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [shareoutOpen, setShareoutOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -62,6 +63,7 @@ export default function SavingsGroupsSettingsPage() {
   });
 
   const cashAccounts = useMemo(() => spendableAccounts(accounts), [accounts]);
+  const groupPendingDeletion = groups.find((group) => group.id === deleteId);
 
   const loadData = useCallback(async () => {
     const [loadedGroups, loadedAccounts] = await Promise.all([
@@ -145,6 +147,22 @@ export default function SavingsGroupsSettingsPage() {
     }
   }
 
+  async function deleteGroup() {
+    if (!deleteId) {
+      return;
+    }
+    setStatus("");
+    try {
+      await apiCall(`/v1/savings-groups/${deleteId}`, { method: "DELETE" });
+      setDeleteId(null);
+      await loadData();
+      setStatus("Savings group deleted.");
+    } catch (error) {
+      setDeleteId(null);
+      setStatus(error instanceof Error ? error.message : "Failed to delete savings group");
+    }
+  }
+
   return (
     <section className="settingsSection">
       <div className="grid gap-6">
@@ -178,6 +196,7 @@ export default function SavingsGroupsSettingsPage() {
                     <th className="font-semibold">Cycle</th>
                     <th className="font-semibold">Balance</th>
                     <th className="font-semibold">Contributed</th>
+                    <th className="font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -187,6 +206,21 @@ export default function SavingsGroupsSettingsPage() {
                       <td data-label="Cycle" className="text-on-surface-soft">{`${new Date(group.cycleStart).toLocaleDateString()} · ${group.cycleLengthMonths} months`}</td>
                       <td data-label="Balance" className="text-on-surface">{formatMoney(group.currentBalance, userCurrency)}</td>
                       <td data-label="Contributed" className="text-on-surface-soft">{formatMoney(group.contributedMinor, userCurrency)}</td>
+                      <td data-label="Actions">
+                        <button
+                          className="btn btn-danger"
+                          type="button"
+                          disabled={group.currentBalance !== 0 || group.contributedMinor !== 0}
+                          title={
+                            group.currentBalance !== 0 || group.contributedMinor !== 0
+                              ? "Groups with savings can only be closed with a share-out."
+                              : undefined
+                          }
+                          onClick={() => setDeleteId(group.id)}
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -197,6 +231,16 @@ export default function SavingsGroupsSettingsPage() {
       </div>
 
       {status ? <p className="statusText">{status}</p> : null}
+
+      <ConfirmationDialog
+        open={deleteId !== null}
+        title={groupPendingDeletion ? `Delete ${groupPendingDeletion.name}?` : "Delete savings group?"}
+        description="This removes the group and the savings account created with it. Only groups without any savings recorded can be deleted; once a group has contributions, record a share-out instead."
+        confirmLabel="Delete group"
+        destructive
+        onConfirm={() => void deleteGroup()}
+        onClose={() => setDeleteId(null)}
+      />
 
       <FormDialog
         open={createOpen}

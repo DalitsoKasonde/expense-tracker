@@ -17,6 +17,51 @@ describe("savings group settings", () => {
     });
   });
 
+  function group(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "group-1",
+      accountId: "account-1",
+      name: "SL Savings",
+      isShareoutGroup: true,
+      cycleStart: "2026-01-01",
+      cycleLengthMonths: 12,
+      status: "active",
+      contributedMinor: 0,
+      currentBalance: 0,
+      ...overrides,
+    };
+  }
+
+  it("deletes a group that has no savings recorded", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/savings-groups") return Promise.resolve([group()]);
+      if (path === "/v1/accounts") return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+
+    render(<SavingsGroupsSettingsPage />);
+    await screen.findByRole("button", { name: "Delete" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete group" }));
+
+    await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith("/v1/savings-groups/group-1", { method: "DELETE" }));
+    expect(await screen.findByText("Savings group deleted.")).toBeInTheDocument();
+  });
+
+  it("blocks deletion once the group holds savings", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/savings-groups") return Promise.resolve([group({ contributedMinor: 25_000, currentBalance: 25_000 })]);
+      if (path === "/v1/accounts") return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+
+    render(<SavingsGroupsSettingsPage />);
+    await screen.findByRole("button", { name: "Delete" });
+
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+  });
+
   it("creates every savings group as a share-out group without an unused target", async () => {
     render(<SavingsGroupsSettingsPage />);
     await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith("/v1/savings-groups"));

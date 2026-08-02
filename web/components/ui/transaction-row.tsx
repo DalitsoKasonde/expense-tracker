@@ -7,6 +7,7 @@ export type TransactionRowData = {
   amount: number;
   currency: string;
   note?: string;
+  categoryName?: string;
   isPending?: boolean;
 };
 
@@ -27,16 +28,16 @@ function describeEntryKind(entryKind: string) {
     ?? entryKind.replaceAll("_", " ").replace(/^./, (character) => character.toUpperCase());
 }
 
-export function TransactionRow({ transaction }: { transaction: TransactionRowData }) {
+export function TransactionRow({ transaction, onEdit }: { transaction: TransactionRowData; onEdit?: () => void }) {
   const positive = isPositiveEntry(transaction.entryKind);
   const date = new Date(transaction.transactionDate);
-  const kindLabel = describeEntryKind(transaction.entryKind);
+  const kindLabel = transaction.categoryName?.trim() || describeEntryKind(transaction.entryKind);
   const note = transaction.note?.trim();
   const label = note || kindLabel;
   const dateLabel = date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
   return (
-    <div className="grid min-w-0 grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 border-b border-outline py-3.5 last:border-0">
+    <div className={`grid min-w-0 ${onEdit ? "grid-cols-[36px_minmax(0,1fr)_auto_auto]" : "grid-cols-[36px_minmax(0,1fr)_auto]"} items-center gap-3 border-b border-outline py-3.5 last:border-0`}>
       <div
         className={`grid size-9 place-items-center rounded-full text-base font-semibold ${positive ? "bg-positive-soft text-positive" : "bg-negative-soft text-negative"}`}
         aria-hidden="true"
@@ -57,6 +58,11 @@ export function TransactionRow({ transaction }: { transaction: TransactionRowDat
         </p>
         <p className="mt-0.5 text-[11px] text-on-surface-soft">{positive ? "Money in" : "Money out"}</p>
       </div>
+      {onEdit ? (
+        <button type="button" className="btn btn-ghost px-2 py-1 text-xs" onClick={onEdit} aria-label={`Edit ${label}`}>
+          Edit
+        </button>
+      ) : null}
     </div>
   );
 }

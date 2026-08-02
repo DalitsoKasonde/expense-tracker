@@ -42,6 +42,13 @@ describe("Expenses UI primitives", () => {
     expect(screen.getByText("Money in")).toBeInTheDocument();
   });
 
+  it("uses a category instead of the generic living-expense label", () => {
+    render(<TransactionRow transaction={{ id: "fee", transactionDate: "2026-08-02", entryKind: "expense_living", amount: 200, currency: "ZMW", categoryName: "Transaction fees" }} />);
+
+    expect(screen.getByText("Transaction fees")).toBeInTheDocument();
+    expect(screen.queryByText("Living expense")).not.toBeInTheDocument();
+  });
+
   it("emits controlled filter changes", () => {
     const onChange = vi.fn();
     render(<TransactionFilters value={{ query: "", direction: "all" }} onChange={onChange} />);

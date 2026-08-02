@@ -301,6 +301,56 @@ func (s *SavingsGroupStore) CloseCycle(ctx context.Context, userID string, input
 	}, nil
 }
 
+// Delete removes a savings group and the savings account created with it. It is
+// only allowed while the group is untouched: any transaction pointing at the
+// account (including soft-deleted ones, which still hold the account's foreign
+// key) means the group carries history that deleting would silently discard.
+func (s *SavingsGroupStore) Delete(ctx context.Context, userID, groupID string) error {
+	group, err := s.get(ctx, userID, groupID)
+	if err != nil {
+		return err
+	}
+
+	var transactionCount int
+	if err := s.db.QueryRow(ctx, `
+		select count(*)::int
+		from transactions
+		where user_id = $1
+		  and (account_id = $2 or destination_account_id = $2)
+	`, userID, group.AccountID).Scan(&transactionCount); err != nil {
+		return err
+	}
+	if transactionCount > 0 {
+		return ErrAccountHasTransactions
+	}
+
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// savings_group_cycles cascades from savings_groups; the account is a
+	// restrict FK so it has to go after the group row.
+	if tag, err := tx.Exec(ctx, `
+		delete from savings_groups
+		where id = $1 and user_id = $2
+	`, group.ID, userID); err != nil {
+		return normalizeWriteError(err)
+	} else if err := normalizeExecResult(tag, nil); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		delete from accounts
+		where id = $1 and user_id = $2
+	`, group.AccountID, userID); err != nil {
+		return normalizeWriteError(err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (s *SavingsGroupStore) get(ctx context.Context, userID, groupID string) (SavingsGroup, error) {
 	var group SavingsGroup
 	err := s.db.QueryRow(ctx, `

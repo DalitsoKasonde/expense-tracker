@@ -19,6 +19,7 @@ type Transaction struct {
 	AccountID            string   `json:"accountId,omitempty"`
 	DestinationAccountID *string  `json:"destinationAccountId"`
 	CategoryID           *string  `json:"categoryId"`
+	CategoryName         *string  `json:"categoryName,omitempty"`
 	IncomeSourceID       *string  `json:"incomeSourceId"`
 	BusinessID           *string  `json:"businessId"`
 	AssetID              *string  `json:"assetId"`
@@ -46,12 +47,13 @@ func NewTransactionStore(db *pgxpool.Pool) *TransactionStore {
 
 func (s *TransactionStore) ListByUser(ctx context.Context, userID string, limit, offset int) ([]Transaction, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, user_id, transaction_date::text, entry_kind, amount::bigint, currency, account_id, destination_account_id, category_id,
+		select t.id, t.user_id, t.transaction_date::text, t.entry_kind, t.amount::bigint, t.currency, t.account_id, t.destination_account_id, t.category_id,
 		       income_source_id, business_id, asset_id, loan_id, quantity, unit_price::bigint, fees::bigint, note, source, import_id,
-		       origin_event_id::text, origin_event_type, deleted_at::text, created_at::text, updated_at::text
-		from transactions
-		where user_id = $1 and deleted_at is null
-		order by transaction_date desc
+		       origin_event_id::text, origin_event_type, deleted_at::text, t.created_at::text, t.updated_at::text, c.name
+		from transactions t
+		left join categories c on c.id = t.category_id and c.user_id = t.user_id
+		where t.user_id = $1 and t.deleted_at is null
+		order by t.transaction_date desc, t.created_at desc
 		limit $2 offset $3
 	`, userID, limit, offset)
 	if err != nil {
@@ -67,7 +69,7 @@ func (s *TransactionStore) ListByUser(ctx context.Context, userID string, limit,
 			&t.ID, &t.UserID, &t.TransactionDate, &t.EntryKind, &t.Amount, &t.Currency,
 			&accountID, &t.DestinationAccountID, &t.CategoryID, &t.IncomeSourceID, &t.BusinessID, &t.AssetID, &t.LoanID,
 			&t.Quantity, &t.UnitPrice, &t.Fees, &t.Note, &t.Source, &t.ImportID,
-			&t.OriginEventID, &t.OriginEventType, &t.DeletedAt, &t.CreatedAt, &t.UpdatedAt,
+			&t.OriginEventID, &t.OriginEventType, &t.DeletedAt, &t.CreatedAt, &t.UpdatedAt, &t.CategoryName,
 		); err != nil {
 			return nil, err
 		}
@@ -78,6 +80,28 @@ func (s *TransactionStore) ListByUser(ctx context.Context, userID string, limit,
 	}
 
 	return transactions, rows.Err()
+}
+
+func (s *TransactionStore) GetByID(ctx context.Context, id, userID string) (Transaction, error) {
+	var result Transaction
+	var accountID *string
+	err := s.db.QueryRow(ctx, `
+		select t.id, t.user_id, t.transaction_date::text, t.entry_kind, t.amount::bigint, t.currency, t.account_id, t.destination_account_id, t.category_id,
+		       t.income_source_id, t.business_id, t.asset_id, t.loan_id, t.quantity, t.unit_price::bigint, t.fees::bigint, t.note, t.source, t.import_id,
+		       t.origin_event_id::text, t.origin_event_type, t.deleted_at::text, t.created_at::text, t.updated_at::text, c.name
+		from transactions t
+		left join categories c on c.id = t.category_id and c.user_id = t.user_id
+		where t.id = $1 and t.user_id = $2 and t.deleted_at is null
+	`, id, userID).Scan(
+		&result.ID, &result.UserID, &result.TransactionDate, &result.EntryKind, &result.Amount, &result.Currency,
+		&accountID, &result.DestinationAccountID, &result.CategoryID, &result.IncomeSourceID, &result.BusinessID, &result.AssetID, &result.LoanID,
+		&result.Quantity, &result.UnitPrice, &result.Fees, &result.Note, &result.Source, &result.ImportID,
+		&result.OriginEventID, &result.OriginEventType, &result.DeletedAt, &result.CreatedAt, &result.UpdatedAt, &result.CategoryName,
+	)
+	if accountID != nil {
+		result.AccountID = *accountID
+	}
+	return result, normalizeWriteError(err)
 }
 
 func (s *TransactionStore) Create(ctx context.Context, tx Transaction) (Transaction, error) {
@@ -101,6 +125,7 @@ func (s *TransactionStore) CreateMovementFeeWithTx(ctx context.Context, dbTx pgx
 	if movement.Note != nil && *movement.Note != "" {
 		note += " - " + *movement.Note
 	}
+	feeOriginType := "transaction_fee"
 	return createTransaction(ctx, dbTx, Transaction{
 		UserID:          movement.UserID,
 		TransactionDate: movement.TransactionDate,
@@ -112,7 +137,7 @@ func (s *TransactionStore) CreateMovementFeeWithTx(ctx context.Context, dbTx pgx
 		Note:            &note,
 		Source:          movement.Source,
 		OriginEventID:   movement.OriginEventID,
-		OriginEventType: movement.OriginEventType,
+		OriginEventType: &feeOriginType,
 	})
 }
 
@@ -165,6 +190,14 @@ func nullableAccountID(accountID string) any {
 }
 
 func (s *TransactionStore) Update(ctx context.Context, id, userID string, tx Transaction) (Transaction, error) {
+	return updateTransaction(ctx, s.db, id, userID, tx)
+}
+
+func (s *TransactionStore) UpdateWithTx(ctx context.Context, dbTx pgx.Tx, id, userID string, tx Transaction) (Transaction, error) {
+	return updateTransaction(ctx, dbTx, id, userID, tx)
+}
+
+func updateTransaction(ctx context.Context, db transactionRowQuerier, id, userID string, tx Transaction) (Transaction, error) {
 	note := ""
 	if tx.Note != nil {
 		note = *tx.Note
@@ -172,15 +205,15 @@ func (s *TransactionStore) Update(ctx context.Context, id, userID string, tx Tra
 
 	var result Transaction
 	var accountID *string
-	err := s.db.QueryRow(ctx, `
+	err := db.QueryRow(ctx, `
 		update transactions
-		set entry_kind = $1, amount = $2, account_id = $3, destination_account_id = $4, category_id = $5,
-		    income_source_id = $6, business_id = $7, note = $8, updated_at = now()
-		where id = $9 and user_id = $10 and deleted_at is null
+		set transaction_date = $1, entry_kind = $2, amount = $3, account_id = $4, destination_account_id = $5, category_id = $6,
+		    income_source_id = $7, business_id = $8, note = $9, updated_at = now()
+		where id = $10 and user_id = $11 and deleted_at is null
 		returning id, user_id, transaction_date::text, entry_kind, amount::bigint, currency, account_id, destination_account_id, category_id,
 		          income_source_id, business_id, asset_id, loan_id, quantity, unit_price::bigint, fees::bigint, note, source, import_id,
 		          origin_event_id::text, origin_event_type, deleted_at::text, created_at::text, updated_at::text
-		`, tx.EntryKind, tx.Amount, nullableAccountID(tx.AccountID), tx.DestinationAccountID, tx.CategoryID, tx.IncomeSourceID, tx.BusinessID, note, id, userID,
+		`, tx.TransactionDate, tx.EntryKind, tx.Amount, nullableAccountID(tx.AccountID), tx.DestinationAccountID, tx.CategoryID, tx.IncomeSourceID, tx.BusinessID, note, id, userID,
 	).Scan(
 		&result.ID, &result.UserID, &result.TransactionDate, &result.EntryKind, &result.Amount, &result.Currency,
 		&accountID, &result.DestinationAccountID, &result.CategoryID, &result.IncomeSourceID, &result.BusinessID, &result.AssetID, &result.LoanID,
@@ -190,7 +223,7 @@ func (s *TransactionStore) Update(ctx context.Context, id, userID string, tx Tra
 	if accountID != nil {
 		result.AccountID = *accountID
 	}
-	return result, err
+	return result, normalizeWriteError(err)
 }
 
 // SoftDelete marks a transaction as deleted

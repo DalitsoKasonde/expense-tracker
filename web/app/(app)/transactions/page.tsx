@@ -13,12 +13,18 @@ import {
   type TransactionFilterValue,
   TransactionFilters,
   TransactionRow,
-  type TransactionRowData,
 } from "@/components/ui";
 import { AddEntryButton } from "@/components/add-entry-button";
+import { EditTransactionDialog, type EditableTransaction } from "@/components/edit-transaction-dialog";
 
-type Transaction = TransactionRowData & { accountId?: string; categoryId?: string };
-type Option = { id: string; name: string; accountType?: string; currency?: string };
+type Transaction = EditableTransaction;
+type Option = { id: string; name: string; accountType?: string; accountClass?: string; currency?: string; categoryGroup?: string };
+
+function canEditTransaction(transaction: Transaction) {
+  if (transaction.isPending || transaction.assetId || transaction.loanId) return false;
+  if (transaction.originEventType && !["transaction_with_fee", "transaction_fee"].includes(transaction.originEventType)) return false;
+  return ["expense_living", "income_earned", "saving_transfer", "loan_receivable_advance", "loan_receivable_repayment"].includes(transaction.entryKind);
+}
 
 export default function TransactionsPage() {
   const { data: session } = useSession();
@@ -30,6 +36,7 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<Option[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState<Transaction | null>(null);
   const [filters, setFilters] = useState<TransactionFilterValue>({ query: "", direction: "all" });
 
   useEffect(() => {
@@ -84,7 +91,14 @@ export default function TransactionsPage() {
       <PageHeader eyebrow="Activity" title="Money activity" subtitle="Find every payment, deposit, transfer, loan movement, and investment purchase." actions={<AddEntryButton className="btn btn-primary">Add entry</AddEntryButton>} />
       <section className="card min-w-0 max-w-full overflow-hidden"><TransactionFilters value={filters} onChange={setFilters} accounts={accounts} categories={categories} /></section>
       {error ? <div role="alert" className="rounded-md border border-negative/30 bg-negative-soft p-4 text-sm text-negative">{error}</div> : null}
-      {groups.length ? <div className="grid gap-7">{groups.map(([label, rows]) => <section key={label}><div className="mb-3 flex items-center gap-4"><h2 className="shrink-0 text-sm font-semibold text-on-surface">{label}</h2><div className="h-px flex-1 bg-outline" /></div><div className="rounded-lg border border-outline bg-surface px-4 shadow-sm">{rows.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</div></section>)}</div> : <EmptyState title="No matching transactions" description="Adjust your filters or add a new entry to see activity here." action={<button type="button" className="btn btn-ghost" onClick={() => setFilters({ query: "", direction: "all" })}>Clear filters</button>} />}
+      {groups.length ? <div className="grid gap-7">{groups.map(([label, rows]) => <section key={label}><div className="mb-3 flex items-center gap-4"><h2 className="shrink-0 text-sm font-semibold text-on-surface">{label}</h2><div className="h-px flex-1 bg-outline" /></div><div className="rounded-lg border border-outline bg-surface px-4 shadow-sm">{rows.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} onEdit={canEditTransaction(transaction) ? () => setEditing(transaction) : undefined} />)}</div></section>)}</div> : <EmptyState title="No matching transactions" description="Adjust your filters or add a new entry to see activity here." action={<button type="button" className="btn btn-ghost" onClick={() => setFilters({ query: "", direction: "all" })}>Clear filters</button>} />}
+      <EditTransactionDialog
+        transaction={editing}
+        accounts={accounts}
+        categories={categories}
+        onClose={() => setEditing(null)}
+        onSaved={(updated) => setTransactions((current) => current.map((transaction) => transaction.id === updated.id ? updated : transaction))}
+      />
     </PageShell>
   );
 }

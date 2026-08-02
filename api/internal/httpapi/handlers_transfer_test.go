@@ -92,6 +92,20 @@ func TestMovementFeeAccountID(t *testing.T) {
 	}
 }
 
+func TestIsEditableTransactionProtectsLinkedWorkflows(t *testing.T) {
+	if !isEditableTransaction(store.Transaction{EntryKind: "expense_living", Source: "manual"}) {
+		t.Fatal("manual living expense should be editable")
+	}
+	loanID := "loan"
+	if isEditableTransaction(store.Transaction{EntryKind: "expense_living", Source: "manual", LoanID: &loanID}) {
+		t.Fatal("loan-linked transaction should not be directly editable")
+	}
+	originType := "transaction_with_fee"
+	if !isEditableTransaction(store.Transaction{EntryKind: "saving_transfer", Source: "manual", OriginEventType: &originType}) {
+		t.Fatal("fee-linked transfer should be editable")
+	}
+}
+
 func TestNormalizeOptionalSymbol(t *testing.T) {
 	blank := "  "
 	if got := normalizeOptionalSymbol(&blank); got != nil {

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -56,6 +57,24 @@ func (s *Server) createSavingsGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, group)
+}
+
+func (s *Server) deleteSavingsGroup(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := s.savingsGroups.Delete(r.Context(), claims.UserID, chi.URLParam(r, "id")); err != nil {
+		if errors.Is(err, store.ErrAccountHasTransactions) {
+			http.Error(w, "savings group already has contributions; record a share-out instead of deleting it", http.StatusBadRequest)
+			return
+		}
+		writeSettingsError(w, err, "failed to delete savings group")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) closeSavingsGroupCycle(w http.ResponseWriter, r *http.Request) {

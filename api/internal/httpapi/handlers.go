@@ -886,6 +886,7 @@ func (s *Server) updateTransaction(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
+		TransactionDate      string  `json:"transactionDate"`
 		EntryKind            string  `json:"entryKind"`
 		Amount               int64   `json:"amount"`
 		AccountID            string  `json:"accountId"`
@@ -899,13 +900,109 @@ func (s *Server) updateTransaction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
+	existing, err := s.transactions.GetByID(r.Context(), id, claims.UserID)
+	if err != nil {
+		writeSettingsError(w, err, "failed to load transaction")
+		return
+	}
 	entryKind, err := normalizeAllowedValue(req.EntryKind, "", validTransactionEntryKinds, "entryKind")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if entryKind != existing.EntryKind {
+		http.Error(w, "entryKind cannot be changed", http.StatusBadRequest)
+		return
+	}
+	if !isEditableTransaction(existing) {
+		http.Error(w, "this linked transaction must be corrected from its original loan or investment workflow", http.StatusBadRequest)
+		return
+	}
+	if req.Amount <= 0 {
+		http.Error(w, "amount must be greater than zero", http.StatusBadRequest)
+		return
+	}
+	if _, err := time.Parse("2006-01-02", req.TransactionDate); err != nil {
+		http.Error(w, "transactionDate must use YYYY-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	req.AccountID = strings.TrimSpace(req.AccountID)
+	if existing.Source != historicalBackfillSource && req.AccountID == "" {
+		http.Error(w, "accountId is required", http.StatusBadRequest)
+		return
+	}
+	var sourceAccount store.Account
+	if req.AccountID != "" {
+		sourceAccount, err = s.accounts.GetActiveByID(r.Context(), req.AccountID, claims.UserID)
+		if err != nil {
+			writeSettingsError(w, err, "failed to validate transaction account")
+			return
+		}
+		if sourceAccount.Currency != existing.Currency {
+			http.Error(w, "account and transaction must use the same currency", http.StatusBadRequest)
+			return
+		}
+		if sourceAccount.AccountClass != "asset" {
+			http.Error(w, "transactions can only use active asset accounts", http.StatusBadRequest)
+			return
+		}
+	}
+
+	isTransfer := entryKind == "saving_transfer" || entryKind == "loan_receivable_advance" || entryKind == "loan_receivable_repayment"
+	if isTransfer {
+		if req.DestinationAccountID == nil || strings.TrimSpace(*req.DestinationAccountID) == "" {
+			http.Error(w, "destinationAccountId is required for transfers", http.StatusBadRequest)
+			return
+		}
+		destinationID := strings.TrimSpace(*req.DestinationAccountID)
+		req.DestinationAccountID = &destinationID
+		destinationAccount, destinationErr := s.accounts.GetActiveByID(r.Context(), destinationID, claims.UserID)
+		if destinationErr != nil {
+			writeSettingsError(w, destinationErr, "failed to validate destination account")
+			return
+		}
+		if req.AccountID == "" && existing.Source == historicalBackfillSource && entryKind == "saving_transfer" {
+			if destinationAccount.AccountClass != "asset" || destinationAccount.AccountType != "savings" || destinationAccount.Currency != existing.Currency {
+				http.Error(w, "historical savings must use an active savings account in the same currency", http.StatusBadRequest)
+				return
+			}
+		} else {
+			if err := validateTransferAccounts(sourceAccount, destinationAccount, existing.Currency); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err := validateLendingAccounts(entryKind, sourceAccount, destinationAccount); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+	} else {
+		req.DestinationAccountID = nil
+	}
+
+	if req.CategoryID != nil && strings.TrimSpace(*req.CategoryID) != "" {
+		categoryID := strings.TrimSpace(*req.CategoryID)
+		category, categoryErr := s.categories.GetByID(r.Context(), categoryID, claims.UserID)
+		if categoryErr != nil {
+			writeSettingsError(w, categoryErr, "failed to validate transaction category")
+			return
+		}
+		expectedGroup := "expense"
+		if entryKind == "income_earned" {
+			expectedGroup = "income"
+		}
+		if category.CategoryGroup != expectedGroup {
+			http.Error(w, "category does not match the transaction type", http.StatusBadRequest)
+			return
+		}
+		req.CategoryID = &categoryID
+	} else {
+		req.CategoryID = nil
+	}
 
 	tx := store.Transaction{
+		TransactionDate:      req.TransactionDate,
 		EntryKind:            entryKind,
 		Amount:               req.Amount,
 		AccountID:            req.AccountID,
@@ -916,13 +1013,70 @@ func (s *Server) updateTransaction(w http.ResponseWriter, r *http.Request) {
 		Note:                 req.Note,
 	}
 
-	result, err := s.transactions.Update(r.Context(), id, claims.UserID, tx)
+	dbTx, err := s.db.Begin(r.Context())
 	if err != nil {
-		http.Error(w, "failed to update transaction", http.StatusInternalServerError)
+		writeInternalError(w, r, "transactions.update.begin", "failed to update transaction", err)
+		return
+	}
+	defer dbTx.Rollback(r.Context())
+
+	result, err := s.transactions.UpdateWithTx(r.Context(), dbTx, id, claims.UserID, tx)
+	if err != nil {
+		writeSettingsError(w, err, "failed to update transaction")
+		return
+	}
+	if existing.OriginEventID != nil && existing.OriginEventType != nil && *existing.OriginEventType == "transaction_with_fee" {
+		feeAccountID := movementFeeAccountID(entryKind, req.AccountID, req.DestinationAccountID)
+		if _, err := dbTx.Exec(r.Context(), `
+			update transactions fee
+			set account_id = $1, transaction_date = $2, updated_at = now()
+			where fee.user_id = $3
+			  and fee.origin_event_id = $4
+			  and fee.id <> $5
+			  and fee.deleted_at is null
+			  and (
+				fee.origin_event_type = 'transaction_fee'
+				or exists (
+					select 1 from categories c
+					where c.id = fee.category_id
+					  and c.user_id = fee.user_id
+					  and c.category_group = 'expense'
+					  and lower(btrim(c.name)) = 'transaction fees'
+				)
+			  )
+		`, nullableAccountIDForUpdate(feeAccountID), req.TransactionDate, claims.UserID, *existing.OriginEventID, existing.ID); err != nil {
+			writeInternalError(w, r, "transactions.update.fee", "failed to update linked transaction fee", err)
+			return
+		}
+	}
+	if err := dbTx.Commit(r.Context()); err != nil {
+		writeInternalError(w, r, "transactions.update.commit", "failed to update transaction", err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+func isEditableTransaction(transaction store.Transaction) bool {
+	if transaction.AssetID != nil || transaction.LoanID != nil {
+		return false
+	}
+	if transaction.OriginEventType != nil && *transaction.OriginEventType != "transaction_with_fee" && *transaction.OriginEventType != "transaction_fee" {
+		return false
+	}
+	switch transaction.EntryKind {
+	case "expense_living", "income_earned", "saving_transfer", "loan_receivable_advance", "loan_receivable_repayment":
+		return true
+	default:
+		return false
+	}
+}
+
+func nullableAccountIDForUpdate(accountID string) any {
+	if accountID == "" {
+		return nil
+	}
+	return accountID
 }
 
 func (s *Server) deleteTransaction(w http.ResponseWriter, r *http.Request) {

@@ -86,6 +86,23 @@ func (s *CategoryStore) ListByUser(ctx context.Context, userID string) ([]Catego
 	return categories, rows.Err()
 }
 
+func (s *CategoryStore) GetByID(ctx context.Context, id, userID string) (Category, error) {
+	var category Category
+	err := s.db.QueryRow(ctx, `
+		select id, user_id, name, category_group, parent_id, created_at::text
+		from categories
+		where id = $1 and user_id = $2
+	`, id, userID).Scan(
+		&category.ID,
+		&category.UserID,
+		&category.Name,
+		&category.CategoryGroup,
+		&category.ParentID,
+		&category.CreatedAt,
+	)
+	return category, normalizeWriteError(err)
+}
+
 func (s *CategoryStore) Create(ctx context.Context, userID, name, categoryGroup string, parentID *string) (Category, error) {
 	var category Category
 	if categoryGroup == "" {
