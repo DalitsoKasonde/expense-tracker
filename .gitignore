@@ -3,6 +3,7 @@ node_modules
 dist
 coverage
 .turbo
+*.tsbuildinfo
 .DS_Store
 *.log
 .env
@@ -16,8 +17,12 @@ docker-compose.deploy.yml
 .deploy-state
 api/bin
 api/.cache
+# `go build` run from api/ without -o writes this local executable.
+api/api
+
+# Machine-specific assistant permissions; shared project guidance stays tracked.
+.claude/settings.local.json
 
 # personal financial workbooks used for legacy imports — never commit these
 *.xlsx
 *.xls
-
