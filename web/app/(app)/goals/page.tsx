@@ -45,7 +45,7 @@ export default function GoalsPage() {
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [status, setStatus] = useState("");
-  const [form, setForm] = useState({ name: "", target: "" });
+  const [form, setForm] = useState({ name: "", target: "", alreadySaved: "" });
 
   const loadData = useCallback(async () => {
     const [loadedGroups, loadedAccounts] = await Promise.all([
@@ -74,6 +74,11 @@ export default function GoalsPage() {
       setStatus("Enter a target greater than zero.");
       return;
     }
+    const openingContributionMinor = toMinor(form.alreadySaved);
+    if (openingContributionMinor < 0) {
+      setStatus("Amount already saved cannot be negative.");
+      return;
+    }
 
     setSaving(true);
     setStatus("");
@@ -83,6 +88,7 @@ export default function GoalsPage() {
         body: {
           name: form.name,
           targetMinor,
+          openingContributionMinor,
           isShareoutGroup: false,
           cycleStart: today(),
           cycleLengthMonths: 12,
@@ -90,9 +96,13 @@ export default function GoalsPage() {
         },
       });
       setCreateOpen(false);
-      setForm({ name: "", target: "" });
+      setForm({ name: "", target: "", alreadySaved: "" });
       await loadData();
-      setStatus("Savings goal created. Transfer money into its account to make progress.");
+      setStatus(
+        openingContributionMinor > 0
+          ? "Savings goal created with what you had already saved."
+          : "Savings goal created. Transfer money into its account to make progress.",
+      );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to create savings goal");
     } finally {
@@ -163,6 +173,22 @@ export default function GoalsPage() {
           <div className="field">
             <label htmlFor="goalTarget">Target ({currency})</label>
             <input id="goalTarget" type="number" min="0.01" step="0.01" value={form.target} onChange={(event) => setForm((current) => ({ ...current, target: event.target.value }))} placeholder="0.00" required />
+          </div>
+          <div className="field">
+            <label htmlFor="goalAlreadySaved">Amount already saved (optional)</label>
+            <input
+              id="goalAlreadySaved"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.alreadySaved}
+              onChange={(event) => setForm((current) => ({ ...current, alreadySaved: event.target.value }))}
+              placeholder="0.00"
+              aria-describedby="goalAlreadySavedHint"
+            />
+            <span className="muted" id="goalAlreadySavedHint">
+              Starts the goal at what you have already put aside, without taking money out of any cash account.
+            </span>
           </div>
         </div>
       </FormDialog>
