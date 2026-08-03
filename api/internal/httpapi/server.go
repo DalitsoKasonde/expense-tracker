@@ -35,6 +35,7 @@ type Server struct {
 	assetLots        *store.AssetLotStore
 	loans            *store.LoanStore
 	savingsGroups    *store.SavingsGroupStore
+	savingsPockets   *store.SavingsPocketStore
 	bonds            *store.BondStore
 	unifiedDashboard *store.UnifiedDashboardStore
 	idempotencyKeys  *store.IdempotencyKeyStore
@@ -61,6 +62,7 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 		assetLots:        store.NewAssetLotStore(db),
 		loans:            store.NewLoanStore(db),
 		savingsGroups:    store.NewSavingsGroupStore(db),
+		savingsPockets:   store.NewSavingsPocketStore(db),
 		bonds:            bondStore,
 		unifiedDashboard: store.NewUnifiedDashboardStore(db, bondStore),
 		idempotencyKeys:  store.NewIdempotencyKeyStore(db),
@@ -158,6 +160,9 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.Patch("/v1/savings-groups/{id}", s.updateSavingsGroup)
 		protected.Delete("/v1/savings-groups/{id}", s.deleteSavingsGroup)
 		protected.Post("/v1/savings-groups/{id}/shareout", s.closeSavingsGroupCycle)
+		protected.Get("/v1/savings-pockets", s.listSavingsPockets)
+		protected.Post("/v1/savings-pockets", s.createSavingsPocket)
+		protected.Post("/v1/savings-pockets/{id}/interest", s.recordSavingsPocketInterest)
 
 		// Imports
 		protected.Post("/v1/imports/excel", s.uploadExcel)

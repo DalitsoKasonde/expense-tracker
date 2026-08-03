@@ -16,7 +16,7 @@ import type { MarketStockDirectory } from "@/lib/market-data";
 import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
-type InvestmentKind = "stock" | "bond" | "group";
+type InvestmentKind = "stock" | "bond" | "pocket" | "group";
 type StockMode = "existing" | "new";
 type BondMode = "existing" | "new";
 
@@ -102,11 +102,14 @@ export default function AddInvestmentPage() {
     target: "",
     openingContribution: "0",
     isShareoutGroup: true,
+    openingBalance: "0",
+    annualInterestRate: "",
   });
 
   useEffect(() => {
     const requestedType = new URLSearchParams(window.location.search).get("type");
     if (requestedType === "bond") setKind("bond");
+    if (requestedType === "pocket") setKind("pocket");
     if (requestedType === "group") setKind("group");
   }, []);
 
@@ -123,10 +126,11 @@ export default function AddInvestmentPage() {
   // A savings group opens its own savings account and is funded by transfers
   // afterwards, so it has no purchase, no funding account, and no backfill flag.
   const isSavingsGroup = kind === "group";
+  const isSavingsPocket = kind === "pocket";
   const historicalDate = kind === "stock" || bondMode === "existing" ? form.purchaseDate : form.issueDate;
-  const historicalEligible = !isSavingsGroup && isPastDate(historicalDate, today());
+  const historicalEligible = !isSavingsGroup && !isSavingsPocket && isPastDate(historicalDate, today());
   const historicalBackfill = historicalEligible && form.historicalBackfill;
-  const accountRequired = !historicalBackfill && !isSavingsGroup;
+  const accountRequired = !historicalBackfill && !isSavingsGroup && !isSavingsPocket;
 
   useEffect(() => {
     if (!historicalEligible && form.historicalBackfill) {
@@ -388,6 +392,26 @@ export default function AddInvestmentPage() {
     });
   }
 
+  async function createSavingsPocket() {
+    const name = form.name.trim();
+    if (!name) throw new Error("Enter a name for the savings pocket.");
+    const openingBalanceMinor = toMinor(form.openingBalance);
+    const annualRate = form.annualInterestRate.trim() === "" ? null : Number.parseFloat(form.annualInterestRate);
+    if (openingBalanceMinor < 0) throw new Error("Opening balance cannot be negative.");
+    if (annualRate !== null && (!Number.isFinite(annualRate) || annualRate < 0)) {
+      throw new Error("Enter a valid annual interest rate.");
+    }
+    await apiCall("/v1/savings-pockets", {
+      method: "POST",
+      body: {
+        name,
+        currency: form.currency,
+        openingBalanceMinor,
+        annualInterestRateBps: annualRate === null ? undefined : Math.round(annualRate * 100),
+      },
+    });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (accountRequired && !form.accountId) {
@@ -400,8 +424,9 @@ export default function AddInvestmentPage() {
     try {
       if (kind === "stock") await createStock();
       else if (kind === "group") await createSavingsGroup();
+      else if (kind === "pocket") await createSavingsPocket();
       else await createBond();
-      router.push("/investments");
+      router.push(kind === "pocket" ? "/investments/savings-pockets" : "/investments");
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to add investment");
@@ -422,7 +447,7 @@ export default function AddInvestmentPage() {
         />
         <PageHeader
           title="Add investment"
-          subtitle="Track a stock holding, a government bond, or a savings group in its own currency."
+          subtitle="Track a stock, government bond, interest-bearing savings pocket, or savings group in its own currency."
         />
 
         <div className="rangeSwitcher" role="tablist" aria-label="Investment type">
@@ -431,6 +456,9 @@ export default function AddInvestmentPage() {
           </button>
           <button type="button" className={kind === "bond" ? "rangeChip active" : "rangeChip"} onClick={() => setKind("bond")}>
             Government bond
+          </button>
+          <button type="button" className={kind === "pocket" ? "rangeChip active" : "rangeChip"} onClick={() => setKind("pocket")}>
+            Savings pocket
           </button>
           <button type="button" className={kind === "group" ? "rangeChip active" : "rangeChip"} onClick={() => setKind("group")}>
             Savings group
@@ -546,6 +574,8 @@ export default function AddInvestmentPage() {
                 <label htmlFor="name">
                   {kind === "stock"
                     ? "Company or fund name"
+                    : kind === "pocket"
+                      ? "Savings pocket name"
                     : kind === "group"
                       ? "Savings group name"
                       : "Bond name"}
@@ -557,6 +587,8 @@ export default function AddInvestmentPage() {
                   placeholder={
                     kind === "stock"
                       ? "e.g. ZCCM Investments Holdings"
+                      : kind === "pocket"
+                        ? "e.g. Patumba Pocket"
                       : kind === "group"
                         ? "e.g. Month-end chilimba"
                         : "e.g. GRZ 15-year bond"
@@ -593,6 +625,13 @@ export default function AddInvestmentPage() {
                 transferring money into that account, and each transfer counts as a contribution.
               </span>
             </div>
+          ) : isSavingsPocket ? (
+            <div className="rounded-md border border-primary/30 bg-primary-softer p-4">
+              <strong className="block text-sm text-on-surface">Its own interest-bearing savings account</strong>
+              <span className="mt-1 block text-xs text-on-surface-soft">
+                The pocket stays outside available spending money. Fund it with transfers and record credited interest from its Investments dashboard.
+              </span>
+            </div>
           ) : historicalBackfill ? (
             <div className="rounded-md border border-primary/30 bg-primary-softer p-4">
               <strong className="block text-sm text-on-surface">Funding account not required</strong>
@@ -615,7 +654,7 @@ export default function AddInvestmentPage() {
             </div>
           )}
 
-          {historicalEligible && !isSavingsGroup ? (
+          {historicalEligible && !isSavingsGroup && !isSavingsPocket ? (
             <label className="flex cursor-pointer items-start gap-3 rounded-md border border-outline bg-surface-soft p-4">
               <input
                 type="checkbox"
@@ -707,6 +746,21 @@ export default function AddInvestmentPage() {
                   </span>
                 </span>
               </label>
+            </>
+          ) : isSavingsPocket ? (
+            <>
+              <div className="splitFields items-start">
+                <div className="field">
+                  <label htmlFor="openingBalance">Current balance ({form.currency})</label>
+                  <input id="openingBalance" type="number" min="0" step="0.01" value={form.openingBalance} onChange={(event) => update("openingBalance", event.target.value)} required />
+                  <span className="field-hint">Use the pocket balance shown by the provider today.</span>
+                </div>
+                <div className="field">
+                  <label htmlFor="annualInterestRate">Annual interest rate (%, optional)</label>
+                  <input id="annualInterestRate" type="number" min="0" step="0.01" value={form.annualInterestRate} onChange={(event) => update("annualInterestRate", event.target.value)} placeholder="e.g. 12.5" />
+                  <span className="field-hint">For reference; actual returns come from interest credits you record.</span>
+                </div>
+              </div>
             </>
           ) : kind === "stock" ? (
             <>
@@ -819,6 +873,8 @@ export default function AddInvestmentPage() {
               ? "Saving..."
               : isSavingsGroup
                 ? "Add savings group"
+                : isSavingsPocket
+                  ? "Add savings pocket"
                 : kind === "stock" && stockMode === "existing"
                   ? "Add purchase to stock"
                   : kind === "stock"

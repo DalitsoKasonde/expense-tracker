@@ -3,6 +3,7 @@ import type { Route } from "next";
 export type PortfolioHoldingKind =
   | "stock"
   | "bond"
+  | "savings_pocket"
   | "savings_group"
   | "cash_equivalent"
   | "other";
@@ -59,6 +60,16 @@ type SavingsGroupInput = {
   contributedMinor: number;
 };
 
+type SavingsPocketInput = {
+  id: string;
+  accountId: string;
+  name: string;
+  currency: string;
+  currentBalanceMinor: number;
+  netContributionsMinor: number;
+  interestEarnedMinor: number;
+};
+
 // Order is deliberate: the kinds people check most often come first, and
 // "Other" is last so an unclassified holding never leads the page.
 const groupOrder: Array<{
@@ -71,6 +82,11 @@ const groupOrder: Array<{
     kind: "bond",
     label: "Government bonds",
     description: "Fixed coupons held to maturity",
+  },
+  {
+    kind: "savings_pocket",
+    label: "Savings pockets",
+    description: "Interest-bearing savings products",
   },
   {
     kind: "savings_group",
@@ -100,6 +116,7 @@ function kindForAssetClass(assetClass: string): PortfolioHoldingKind {
 
 export function buildPortfolioHoldings(input: {
   assets: AssetInput[];
+  savingsPockets?: SavingsPocketInput[];
   savingsGroups: SavingsGroupInput[];
   fallbackCurrency: string;
 }): PortfolioHolding[] {
@@ -129,7 +146,19 @@ export function buildPortfolioHoldings(input: {
     hasPosition: true,
   }));
 
-  return [...assetHoldings, ...groupHoldings];
+  const pocketHoldings = (input.savingsPockets ?? []).map<PortfolioHolding>((pocket) => ({
+    id: pocket.id,
+    name: pocket.name,
+    href: "/investments/savings-pockets" as Route,
+    kind: "savings_pocket",
+    meta: "Interest-bearing savings",
+    currency: pocket.currency,
+    currentValueMinor: pocket.currentBalanceMinor,
+    investedAmountMinor: pocket.netContributionsMinor,
+    hasPosition: true,
+  }));
+
+  return [...assetHoldings, ...pocketHoldings, ...groupHoldings];
 }
 
 export function currencyTotals(holdings: PortfolioHolding[]): CurrencyTotal[] {

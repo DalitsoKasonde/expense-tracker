@@ -131,6 +131,10 @@ func (s *Server) updateAccount(w http.ResponseWriter, r *http.Request) {
 
 	account, err := s.accounts.Update(r.Context(), id, claims.UserID, name, accountType, accountClass, currency, req.OpeningBalanceMinor)
 	if err != nil {
+		if errors.Is(err, store.ErrInvalidSavingsPocketAccount) {
+			http.Error(w, "a savings pocket must remain a savings asset while it is tracked in Investments", http.StatusBadRequest)
+			return
+		}
 		if errors.Is(err, store.ErrConflict) {
 			http.Error(w, "an active account with that name already exists", http.StatusConflict)
 			return

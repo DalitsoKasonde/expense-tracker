@@ -60,6 +60,7 @@ describe("AddInvestmentPage", () => {
       }
       if (path === "/v1/bonds/bond-1/purchases" && options?.method === "POST") return Promise.resolve({});
       if (path === "/v1/savings-groups" && options?.method === "POST") return Promise.resolve({});
+      if (path === "/v1/savings-pockets" && options?.method === "POST") return Promise.resolve({});
       if (path === "/v1/transactions" && options?.method === "POST") return Promise.resolve({});
       return Promise.reject(new Error(`unexpected path ${path}`));
     });
@@ -128,6 +129,27 @@ describe("AddInvestmentPage", () => {
       }),
     );
     expect(mocks.push).toHaveBeenCalledWith("/investments");
+  });
+
+  it("creates an interest-bearing savings pocket without spending from another account", async () => {
+    render(<AddInvestmentPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Savings pocket" }));
+    fireEvent.change(screen.getByLabelText("Savings pocket name"), { target: { value: "Patumba Pocket" } });
+    fireEvent.change(screen.getByLabelText("Current balance (ZMW)"), { target: { value: "250" } });
+    fireEvent.change(screen.getByLabelText("Annual interest rate (%, optional)"), { target: { value: "12.5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add savings pocket" }));
+
+    await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith("/v1/savings-pockets", {
+      method: "POST",
+      body: {
+        name: "Patumba Pocket",
+        currency: "ZMW",
+        openingBalanceMinor: 25_000,
+        annualInterestRateBps: 1_250,
+      },
+    }));
+    expect(screen.queryByLabelText("Paid from account")).not.toBeInTheDocument();
+    expect(mocks.push).toHaveBeenCalledWith("/investments/savings-pockets");
   });
 });
 

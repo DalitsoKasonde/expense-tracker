@@ -24,6 +24,15 @@ describe("buildPortfolioHoldings", () => {
   it("puts assets and savings groups into one comparable shape", () => {
     const holdings = buildPortfolioHoldings({
       assets: [asset()],
+      savingsPockets: [{
+        id: "pocket-1",
+        accountId: "account-1",
+        name: "Patumba Pocket",
+        currency: "ZMW",
+        currentBalanceMinor: 12_000,
+        netContributionsMinor: 10_000,
+        interestEarnedMinor: 2_000,
+      }],
       savingsGroups: [
         {
           id: "group-1",
@@ -37,8 +46,14 @@ describe("buildPortfolioHoldings", () => {
       fallbackCurrency: "ZMW",
     });
 
-    expect(holdings.map((holding) => holding.kind)).toEqual(["stock", "savings_group"]);
+    expect(holdings.map((holding) => holding.kind)).toEqual(["stock", "savings_pocket", "savings_group"]);
     expect(holdings[1]).toMatchObject({
+      name: "Patumba Pocket",
+      href: "/investments/savings-pockets",
+      currentValueMinor: 12_000,
+      investedAmountMinor: 10_000,
+    });
+    expect(holdings[2]).toMatchObject({
       name: "Chilimba",
       href: "/investments/savings-groups",
       meta: "Share-out group",

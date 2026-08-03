@@ -24,9 +24,20 @@ type SavingsGroup = {
   contributedMinor: number;
 };
 
+type SavingsPocket = {
+  id: string;
+  accountId: string;
+  name: string;
+  currency: string;
+  currentBalanceMinor: number;
+  netContributionsMinor: number;
+  interestEarnedMinor: number;
+};
+
 const dashboardRoutes = {
   stock: "/investments/stocks",
   bond: "/investments/bonds",
+  savings_pocket: "/investments/savings-pockets",
   savings_group: "/investments/savings-groups",
 } as const;
 
@@ -34,12 +45,19 @@ export default function InvestmentsPage() {
   const apiCall = useApiCall();
   const { data, loading } = useUnifiedDashboard();
   const [savingsGroups, setSavingsGroups] = useState<SavingsGroup[]>([]);
+  const [savingsPockets, setSavingsPockets] = useState<SavingsPocket[]>([]);
 
   useEffect(() => {
     let ignore = false;
-    void apiCall<SavingsGroup[]>("/v1/savings-groups")
-      .then((groups) => {
-        if (!ignore) setSavingsGroups(groups ?? []);
+    void Promise.all([
+      apiCall<SavingsGroup[]>("/v1/savings-groups").catch(() => []),
+      apiCall<SavingsPocket[]>("/v1/savings-pockets").catch(() => []),
+    ])
+      .then(([groups, pockets]) => {
+        if (!ignore) {
+          setSavingsGroups(groups ?? []);
+          setSavingsPockets(pockets ?? []);
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -51,6 +69,7 @@ export default function InvestmentsPage() {
   const { groups, totals, holdingCount } = useMemo(() => {
     const holdings = buildPortfolioHoldings({
       assets: data?.assets ?? [],
+      savingsPockets,
       savingsGroups,
       fallbackCurrency: reportingCurrency,
     });
@@ -59,7 +78,7 @@ export default function InvestmentsPage() {
       totals: currencyTotals(holdings),
       holdingCount: holdings.filter((holding) => holding.hasPosition).length,
     };
-  }, [data?.assets, reportingCurrency, savingsGroups]);
+  }, [data?.assets, reportingCurrency, savingsGroups, savingsPockets]);
 
   if (loading) {
     return (
@@ -88,13 +107,13 @@ export default function InvestmentsPage() {
       {groups.length === 0 ? (
         <EmptyState
           title="No investments yet"
-          description="Add a stock, government bond, or savings group to start your portfolio."
+          description="Add a stock, government bond, savings pocket, or savings group to start your portfolio."
           action={<Link href="/investments/add" className="btn btn-primary">Add investment</Link>}
         />
       ) : (
         <>
           <CompactSummary totals={totals} holdingCount={holdingCount} />
-          <section className="grid gap-4 md:grid-cols-3" aria-label="Investment dashboards">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" aria-label="Investment dashboards">
             {groups
               .filter((group) => group.kind in dashboardRoutes)
               .map((group) => (

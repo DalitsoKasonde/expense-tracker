@@ -140,6 +140,20 @@ func (s *AccountStore) Update(ctx context.Context, id, userID, name, accountType
 	if currency == "" {
 		currency = "ZMW"
 	}
+	if accountType != "savings" || accountClass != "asset" {
+		var isSavingsPocket bool
+		if err := s.db.QueryRow(ctx, `
+			select exists(
+				select 1 from savings_pockets
+				where account_id = $1 and user_id = $2
+			)
+		`, id, userID).Scan(&isSavingsPocket); err != nil {
+			return account, err
+		}
+		if isSavingsPocket {
+			return account, ErrInvalidSavingsPocketAccount
+		}
+	}
 
 	if openingBalanceMinor != nil {
 		var hasTransactions bool
