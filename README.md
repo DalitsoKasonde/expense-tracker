@@ -70,4 +70,31 @@ After the first user exists, changing these environment variables does not chang
 
 ### Registration security
 
-Registration is intended for local or trusted-group deployments. New accounts become active immediately; email verification is not implemented. Every request is scoped to the authenticated user's data, but `admin` and `member` are currently identity labels rather than different permission tiers—there is no admin-only control panel. Add email verification and review role permissions before exposing registration to an untrusted public audience.
+Registration is intended for local or trusted-group deployments. New accounts become active immediately; email verification is not implemented. Every member request is scoped to the authenticated user's data.
+
+## System administration
+
+The `system_admin` role has a separate `/admin` console for operational user access, encrypted database backups, and an administrative audit trail. It cannot use member financial endpoints. The user list exposes masked email addresses and account metadata only; balances, transactions, loans, investments, and other personal financial records are not exposed.
+
+Subscriptions are intentionally not implemented yet.
+
+Bootstrap the first system administrator with protected environment values:
+
+```dotenv
+SYSTEM_ADMIN_BOOTSTRAP_EMAIL=ops@example.com
+SYSTEM_ADMIN_BOOTSTRAP_PASSWORD=use-a-long-unique-password
+```
+
+On startup, the API creates this identity only when no `system_admin` exists. Remove both values from the environment after the first successful deployment. The initial administrator can create additional system administrators from `/admin`; those actions are audited. The packaged `adminctl` command remains available for recovery if every system administrator account becomes inaccessible.
+
+For production backups, add a persistent 32-byte encryption key to `.env.prod`. Generate it once, store a protected copy outside the application server, and do not rotate it without retaining the old key for existing backups:
+
+```bash
+openssl rand -base64 32
+```
+
+```dotenv
+BACKUP_ENCRYPTION_KEY=the-generated-base64-value
+```
+
+Production Compose mounts the encrypted backup directory at `/var/lib/expenses/backups`. The admin console can create backups and view their status, size, and SHA-256 checksum; it cannot download or inspect backup contents. A backup is only useful if its encryption key is retained separately and restore procedures are tested periodically.

@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { establishApiSession } from "@/lib/browser-auth";
 
@@ -39,7 +39,8 @@ export function LoginForm() {
         return;
       }
 
-      router.push("/today");
+      const session = await getSession();
+      router.push(session?.user?.role === "system_admin" ? "/admin" : "/today");
       router.refresh();
     } catch (error) {
       setIsPending(false);

@@ -7,10 +7,12 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   refresh: vi.fn(),
   signIn: vi.fn(),
+  getSession: vi.fn(),
 }));
 
 vi.mock("next-auth/react", () => ({
   signIn: mocks.signIn,
+  getSession: mocks.getSession,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -27,6 +29,7 @@ vi.mock("@/lib/browser-auth", () => ({
 describe("LoginForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getSession.mockResolvedValue({ user: { role: "member" } });
   });
 
   it("keeps credentials visible and shows progress while signing in", async () => {
@@ -57,5 +60,18 @@ describe("LoginForm", () => {
     mocks.signIn.mockResolvedValue({ ok: true });
 
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/today"));
+  });
+
+  it("sends system administrators to the isolated admin console", async () => {
+    mocks.establishApiSession.mockResolvedValue(undefined);
+    mocks.signIn.mockResolvedValue({ ok: true });
+    mocks.getSession.mockResolvedValue({ user: { role: "system_admin" } });
+
+    render(<LoginForm />);
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ops@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "expenses2026" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign in" }).closest("form")!);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/admin"));
   });
 });

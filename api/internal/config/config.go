@@ -20,36 +20,44 @@ const (
 )
 
 type Config struct {
-	DatabaseURL            string
-	JWTSecret              string
-	AppOrigins             []string
-	AdminBootstrapEmail    string
-	AdminBootstrapPassword string
-	Port                   string
-	AppEnv                 string
+	DatabaseURL                  string
+	JWTSecret                    string
+	AppOrigins                   []string
+	AdminBootstrapEmail          string
+	AdminBootstrapPassword       string
+	SystemAdminBootstrapEmail    string
+	SystemAdminBootstrapPassword string
+	Port                         string
+	AppEnv                       string
 	// AppVersion identifies the running build. Deploys set it to the git
 	// commit SHA so /healthz can prove which build is live.
-	AppVersion     string
-	CookieName     string
-	CookieSecure   bool
-	CookieSameSite string
-	MaxBodyBytes   int64
-	MansaAPIKey    string
+	AppVersion          string
+	CookieName          string
+	CookieSecure        bool
+	CookieSameSite      string
+	MaxBodyBytes        int64
+	MansaAPIKey         string
+	BackupDir           string
+	BackupEncryptionKey string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		DatabaseURL:            envOrDefault("DATABASE_URL", defaultDatabaseURL),
-		JWTSecret:              envOrDefault("JWT_SECRET", defaultJWTSecret),
-		AppOrigins:             mergeOrigins(defaultAppOrigins(), splitOrigins(os.Getenv("APP_ORIGIN"))),
-		AdminBootstrapEmail:    os.Getenv("ADMIN_BOOTSTRAP_EMAIL"),
-		AdminBootstrapPassword: os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
-		Port:                   envOrDefault("PORT", defaultPort),
-		AppEnv:                 strings.ToLower(envOrDefault("APP_ENV", "development")),
-		AppVersion:             envOrDefault("APP_VERSION", defaultAppVersion),
-		CookieName:             envOrDefault("AUTH_COOKIE_NAME", defaultCookieName),
-		CookieSameSite:         strings.ToLower(envOrDefault("AUTH_COOKIE_SAMESITE", defaultCookieSameSite)),
-		MansaAPIKey:            os.Getenv("MANSA_API_KEY"),
+		DatabaseURL:                  envOrDefault("DATABASE_URL", defaultDatabaseURL),
+		JWTSecret:                    envOrDefault("JWT_SECRET", defaultJWTSecret),
+		AppOrigins:                   mergeOrigins(defaultAppOrigins(), splitOrigins(os.Getenv("APP_ORIGIN"))),
+		AdminBootstrapEmail:          os.Getenv("ADMIN_BOOTSTRAP_EMAIL"),
+		AdminBootstrapPassword:       os.Getenv("ADMIN_BOOTSTRAP_PASSWORD"),
+		SystemAdminBootstrapEmail:    os.Getenv("SYSTEM_ADMIN_BOOTSTRAP_EMAIL"),
+		SystemAdminBootstrapPassword: os.Getenv("SYSTEM_ADMIN_BOOTSTRAP_PASSWORD"),
+		Port:                         envOrDefault("PORT", defaultPort),
+		AppEnv:                       strings.ToLower(envOrDefault("APP_ENV", "development")),
+		AppVersion:                   envOrDefault("APP_VERSION", defaultAppVersion),
+		CookieName:                   envOrDefault("AUTH_COOKIE_NAME", defaultCookieName),
+		CookieSameSite:               strings.ToLower(envOrDefault("AUTH_COOKIE_SAMESITE", defaultCookieSameSite)),
+		MansaAPIKey:                  os.Getenv("MANSA_API_KEY"),
+		BackupDir:                    os.Getenv("BACKUP_DIR"),
+		BackupEncryptionKey:          os.Getenv("BACKUP_ENCRYPTION_KEY"),
 	}
 
 	if cfg.AppEnv == "" {
