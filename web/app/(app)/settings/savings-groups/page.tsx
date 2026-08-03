@@ -46,6 +46,8 @@ export default function SavingsGroupsSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [shareoutOpen, setShareoutOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<SavingsGroup | null>(null);
+  const [editCycleStart, setEditCycleStart] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({
@@ -63,6 +65,7 @@ export default function SavingsGroupsSettingsPage() {
   });
 
   const cashAccounts = useMemo(() => spendableAccounts(accounts), [accounts]);
+  const shareoutGroups = useMemo(() => groups.filter((group) => group.isShareoutGroup), [groups]);
   const groupPendingDeletion = groups.find((group) => group.id === deleteId);
 
   const loadData = useCallback(async () => {
@@ -70,12 +73,12 @@ export default function SavingsGroupsSettingsPage() {
       apiCall<SavingsGroup[]>("/v1/savings-groups"),
       apiCall<Account[]>("/v1/accounts"),
     ]);
-    const shareoutGroups = (loadedGroups ?? []).filter((group) => group.isShareoutGroup);
-    setGroups(shareoutGroups);
+    const loadedShareoutGroups = (loadedGroups ?? []).filter((group) => group.isShareoutGroup);
+    setGroups(loadedGroups ?? []);
     setAccounts(loadedAccounts ?? []);
     setShareout((current) => ({
       ...current,
-      groupId: current.groupId || shareoutGroups[0]?.id || "",
+      groupId: current.groupId || loadedShareoutGroups[0]?.id || "",
       cashAccountId: current.cashAccountId || loadedAccounts?.find(isSpendableAccount)?.id || "",
     }));
   }, [apiCall]);
@@ -147,6 +150,27 @@ export default function SavingsGroupsSettingsPage() {
     }
   }
 
+  async function updateGroup(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingGroup) return;
+    setSaving(true);
+    setStatus("");
+    try {
+      await apiCall<SavingsGroup>(`/v1/savings-groups/${editingGroup.id}`, {
+        method: "PATCH",
+        body: { cycleStart: editCycleStart },
+      });
+      setEditingGroup(null);
+      setEditCycleStart("");
+      await loadData();
+      setStatus("Savings group start date updated.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Failed to update savings group");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function deleteGroup() {
     if (!deleteId) {
       return;
@@ -175,7 +199,7 @@ export default function SavingsGroupsSettingsPage() {
             <button className="btn btn-primary" type="button" onClick={() => setCreateOpen(true)}>
               Create group
             </button>
-            <button className="btn btn-ghost" type="button" onClick={() => setShareoutOpen(true)} disabled={groups.length === 0 || cashAccounts.length === 0}>
+            <button className="btn btn-ghost" type="button" onClick={() => setShareoutOpen(true)} disabled={shareoutGroups.length === 0 || cashAccounts.length === 0}>
               Record share-out
             </button>
           </div>
@@ -207,19 +231,31 @@ export default function SavingsGroupsSettingsPage() {
                       <td data-label="Balance" className="text-on-surface">{formatMoney(group.currentBalance, userCurrency)}</td>
                       <td data-label="Contributed" className="text-on-surface-soft">{formatMoney(group.contributedMinor, userCurrency)}</td>
                       <td data-label="Actions">
-                        <button
-                          className="btn btn-danger"
-                          type="button"
-                          disabled={group.currentBalance !== 0 || group.contributedMinor !== 0}
-                          title={
-                            group.currentBalance !== 0 || group.contributedMinor !== 0
-                              ? "Groups with savings can only be closed with a share-out."
-                              : undefined
-                          }
-                          onClick={() => setDeleteId(group.id)}
-                        >
-                          Delete
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="btn btn-ghost"
+                            type="button"
+                            onClick={() => {
+                              setEditingGroup(group);
+                              setEditCycleStart(group.cycleStart.slice(0, 10));
+                            }}
+                          >
+                            Edit start date
+                          </button>
+                          <button
+                            className="btn btn-danger"
+                            type="button"
+                            disabled={group.currentBalance !== 0 || group.contributedMinor !== 0}
+                            title={
+                              group.currentBalance !== 0 || group.contributedMinor !== 0
+                                ? "Groups with savings can only be closed with a share-out."
+                                : undefined
+                            }
+                            onClick={() => setDeleteId(group.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -241,6 +277,31 @@ export default function SavingsGroupsSettingsPage() {
         onConfirm={() => void deleteGroup()}
         onClose={() => setDeleteId(null)}
       />
+
+      <FormDialog
+        open={editingGroup !== null}
+        title={editingGroup ? `Edit ${editingGroup.name}` : "Edit savings group"}
+        description="Changing the start date recalculates this cycle's contributions. The opening historical contribution moves with the corrected date; real transfers keep their original dates."
+        submitLabel="Save start date"
+        pending={saving}
+        error={status.startsWith("Failed") ? status : undefined}
+        onSubmit={updateGroup}
+        onClose={() => {
+          setEditingGroup(null);
+          setEditCycleStart("");
+        }}
+      >
+        <div className="field">
+          <label htmlFor="edit-group-cycle-start">Cycle start</label>
+          <input
+            id="edit-group-cycle-start"
+            type="date"
+            value={editCycleStart}
+            onChange={(event) => setEditCycleStart(event.target.value)}
+            required
+          />
+        </div>
+      </FormDialog>
 
       <FormDialog
         open={createOpen}
@@ -299,7 +360,7 @@ export default function SavingsGroupsSettingsPage() {
             <label>Group</label>
             <select value={shareout.groupId} onChange={(event) => setShareout((current) => ({ ...current, groupId: event.target.value }))} required>
               <option value="">Select group</option>
-              {groups.map((group) => (
+              {shareoutGroups.map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
                 </option>

@@ -145,6 +145,7 @@ func (s *Server) registerRoutes(router chi.Router) {
 		// Savings groups
 		protected.Get("/v1/savings-groups", s.listSavingsGroups)
 		protected.Post("/v1/savings-groups", s.createSavingsGroup)
+		protected.Patch("/v1/savings-groups/{id}", s.updateSavingsGroup)
 		protected.Delete("/v1/savings-groups/{id}", s.deleteSavingsGroup)
 		protected.Post("/v1/savings-groups/{id}/shareout", s.closeSavingsGroupCycle)
 

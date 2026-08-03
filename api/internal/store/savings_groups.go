@@ -45,6 +45,10 @@ type CloseSavingsGroupInput struct {
 	Currency      string `json:"currency"`
 }
 
+type UpdateSavingsGroupInput struct {
+	CycleStart string `json:"cycleStart"`
+}
+
 type SavingsGroupCloseResult struct {
 	OriginEventID       string        `json:"originEventId"`
 	ContributedMinor    int64         `json:"contributedMinor"`
@@ -172,6 +176,76 @@ func (s *SavingsGroupStore) Create(ctx context.Context, userID string, input Cre
 	if err := tx.Commit(ctx); err != nil {
 		return SavingsGroup{}, err
 	}
+	if err := s.decorate(ctx, &group); err != nil {
+		return SavingsGroup{}, err
+	}
+	return group, nil
+}
+
+func (s *SavingsGroupStore) Update(ctx context.Context, userID, groupID string, input UpdateSavingsGroupInput) (SavingsGroup, error) {
+	if input.CycleStart == "" {
+		return SavingsGroup{}, errors.New("cycle start is required")
+	}
+
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return SavingsGroup{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var group SavingsGroup
+	err = tx.QueryRow(ctx, `
+		select id, user_id, account_id, name, is_shareout_group, cycle_start::text,
+		       cycle_length_months, status, target_minor, created_at::text
+		from savings_groups
+		where id = $1 and user_id = $2
+		for update
+	`, groupID, userID).Scan(
+		&group.ID,
+		&group.UserID,
+		&group.AccountID,
+		&group.Name,
+		&group.IsShareoutGroup,
+		&group.CycleStart,
+		&group.CycleLengthMonths,
+		&group.Status,
+		&group.TargetMinor,
+		&group.CreatedAt,
+	)
+	if err != nil {
+		return SavingsGroup{}, normalizeWriteError(err)
+	}
+
+	oldCycleStart := group.CycleStart
+	if _, err := tx.Exec(ctx, `
+		update savings_groups
+		set cycle_start = $1, updated_at = now()
+		where id = $2 and user_id = $3
+	`, input.CycleStart, group.ID, userID); err != nil {
+		return SavingsGroup{}, normalizeWriteError(err)
+	}
+
+	// Keep the one-time opening contribution inside the corrected first cycle.
+	// Real transfers retain their actual dates and are included or excluded by
+	// the normal cycle-start calculation.
+	if _, err := tx.Exec(ctx, `
+		update transactions
+		set transaction_date = $1, updated_at = now()
+		where user_id = $2
+		  and destination_account_id = $3
+		  and transaction_date = $4
+		  and entry_kind = 'saving_transfer'
+		  and source = 'historical_backfill'
+		  and note = 'Savings recorded before Expenses'
+		  and deleted_at is null
+	`, input.CycleStart, userID, group.AccountID, oldCycleStart); err != nil {
+		return SavingsGroup{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return SavingsGroup{}, err
+	}
+	group.CycleStart = input.CycleStart
 	if err := s.decorate(ctx, &group); err != nil {
 		return SavingsGroup{}, err
 	}

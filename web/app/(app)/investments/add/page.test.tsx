@@ -187,6 +187,13 @@ describe("AddInvestmentPage savings groups", () => {
     expect(screen.getByText("Its own savings account")).toBeInTheDocument();
   });
 
+  it("top-aligns paired fields when their helper text has different heights", async () => {
+    await openSavingsGroupTab();
+
+    expect(screen.getByLabelText("Cycle start").closest(".splitFields")).toHaveClass("items-start");
+    expect(screen.getByLabelText(/Target/).closest(".splitFields")).toHaveClass("items-start");
+  });
+
   it("sends a target only when one is entered", async () => {
     await openSavingsGroupTab();
 

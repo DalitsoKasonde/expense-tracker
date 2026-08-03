@@ -59,6 +59,31 @@ func (s *Server) createSavingsGroup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, group)
 }
 
+func (s *Server) updateSavingsGroup(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req store.UpdateSavingsGroupInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if _, err := time.Parse("2006-01-02", req.CycleStart); err != nil {
+		http.Error(w, "cycleStart must use YYYY-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	group, err := s.savingsGroups.Update(r.Context(), claims.UserID, chi.URLParam(r, "id"), req)
+	if err != nil {
+		writeSettingsError(w, err, "failed to update savings group")
+		return
+	}
+	writeJSON(w, http.StatusOK, group)
+}
+
 func (s *Server) deleteSavingsGroup(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {

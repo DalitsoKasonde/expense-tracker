@@ -62,6 +62,43 @@ describe("savings group settings", () => {
     expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
   });
 
+  it("edits the current cycle start date", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/savings-groups") return Promise.resolve([group()]);
+      if (path === "/v1/accounts") return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+
+    render(<SavingsGroupsSettingsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit start date" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Edit SL Savings" });
+    const startDate = within(dialog).getByLabelText("Cycle start");
+    expect(startDate).toHaveValue("2026-01-01");
+    fireEvent.change(startDate, { target: { value: "2026-02-01" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save start date" }));
+
+    await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith("/v1/savings-groups/group-1", {
+      method: "PATCH",
+      body: { cycleStart: "2026-02-01" },
+    }));
+    expect(await screen.findByText("Savings group start date updated.")).toBeInTheDocument();
+  });
+
+  it("keeps non-share-out groups visible and editable", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/savings-groups") return Promise.resolve([group({ isShareoutGroup: false })]);
+      if (path === "/v1/accounts") return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+
+    render(<SavingsGroupsSettingsPage />);
+
+    expect(await screen.findByText("SL Savings")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit start date" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Record share-out" })).toBeDisabled();
+  });
+
   it("creates every savings group as a share-out group without an unused target", async () => {
     render(<SavingsGroupsSettingsPage />);
     await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith("/v1/savings-groups"));

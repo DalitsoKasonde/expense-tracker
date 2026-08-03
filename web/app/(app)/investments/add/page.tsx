@@ -630,7 +630,7 @@ export default function AddInvestmentPage() {
 
           {isSavingsGroup ? (
             <>
-              <div className="splitFields">
+              <div className="splitFields items-start">
                 <div className="field">
                   <label htmlFor="cycleStart">Cycle start</label>
                   <input
@@ -655,7 +655,7 @@ export default function AddInvestmentPage() {
                   />
                 </div>
               </div>
-              <div className="splitFields">
+              <div className="splitFields items-start">
                 <div className="field">
                   <label htmlFor="target">Target ({form.currency}, optional)</label>
                   <input
