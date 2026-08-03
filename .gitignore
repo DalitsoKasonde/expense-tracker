@@ -19,6 +19,7 @@ docker-compose.deploy.yml
 .deploy-state
 api/bin
 api/.cache
+api/backups/
 # `go build` run from api/ without -o writes this local executable.
 api/api
 

@@ -24,6 +24,9 @@ services:
       APP_ENV: production
       PORT: "8080"
       APP_VERSION: ${IMAGE_TAG}
+      BACKUP_DIR: /var/lib/expenses/backups
+    volumes:
+      - expenses_backups:/var/lib/expenses/backups
     networks:
       - edge
       - database
@@ -97,3 +100,6 @@ networks:
   database:
     external: true
     name: chuma-database
+
+volumes:
+  expenses_backups:

@@ -38,6 +38,7 @@ type Server struct {
 	bonds            *store.BondStore
 	unifiedDashboard *store.UnifiedDashboardStore
 	idempotencyKeys  *store.IdempotencyKeyStore
+	admin            *store.AdminStore
 	marketStocks     marketStockDirectoryCache
 }
 
@@ -63,6 +64,7 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 		bonds:            bondStore,
 		unifiedDashboard: store.NewUnifiedDashboardStore(db, bondStore),
 		idempotencyKeys:  store.NewIdempotencyKeyStore(db),
+		admin:            store.NewAdminStore(db),
 	}
 
 	router := chi.NewRouter()
@@ -89,9 +91,17 @@ func (s *Server) registerRoutes(router chi.Router) {
 
 	router.Group(func(protected chi.Router) {
 		protected.Use(auth.Middleware(s.config.JWTSecret, s.config.CookieName))
+		protected.Use(s.requireCurrentUser)
+		protected.Use(auth.SystemAdminBoundary)
 		protected.Get("/v1/auth/me", s.me)
 		protected.With(authLimiter.middleware).Post("/v1/auth/refresh", s.refreshToken)
 		protected.With(authLimiter.middleware).Post("/v1/auth/logout", s.logout)
+		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/users", s.listAdminUsers)
+		protected.With(auth.RequireRole("system_admin")).Post("/v1/admin/system-admins", s.createSystemAdmin)
+		protected.With(auth.RequireRole("system_admin")).Patch("/v1/admin/users/{id}/status", s.updateAdminUserStatus)
+		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/audit", s.listAdminAudit)
+		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/backups", s.listAdminBackups)
+		protected.With(auth.RequireRole("system_admin")).Post("/v1/admin/backups", s.createAdminBackup)
 		protected.Get("/v1/onboarding/status", s.getOnboardingStatus)
 		protected.Post("/v1/onboarding/complete", s.completeOnboarding)
 		protected.Get("/v1/user/preferences", s.getUserPreferences)
@@ -274,6 +284,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.IssueToken(s.config.JWTSecret, user.ID, user.Role)
 	if err != nil {
 		http.Error(w, "could not issue token", http.StatusInternalServerError)
+		return
+	}
+	if err := s.users.RecordLogin(r.Context(), user.ID); err != nil {
+		http.Error(w, "could not record login", http.StatusInternalServerError)
 		return
 	}
 

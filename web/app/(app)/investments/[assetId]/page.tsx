@@ -246,6 +246,21 @@ export default function AssetDetailPage() {
       ? Math.max(0, couponNetMinor - couponPurchaseFeeMinor) / couponUnitPriceMinor
       : 0;
   const luseTicker = asset ? inferLuSETicker(asset.symbol, asset.name) : "";
+  // What the holding has actually done for you: the price move plus every
+  // dividend it has paid. A reinvested dividend raises the cost basis by the
+  // same amount it adds here, so it is counted once, not twice. Money already
+  // banked by selling shares is not in either figure — invested and current
+  // value both drop on a sale.
+  const investedMinor = asset?.investedAmountMinor ?? 0;
+  const priceReturnMinor = (asset?.currentValueMinor ?? 0) - investedMinor;
+  const totalReturnMinor = priceReturnMinor + dividendTotalMinor;
+  const totalReturnPercent = investedMinor > 0 ? (totalReturnMinor / investedMinor) * 100 : null;
+  const costRecoveredPercent = investedMinor > 0 ? (dividendTotalMinor / investedMinor) * 100 : null;
+  // The price at which the dividends have already made you whole.
+  const breakEvenPriceMinor =
+    holding && holding.quantity > 0
+      ? Math.round((investedMinor - dividendTotalMinor) / holding.quantity)
+      : null;
 
   useEffect(() => {
     if (!dividendHistoricalEligible && dividendForm.historicalBackfill) {
@@ -711,10 +726,31 @@ export default function AssetDetailPage() {
                     </div>
                   ) : null}
                   <div className="metricCard">
-                    <span className="metricCardLabel">Gain or loss</span>
-                    <strong className="metricCardValue">
-                      {formatMoney(asset.currentValueMinor - asset.investedAmountMinor, asset.currency)}
+                    <span className="metricCardLabel">Total return</span>
+                    <strong
+                      className={`metricCardValue ${totalReturnMinor >= 0 ? "text-positive" : "text-negative"}`}
+                    >
+                      {totalReturnMinor >= 0 ? "+" : ""}
+                      {formatMoney(totalReturnMinor, asset.currency)}
+                      {totalReturnPercent === null
+                        ? ""
+                        : ` (${totalReturnPercent >= 0 ? "+" : ""}${totalReturnPercent.toFixed(1)}%)`}
                     </strong>
+                    <span className="muted">
+                      Price {priceReturnMinor >= 0 ? "+" : ""}
+                      {formatMoney(priceReturnMinor, asset.currency)} · Dividends{" "}
+                      {formatMoney(dividendTotalMinor, asset.currency)}
+                    </span>
+                  </div>
+                  <div className="metricCard">
+                    <span className="metricCardLabel">Cost recovered</span>
+                    <strong className="metricCardValue">
+                      {costRecoveredPercent === null ? "—" : `${costRecoveredPercent.toFixed(1)}%`}
+                    </strong>
+                    <span className="muted">
+                      {formatMoney(dividendTotalMinor, asset.currency)} of{" "}
+                      {formatMoney(asset.investedAmountMinor, asset.currency)} paid back in dividends.
+                    </span>
                   </div>
                   {holding ? (
                     <div className="metricCard">
@@ -725,6 +761,19 @@ export default function AssetDetailPage() {
                       <span className="muted">Includes allocated brokerage fees.</span>
                     </div>
                   ) : null}
+                  {breakEvenPriceMinor === null ? null : (
+                    <div className="metricCard">
+                      <span className="metricCardLabel">Break-even price</span>
+                      <strong className="metricCardValue">
+                        {formatMoney(Math.max(0, breakEvenPriceMinor), asset.currency)}
+                      </strong>
+                      <span className="muted">
+                        {breakEvenPriceMinor <= 0
+                          ? "Dividends alone have already returned what you paid."
+                          : "What a share must be worth for the dividends to have made you whole."}
+                      </span>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1079,7 +1128,7 @@ export default function AssetDetailPage() {
                     setDividendForm((current) => ({ ...current, disposition: event.target.value }))
                   }
                 >
-                  <option value="cash">Kept as cash</option>
+                  <option value="cash">Taken as cash</option>
                   <option value="drip">Reinvested to buy more shares</option>
                 </select>
               </div>
@@ -1457,7 +1506,7 @@ export default function AssetDetailPage() {
                     setCouponForm((current) => ({ ...current, destination: event.target.value }))
                   }
                 >
-                  <option value="cash">Kept as cash</option>
+                  <option value="cash">Taken as cash</option>
                   <option value="stock" disabled={destinationStocks.length === 0}>
                     Bought an existing stock
                   </option>

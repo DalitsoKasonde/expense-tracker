@@ -32,6 +32,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/login");
   }
 
+  if (session.user.role === "system_admin") {
+    redirect("/admin");
+  }
+
   try {
     await apiFetch("/v1/auth/me", session.accessToken);
   } catch {

@@ -21,6 +21,11 @@ type UserStore struct {
 	db *pgxpool.Pool
 }
 
+type UserAuthState struct {
+	Role     string
+	IsActive bool
+}
+
 func NewUserStore(db *pgxpool.Pool) *UserStore {
 	return &UserStore{db: db}
 }
@@ -53,6 +58,21 @@ func (s *UserStore) FindByEmail(ctx context.Context, email string) (User, error)
 	}
 
 	return user, nil
+}
+
+func (s *UserStore) RecordLogin(ctx context.Context, userID string) error {
+	_, err := s.db.Exec(ctx, `update users set last_login_at = now() where id = $1`, userID)
+	return err
+}
+
+func (s *UserStore) GetAuthState(ctx context.Context, userID string) (UserAuthState, error) {
+	var state UserAuthState
+	err := s.db.QueryRow(ctx, `
+		select role, is_active
+		from users
+		where id = $1
+	`, userID).Scan(&state.Role, &state.IsActive)
+	return state, err
 }
 
 func (s *UserStore) CreateBootstrapAdmin(ctx context.Context, email, passwordHash string) (User, error) {
@@ -90,4 +110,3 @@ func (s *UserStore) CreateInvitedUser(ctx context.Context, email, passwordHash, 
 	)
 	return user, err
 }
-
