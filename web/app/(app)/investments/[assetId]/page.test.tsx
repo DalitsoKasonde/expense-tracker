@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   reload: vi.fn(),
   assetClass: "stock",
+  dividends: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -43,6 +44,7 @@ describe("AssetDetailPage", () => {
     mocks.push.mockReset();
     mocks.refresh.mockReset();
     mocks.assetClass = "stock";
+    mocks.dividends = [];
     mocks.apiCall.mockImplementation((path: string, options?: { method?: string }) => {
       if (path === "/v1/accounts") return Promise.resolve([]);
       if (path === "/v1/assets/asset-1/holding") {
@@ -63,7 +65,7 @@ describe("AssetDetailPage", () => {
           }],
         });
       }
-      if (path.startsWith("/v1/transactions")) return Promise.resolve([]);
+      if (path.startsWith("/v1/transactions")) return Promise.resolve(mocks.dividends);
       if (path === "/v1/market-data/luse") {
         return Promise.resolve({ stocks: [], updatedAt: "", sourceName: "Mansa Markets", sourceUrl: "https://www.mansamarkets.com/zambia/" });
       }
@@ -173,6 +175,27 @@ describe("AssetDetailPage", () => {
       }),
     );
     expect(mocks.reload).toHaveBeenCalled();
+  });
+
+  it("counts dividends into the return, cost recovered and break-even price", async () => {
+    mocks.dividends = [{
+      id: "dividend-1",
+      transactionDate: "2026-03-01",
+      entryKind: "investment_income",
+      originEventType: "equity_dividend",
+      amount: 2_500,
+      currency: "ZMW",
+      assetId: "asset-1",
+    }];
+    render(<AssetDetailPage />);
+
+    // Invested 100.00, worth 110.00, dividends 25.00 -> price +10.00, total +35.00 (35%).
+    expect(await screen.findByText("+ZMW 35.00 (+35.0%)")).toBeInTheDocument();
+    expect(screen.getByText("Price +ZMW 10.00 · Dividends ZMW 25.00")).toBeInTheDocument();
+    expect(screen.getByText("25.0%")).toBeInTheDocument();
+    // (100.00 - 25.00) across 10 shares.
+    expect(screen.getByText("Break-even price")).toBeInTheDocument();
+    expect(screen.getByText("ZMW 7.50")).toBeInTheDocument();
   });
 
   it("shows each stock purchase lot with its one-off brokerage fee", async () => {
