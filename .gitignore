@@ -6,6 +6,8 @@ coverage
 *.tsbuildinfo
 .DS_Store
 *.log
+.vscode/
+.kiro/
 .env
 .env.local
 .env.development.local
@@ -22,6 +24,13 @@ api/api
 
 # Machine-specific assistant permissions; shared project guidance stays tracked.
 .claude/settings.local.json
+
+# Local development notes and design exports. Keep public project history/docs.
+*.md
+!README.md
+!**/README.md
+!CHANGELOG.md
+stitch_untitled_project/
 
 # personal financial workbooks used for legacy imports — never commit these
 *.xlsx
