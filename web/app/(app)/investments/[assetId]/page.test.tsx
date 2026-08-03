@@ -121,6 +121,25 @@ describe("AssetDetailPage", () => {
     expect(within(trail).getByRole("link", { name: "Government bonds" })).toHaveAttribute("href", "/investments/bonds");
   });
 
+  it("shows bond-specific summary cards instead of stock statistics", async () => {
+    mocks.assetClass = "bond";
+    render(<AssetDetailPage />);
+
+    expect(await screen.findByText("Total purchase cost")).toBeInTheDocument();
+    expect(screen.getByText("Projected net coupons")).toBeInTheDocument();
+    expect(screen.getByText("Projected total payout")).toBeInTheDocument();
+    expect(screen.getByText("Maturity date")).toBeInTheDocument();
+    expect(screen.getAllByText("ZMW 1,260.00").length).toBeGreaterThan(0);
+    expect(screen.getByText(new Date("2028-01-01T00:00:00").toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }))).toBeInTheDocument();
+    expect(screen.queryByText("Shares owned")).not.toBeInTheDocument();
+    expect(screen.queryByText("Average cost per share")).not.toBeInTheDocument();
+    expect(screen.queryByText("Gain or loss")).not.toBeInTheDocument();
+  });
+
   it("deletes a mistaken investment after confirmation", async () => {
     render(<AssetDetailPage />);
 
@@ -177,6 +196,34 @@ describe("AssetDetailPage", () => {
       "href",
       "/investments/add",
     );
+  });
+
+  it("offers no reinvestment choice for a dividend that is happening now", async () => {
+    render(<AssetDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Record a dividend/ }));
+    const dialog = screen.getByRole("dialog", { name: "Record a dividend" });
+    expect(within(dialog).queryByLabelText("What happened to the payment?")).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/paid into your account/i)).toBeInTheDocument();
+
+    // The choice only appears for a payment that already happened, where both
+    // legs are in the past.
+    fireEvent.change(within(dialog).getByLabelText("Date received"), { target: { value: "2025-08-01" } });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Record as a historical dividend/ }));
+    expect(within(dialog).getByLabelText("What happened to the payment?")).toBeInTheDocument();
+  });
+
+  it("offers no reinvestment choice for a coupon that is happening now", async () => {
+    mocks.assetClass = "bond";
+    render(<AssetDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm coupon" }));
+    const dialog = screen.getByRole("dialog", { name: "Confirm coupon payment" });
+    expect(within(dialog).queryByLabelText("Use net coupon for")).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/paid into the settlement account/i)).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Record as a historical coupon/ }));
+    expect(within(dialog).getByLabelText("Use net coupon for")).toBeInTheDocument();
   });
 
   it("records a past dividend as historical without a cash account", async () => {

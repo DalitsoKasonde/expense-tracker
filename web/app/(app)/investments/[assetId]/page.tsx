@@ -472,7 +472,7 @@ export default function AssetDetailPage() {
       return;
     }
     if (
-      couponForm.destination === "stock" &&
+      couponDestination === "stock" &&
       (!couponForm.destinationAssetId || unitPriceMinor <= 0 || purchaseFeeMinor < 0 || purchaseFeeMinor >= grossAmountMinor - taxAmountMinor)
     ) {
       setCouponError("Select a stock, enter its price, and keep the purchase fee below the net coupon.");
@@ -491,12 +491,12 @@ export default function AssetDetailPage() {
             grossAmountMinor,
             taxAmountMinor,
             paymentDate: couponForm.paymentDate,
-            destination: couponForm.destination,
+            destination: couponDestination,
             destinationAssetId:
-              couponForm.destination === "stock" ? couponForm.destinationAssetId : undefined,
-            unitPriceMinor: couponForm.destination === "stock" ? unitPriceMinor : undefined,
+              couponDestination === "stock" ? couponForm.destinationAssetId : undefined,
+            unitPriceMinor: couponDestination === "stock" ? unitPriceMinor : undefined,
             purchaseFeeMinor:
-              couponForm.destination === "stock" ? purchaseFeeMinor : undefined,
+              couponDestination === "stock" ? purchaseFeeMinor : undefined,
             historicalBackfill: couponHistoricalBackfill || undefined,
           },
         },
@@ -647,35 +647,86 @@ export default function AssetDetailPage() {
 
         <div className="investmentOverview">
           <section className="heroCard investmentValueCard">
-            <p className="sectionKicker">Current value</p>
-            <h2 className="text-2xl font-bold my-2">{formatMoney(asset.currentValueMinor, asset.currency)}</h2>
-            <p className="muted">What this investment is worth today.</p>
+            <p className="sectionKicker">{asset.assetClass === "bond" ? "Principal value" : "Current value"}</p>
+            <h2 className="text-2xl font-bold my-2">
+              {formatMoney(
+                asset.assetClass === "bond"
+                  ? projection?.bond.principalMinor ?? asset.currentValueMinor
+                  : asset.currentValueMinor,
+                asset.currency,
+              )}
+            </h2>
+            <p className="muted">
+              {asset.assetClass === "bond"
+                ? "The face value currently tracked for this bond."
+                : "What this investment is worth today."}
+            </p>
             <div className="portfolioMiniGrid mt-4">
-              <div className="metricCard">
-                <span className="metricCardLabel">Money invested</span>
-                <strong className="metricCardValue">{formatMoney(asset.investedAmountMinor, asset.currency)}</strong>
-              </div>
-              {holding ? (
-                <div className="metricCard">
-                  <span className="metricCardLabel">Shares owned</span>
-                  <strong className="metricCardValue">{holding.quantity.toFixed(4)}</strong>
-                </div>
-              ) : null}
-              <div className="metricCard">
-                <span className="metricCardLabel">Gain or loss</span>
-                <strong className="metricCardValue">
-                  {formatMoney(asset.currentValueMinor - asset.investedAmountMinor, asset.currency)}
-                </strong>
-              </div>
-              {holding ? (
-                <div className="metricCard">
-                  <span className="metricCardLabel">Average cost per share</span>
-                  <strong className="metricCardValue">
-                    {formatMoney(holding.avgCostBasis, asset.currency)}
-                  </strong>
-                  <span className="muted">Includes allocated brokerage fees.</span>
-                </div>
-              ) : null}
+              {asset.assetClass === "bond" ? (
+                <>
+                  <div className="metricCard">
+                    <span className="metricCardLabel">Total purchase cost</span>
+                    <strong className="metricCardValue">
+                      {formatMoney(
+                        projection
+                          ? projection.bond.principalMinor + projection.bond.purchaseFeeMinor
+                          : asset.investedAmountMinor,
+                        asset.currency,
+                      )}
+                    </strong>
+                    <span className="muted">Principal plus the purchase fee.</span>
+                  </div>
+                  <div className="metricCard">
+                    <span className="metricCardLabel">Projected net coupons</span>
+                    <strong className="metricCardValue">
+                      {projection ? formatMoney(projection.totalCouponMinor, asset.currency) : "—"}
+                    </strong>
+                    <span className="muted">Coupon income after withholding tax.</span>
+                  </div>
+                  <div className="metricCard">
+                    <span className="metricCardLabel">Projected total payout</span>
+                    <strong className="metricCardValue">
+                      {projection ? formatMoney(projection.totalProjectedPayoutMinor, asset.currency) : "—"}
+                    </strong>
+                    <span className="muted">Principal redemption plus net coupons.</span>
+                  </div>
+                  <div className="metricCard">
+                    <span className="metricCardLabel">Maturity date</span>
+                    <strong className="metricCardValue">
+                      {projection ? formatPurchaseDate(projection.bond.maturityDate) : "—"}
+                    </strong>
+                    <span className="muted">When the principal is due back.</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="metricCard">
+                    <span className="metricCardLabel">Money invested</span>
+                    <strong className="metricCardValue">{formatMoney(asset.investedAmountMinor, asset.currency)}</strong>
+                  </div>
+                  {holding ? (
+                    <div className="metricCard">
+                      <span className="metricCardLabel">Shares owned</span>
+                      <strong className="metricCardValue">{holding.quantity.toFixed(4)}</strong>
+                    </div>
+                  ) : null}
+                  <div className="metricCard">
+                    <span className="metricCardLabel">Gain or loss</span>
+                    <strong className="metricCardValue">
+                      {formatMoney(asset.currentValueMinor - asset.investedAmountMinor, asset.currency)}
+                    </strong>
+                  </div>
+                  {holding ? (
+                    <div className="metricCard">
+                      <span className="metricCardLabel">Average cost per share</span>
+                      <strong className="metricCardValue">
+                        {formatMoney(holding.avgCostBasis, asset.currency)}
+                      </strong>
+                      <span className="muted">Includes allocated brokerage fees.</span>
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
           </section>
 
