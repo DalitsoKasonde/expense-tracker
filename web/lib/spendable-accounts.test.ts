@@ -7,10 +7,12 @@ describe("isSpendableAccount", () => {
     expect(isSpendableAccount({ accountClass: "asset", accountType: "mobile_money" })).toBe(true);
   });
 
-  it("rejects liabilities, receivables, and savings-group ledger accounts", () => {
+  it("rejects liabilities, receivables, savings, and savings-group ledger accounts", () => {
     expect(isSpendableAccount({ accountClass: "liability", accountType: "loan" })).toBe(false);
     // Money owed to you cannot fund a repayment, however asset-classed it is.
     expect(isSpendableAccount({ accountClass: "asset", accountType: "receivable" })).toBe(false);
+    // A savings pocket is money set aside; spending it starts with a transfer out.
+    expect(isSpendableAccount({ accountClass: "asset", accountType: "savings" })).toBe(false);
     expect(isSpendableAccount({
       accountClass: "asset",
       accountType: "savings",
@@ -25,6 +27,7 @@ describe("spendableAccounts", () => {
       { id: "bank", accountClass: "asset", accountType: "bank" },
       { id: "owed", accountClass: "asset", accountType: "receivable" },
       { id: "card", accountClass: "liability", accountType: "credit_card" },
+      { id: "pocket", accountClass: "asset", accountType: "savings" },
       { id: "group", accountClass: "asset", accountType: "savings", isSavingsGroupAccount: true },
     ];
     expect(spendableAccounts(accounts).map((account) => account.id)).toEqual(["bank"]);
