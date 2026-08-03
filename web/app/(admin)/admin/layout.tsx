@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Brand } from "@/components/brand";
 import { SignOutButton } from "@/components/sign-out-button";
+import { AdminNavigation } from "@/components/admin-navigation";
 import { getAuthSession } from "@/lib/auth";
 import { hasVerifiedSession } from "@/lib/verified-session";
 import { redirect } from "next/navigation";
@@ -17,7 +18,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <SignOutButton />
         </div>
       </header>
-      {children}
+      <div className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
+        <AdminNavigation />
+        <main className="min-w-0">{children}</main>
+      </div>
     </div>
   );
 }
