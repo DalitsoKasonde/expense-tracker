@@ -576,24 +576,22 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 			req.Source = "manual"
 		}
 	}
-	if entryKind == "saving_transfer" && req.HistoricalBackfill {
+	if (entryKind == "saving_transfer" || entryKind == "loan_receivable_advance") && req.HistoricalBackfill {
 		if req.DestinationAccountID == nil || strings.TrimSpace(*req.DestinationAccountID) == "" {
-			http.Error(w, "destinationAccountId is required for historical savings", http.StatusBadRequest)
+			http.Error(w, "destinationAccountId is required for this historical entry", http.StatusBadRequest)
 			return
 		}
 		destinationAccount, destinationErr := s.accounts.GetActiveByID(r.Context(), *req.DestinationAccountID, claims.UserID)
 		if errors.Is(destinationErr, store.ErrNotFound) {
-			http.Error(w, "the savings account must be active and belong to the signed-in user", http.StatusBadRequest)
+			http.Error(w, "the destination account must be active and belong to the signed-in user", http.StatusBadRequest)
 			return
 		}
 		if destinationErr != nil {
-			http.Error(w, "failed to validate the savings account", http.StatusInternalServerError)
+			http.Error(w, "failed to validate the destination account", http.StatusInternalServerError)
 			return
 		}
-		if destinationAccount.AccountClass != "asset" ||
-			destinationAccount.AccountType != "savings" ||
-			destinationAccount.Currency != currency {
-			http.Error(w, "historical savings must be added to an active savings account using the same currency", http.StatusBadRequest)
+		if err := validateHistoricalTransferDestination(entryKind, destinationAccount, currency); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	} else if entryKind == "saving_transfer" ||
@@ -872,6 +870,23 @@ func validateLendingAccounts(entryKind string, source, destination store.Account
 	return nil
 }
 
+func validateHistoricalTransferDestination(entryKind string, destination store.Account, currency string) error {
+	if destination.AccountClass != "asset" || destination.Currency != currency {
+		return errors.New("historical transfers must use an active asset account in the same currency")
+	}
+	switch entryKind {
+	case "saving_transfer":
+		if destination.AccountType != "savings" {
+			return errors.New("historical savings must be added to a savings account")
+		}
+	case "loan_receivable_advance":
+		if destination.AccountType != "receivable" {
+			return errors.New("historical money lent must be added to money owed to you")
+		}
+	}
+	return nil
+}
+
 func calculateInvestmentTotal(quantity float64, unitPrice, fees int64) int64 {
 	return int64(math.Round(quantity*float64(unitPrice))) + fees
 }
@@ -962,9 +977,10 @@ func (s *Server) updateTransaction(w http.ResponseWriter, r *http.Request) {
 			writeSettingsError(w, destinationErr, "failed to validate destination account")
 			return
 		}
-		if req.AccountID == "" && existing.Source == historicalBackfillSource && entryKind == "saving_transfer" {
-			if destinationAccount.AccountClass != "asset" || destinationAccount.AccountType != "savings" || destinationAccount.Currency != existing.Currency {
-				http.Error(w, "historical savings must use an active savings account in the same currency", http.StatusBadRequest)
+		if req.AccountID == "" && existing.Source == historicalBackfillSource &&
+			(entryKind == "saving_transfer" || entryKind == "loan_receivable_advance") {
+			if err := validateHistoricalTransferDestination(entryKind, destinationAccount, existing.Currency); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 		} else {

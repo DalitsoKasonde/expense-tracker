@@ -22,3 +22,10 @@ func TestValidateHistoricalInvestmentPaymentRejectsToday(t *testing.T) {
 		t.Fatal("historical investment income dated today returned no error")
 	}
 }
+
+func TestValidateHistoricalLendingAdvance(t *testing.T) {
+	now := time.Date(2026, time.August, 3, 12, 0, 0, 0, lusakaLocation)
+	if err := validateHistoricalBackfill("loan_receivable_advance", "2026-08-02", now); err != nil {
+		t.Fatalf("past lending advance returned an error: %v", err)
+	}
+}

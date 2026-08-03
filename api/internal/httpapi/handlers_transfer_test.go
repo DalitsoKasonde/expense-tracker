@@ -82,6 +82,19 @@ func TestValidateLendingAccounts(t *testing.T) {
 	}
 }
 
+func TestValidateHistoricalTransferDestination(t *testing.T) {
+	receivable := store.Account{AccountType: "receivable", AccountClass: "asset", Currency: "ZMW"}
+	if err := validateHistoricalTransferDestination("loan_receivable_advance", receivable, "ZMW"); err != nil {
+		t.Fatalf("valid historical receivable returned an error: %v", err)
+	}
+	if err := validateHistoricalTransferDestination("loan_receivable_advance", store.Account{AccountType: "bank", AccountClass: "asset", Currency: "ZMW"}, "ZMW"); err == nil {
+		t.Fatal("historical lending accepted a non-receivable destination")
+	}
+	if err := validateHistoricalTransferDestination("loan_receivable_advance", receivable, "USD"); err == nil {
+		t.Fatal("historical lending accepted a mixed-currency destination")
+	}
+}
+
 func TestMovementFeeAccountID(t *testing.T) {
 	destination := "cash-destination"
 	if got := movementFeeAccountID("saving_transfer", "cash-source", &destination); got != "cash-source" {

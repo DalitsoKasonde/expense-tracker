@@ -677,10 +677,11 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
               amount: amountMinor,
               transactionFee: transactionFeeMinor || undefined,
               currency: formData.currency,
-              accountId: formData.accountId,
+              accountId: historicalBackfill ? undefined : formData.accountId,
               destinationAccountId: receivableAccount.id,
               note: formData.note || `Lent to ${counterpartyName}`,
               source: "manual",
+              historicalBackfill: historicalBackfill || undefined,
             },
           });
         } catch (caught) {
@@ -995,6 +996,8 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                     <span className="mt-1 block text-xs text-on-surface-soft">
                       {formData.entryKind === "investment_buy" && investmentMode === "bond"
                         ? "This past bond will not reduce any cash account. Coupons and maturity stay projected until you confirm one against an account."
+                        : formData.entryKind === "loan_receivable_advance"
+                          ? "This past loan will not reduce any current cash account. The amount owed to you will still be tracked."
                         : "This past entry will not reduce any cash account."}
                     </span>
                   </div>
@@ -1070,7 +1073,9 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
                       Record as historical without a funding account
                     </strong>
                     <span className="mt-1 block text-xs text-on-surface-soft">
-                      Available only for dates before today. This records what happened without changing any account balance, so you can backfill past years you have no account history for.
+                      {formData.entryKind === "loan_receivable_advance"
+                        ? "Available only for dates before today. Your current cash balance stays unchanged, while the amount still owed to you is recorded."
+                        : "Available only for dates before today. This records what happened without changing the funding account balance, so you can backfill past years you have no account history for."}
                     </span>
                   </span>
                 </label>

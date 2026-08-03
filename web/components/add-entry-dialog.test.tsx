@@ -534,6 +534,50 @@ describe("AddEntryDialog", () => {
     });
   });
 
+  it("records past money lent without reducing a current cash account", async () => {
+    mocks.apiCall.mockImplementation((path: string, options?: { method?: string }) => {
+      if (path === "/v1/accounts" && options?.method === "POST") {
+        return Promise.resolve({
+          id: "receivable-1",
+          name: "Loan to John",
+          accountType: "receivable",
+          accountClass: "asset",
+          currency: "ZMW",
+        });
+      }
+      if (path === "/v1/accounts") {
+        return Promise.resolve([{
+          id: "account-1",
+          name: "Mobile Money",
+          accountType: "mobile_money",
+          accountClass: "asset",
+          currency: "ZMW",
+        }]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I lent someone money" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "250" } });
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2025-08-01" } });
+    fireEvent.change(screen.getByLabelText("Person or loan name"), { target: { value: "John" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Record as historical without a funding account/ }));
+    expect(screen.getByText(/amount owed to you will still be tracked/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith("/v1/transactions", {
+      method: "POST",
+      body: expect.objectContaining({
+        entryKind: "loan_receivable_advance",
+        amount: 25_000,
+        accountId: undefined,
+        destinationAccountId: "receivable-1",
+        historicalBackfill: true,
+      }),
+    }));
+  });
+
   it("records repayment as a transfer from the receivable back into cash", async () => {
     mocks.apiCall.mockImplementation((path: string) => {
       if (path === "/v1/accounts") {
