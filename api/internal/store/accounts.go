@@ -196,7 +196,7 @@ func (s *AccountStore) Delete(ctx context.Context, id, userID string) error {
 					case
 						when t.account_id = a.id then
 							case
-								when t.entry_kind in ('income_earned', 'income_borrowed', 'investment_income', 'investment_sell', 'bond_principal_redemption') then t.amount::bigint
+								when t.entry_kind in ('income_earned', 'income_borrowed', 'investment_income', 'investment_sell', 'bond_principal_redemption', 'savings_group_loan_repayment') then t.amount::bigint
 								when t.entry_kind in ('expense_living', 'expense_interest', 'expense_fee', 'saving_transfer', 'loan_receivable_advance', 'loan_receivable_repayment', 'investment_buy', 'investment_loss', 'debt_principal_payment') then -t.amount::bigint
 								else 0
 							end

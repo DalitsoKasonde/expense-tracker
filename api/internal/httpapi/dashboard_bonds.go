@@ -215,6 +215,13 @@ func (s *Server) confirmBondCoupon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.CashflowID = chi.URLParam(r, "cashflowId")
+	if req.HistoricalBackfill {
+		if err := validateHistoricalBackfill("investment_income", req.PaymentDate, time.Now()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		req.CashAccountID = ""
+	}
 
 	cashflow, err := s.bonds.ConfirmCoupon(r.Context(), claims.UserID, chi.URLParam(r, "assetId"), req)
 	if err != nil {

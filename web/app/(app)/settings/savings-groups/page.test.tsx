@@ -27,6 +27,8 @@ describe("savings group settings", () => {
       cycleLengthMonths: 12,
       status: "active",
       contributedMinor: 0,
+      loanRepaymentsMinor: 0,
+      pendingLoanMinor: 0,
       currentBalance: 0,
       ...overrides,
     };

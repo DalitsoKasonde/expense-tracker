@@ -74,6 +74,17 @@ func (s *Server) recordAssetDividend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "executionDate must use YYYY-MM-DD", http.StatusBadRequest)
 		return
 	}
+	if req.HistoricalBackfill {
+		entryKind := "investment_income"
+		if req.DividendDisposition == "drip" {
+			entryKind = "dividend_drip"
+		}
+		if err := validateHistoricalBackfill(entryKind, req.ExecutionDate, time.Now()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		req.CashAccountID = ""
+	}
 	currency, err := normalizeCurrency(req.Currency)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

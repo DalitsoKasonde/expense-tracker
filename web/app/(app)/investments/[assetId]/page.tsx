@@ -230,15 +230,21 @@ export default function AssetDetailPage() {
   const couponNetMinor = toMinor(couponForm.grossAmount) - toMinor(couponForm.taxAmount);
   const couponPurchaseFeeMinor = toMinor(couponForm.purchaseFee);
   const couponUnitPriceMinor = toMinor(couponForm.unitPrice);
-  const couponQuantity =
-    couponForm.destination === "stock" && couponUnitPriceMinor > 0
-      ? Math.max(0, couponNetMinor - couponPurchaseFeeMinor) / couponUnitPriceMinor
-      : 0;
   const dividendTotalMinor = dividends.reduce((total, dividend) => total + dividend.amount, 0);
   const dividendHistoricalEligible = isPastDate(dividendForm.executionDate, today());
   const dividendHistoricalBackfill = dividendHistoricalEligible && dividendForm.historicalBackfill;
   const couponHistoricalEligible = isPastDate(couponForm.paymentDate, today());
   const couponHistoricalBackfill = couponHistoricalEligible && couponForm.historicalBackfill;
+  // A coupon or dividend that is happening now is paid into an account and stops
+  // there; the reinvestment is recorded as its own purchase at the price and date
+  // it actually happened. Only a historical entry, where both legs are already in
+  // the past, can be booked as a reinvestment in one step.
+  const couponDestination = couponHistoricalBackfill ? couponForm.destination : "cash";
+  const dividendDisposition = dividendHistoricalBackfill ? dividendForm.disposition : "cash";
+  const couponQuantity =
+    couponDestination === "stock" && couponUnitPriceMinor > 0
+      ? Math.max(0, couponNetMinor - couponPurchaseFeeMinor) / couponUnitPriceMinor
+      : 0;
   const luseTicker = asset ? inferLuSETicker(asset.symbol, asset.name) : "";
 
   useEffect(() => {
@@ -549,8 +555,8 @@ export default function AssetDetailPage() {
         body: {
           cashAccountId: dividendHistoricalBackfill ? undefined : dividendForm.cashAccountId,
           amountMinor: toMinor(dividendForm.amount),
-          reinvestmentPriceMinor: dividendForm.disposition === "drip" ? toMinor(dividendForm.reinvestmentPrice) : undefined,
-          dividendDisposition: dividendForm.disposition,
+          reinvestmentPriceMinor: dividendDisposition === "drip" ? toMinor(dividendForm.reinvestmentPrice) : undefined,
+          dividendDisposition,
           currency: asset?.currency ?? "ZMW",
           executionDate: dividendForm.executionDate,
           note: dividendForm.note || undefined,
@@ -561,7 +567,7 @@ export default function AssetDetailPage() {
       await Promise.all([refreshHolding(), refreshDividends()]);
       setEquityDialog(null);
       setActionStatus(
-        dividendForm.disposition === "drip"
+        dividendDisposition === "drip"
           ? "Reinvested dividend recorded."
           : "Cash dividend recorded.",
       );
@@ -1012,19 +1018,26 @@ export default function AssetDetailPage() {
           onClose={() => setEquityDialog(null)}
         >
           <div className="grid gap-4">
-            <div className="field">
-              <label htmlFor="dividend-disposition">What happened to the payment?</label>
-              <select
-                id="dividend-disposition"
-                value={dividendForm.disposition}
-                onChange={(event) =>
-                  setDividendForm((current) => ({ ...current, disposition: event.target.value }))
-                }
-              >
-                <option value="cash">Paid into my cash account</option>
-                <option value="drip">Reinvested to buy more shares</option>
-              </select>
-            </div>
+            {dividendHistoricalBackfill ? (
+              <div className="field">
+                <label htmlFor="dividend-disposition">What happened to the payment?</label>
+                <select
+                  id="dividend-disposition"
+                  value={dividendForm.disposition}
+                  onChange={(event) =>
+                    setDividendForm((current) => ({ ...current, disposition: event.target.value }))
+                  }
+                >
+                  <option value="cash">Kept as cash</option>
+                  <option value="drip">Reinvested to buy more shares</option>
+                </select>
+              </div>
+            ) : (
+              <p className="muted">
+                The dividend is paid into your account. If you reinvest it, record that purchase
+                separately so it carries the price and date you actually paid.
+              </p>
+            )}
             <div className="splitFields">
               <div className="field">
                 <label htmlFor="dividend-amount">Dividend amount ({asset.currency})</label>
@@ -1088,7 +1101,7 @@ export default function AssetDetailPage() {
                 </span>
               </label>
             ) : null}
-            {dividendForm.disposition === "drip" ? (
+            {dividendHistoricalBackfill && dividendForm.disposition === "drip" ? (
               <div className="field">
                 <label htmlFor="dividend-reinvestment-price">Share price when reinvested ({asset.currency})</label>
                 <input
@@ -1383,26 +1396,34 @@ export default function AssetDetailPage() {
               </label>
             ) : null}
 
-            <div className="field">
-              <label htmlFor="coupon-destination">Use net coupon for</label>
-              <select
-                id="coupon-destination"
-                value={couponForm.destination}
-                onChange={(event) =>
-                  setCouponForm((current) => ({ ...current, destination: event.target.value }))
-                }
-              >
-                <option value="cash">Keep in settlement account</option>
-                <option value="stock" disabled={destinationStocks.length === 0}>
-                  Buy an existing stock
-                </option>
-              </select>
-              {destinationStocks.length === 0 ? (
-                <span className="muted">Add a stock in {asset.currency} before choosing stock reinvestment.</span>
-              ) : null}
-            </div>
+            {couponHistoricalBackfill ? (
+              <div className="field">
+                <label htmlFor="coupon-destination">Use net coupon for</label>
+                <select
+                  id="coupon-destination"
+                  value={couponForm.destination}
+                  onChange={(event) =>
+                    setCouponForm((current) => ({ ...current, destination: event.target.value }))
+                  }
+                >
+                  <option value="cash">Kept as cash</option>
+                  <option value="stock" disabled={destinationStocks.length === 0}>
+                    Bought an existing stock
+                  </option>
+                </select>
+                {destinationStocks.length === 0 ? (
+                  <span className="muted">Add a stock in {asset.currency} before recording a reinvestment.</span>
+                ) : null}
+              </div>
+            ) : (
+              <p className="muted">
+                The net coupon is paid into the settlement account. If you reinvest it, record that
+                purchase from <Link href="/investments/add">Add investment</Link> once the money has
+                arrived, so it carries the price and date you actually paid.
+              </p>
+            )}
 
-            {couponForm.destination === "stock" ? (
+            {couponHistoricalBackfill && couponForm.destination === "stock" ? (
               <>
                 <div className="field">
                   <label htmlFor="coupon-stock">Destination stock</label>

@@ -92,6 +92,7 @@ type ConfirmBondCouponInput struct {
 	DestinationAssetID string `json:"destinationAssetId"`
 	UnitPriceMinor     int64  `json:"unitPriceMinor"`
 	PurchaseFeeMinor   int64  `json:"purchaseFeeMinor"`
+	HistoricalBackfill bool   `json:"historicalBackfill"`
 }
 
 type BondStore struct {
@@ -526,20 +527,29 @@ func (s *BondStore) ConfirmCoupon(ctx context.Context, userID, assetID string, i
 		return BondCashflow{}, ErrConflict
 	}
 
-	var accountCurrency, accountClass, accountType string
-	err = tx.QueryRow(ctx, `
+	cashAccountID := input.CashAccountID
+	transactionSource := "manual"
+	if input.HistoricalBackfill {
+		cashAccountID = ""
+		transactionSource = "historical_backfill"
+	}
+
+	if !input.HistoricalBackfill {
+		var accountCurrency, accountClass, accountType string
+		err = tx.QueryRow(ctx, `
 		select currency, account_class, account_type
 		from accounts
 		where id = $1 and user_id = $2 and archived_at is null
-	`, input.CashAccountID, userID).Scan(&accountCurrency, &accountClass, &accountType)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return BondCashflow{}, ErrNotFound
-	}
-	if err != nil {
-		return BondCashflow{}, err
-	}
-	if accountClass != "asset" || accountType == "receivable" || accountCurrency != currency {
-		return BondCashflow{}, errors.New("coupon account must be an active asset account in the bond currency")
+	`, cashAccountID, userID).Scan(&accountCurrency, &accountClass, &accountType)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return BondCashflow{}, ErrNotFound
+		}
+		if err != nil {
+			return BondCashflow{}, err
+		}
+		if accountClass != "asset" || accountType == "receivable" || accountCurrency != currency {
+			return BondCashflow{}, errors.New("coupon account must be an active asset account in the bond currency")
+		}
 	}
 
 	incomeNote := fmt.Sprintf("Net bond coupon from %s (gross %d, withholding tax %d)", bondName, input.GrossAmountMinor, input.TaxAmountMinor)
@@ -548,15 +558,18 @@ func (s *BondStore) ConfirmCoupon(ctx context.Context, userID, assetID string, i
 		insert into transactions (
 			user_id, transaction_date, entry_kind, amount, currency, account_id, asset_id,
 			note, source, origin_event_id, origin_event_type
-		) values ($1, $2, 'investment_income', $3, $4, $5, $6, $7, 'manual', $8, 'bond_coupon_confirmation')
+		) values ($1, $2, 'investment_income', $3, $4, $5, $6, $7, $8, $9, 'bond_coupon_confirmation')
 		returning id
-	`, userID, input.PaymentDate, netAmountMinor, currency, input.CashAccountID, assetID,
-		incomeNote, input.CashflowID).Scan(&incomeTransactionID)
+	`, userID, input.PaymentDate, netAmountMinor, currency, nullableAccountID(cashAccountID), assetID,
+		incomeNote, transactionSource, input.CashflowID).Scan(&incomeTransactionID)
 	if err != nil {
 		return BondCashflow{}, err
 	}
 
 	disposition := "cash_balance"
+	if input.HistoricalBackfill {
+		disposition = "historical_cash"
+	}
 	var destinationAssetID *string
 	var reinvestTransactionID *string
 	if input.Destination == "stock" {
@@ -582,11 +595,11 @@ func (s *BondStore) ConfirmCoupon(ctx context.Context, userID, assetID string, i
 			insert into transactions (
 				user_id, transaction_date, entry_kind, amount, currency, account_id, asset_id,
 				quantity, unit_price, fees, note, source, origin_event_id, origin_event_type
-			) values ($1, $2, 'investment_buy', $3, $4, $5, $6, $7, $8, $9, $10, 'manual', $11, 'bond_coupon_reinvestment')
+			) values ($1, $2, 'investment_buy', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'bond_coupon_reinvestment')
 			returning id
-		`, userID, input.PaymentDate, netAmountMinor, currency, input.CashAccountID,
+		`, userID, input.PaymentDate, netAmountMinor, currency, nullableAccountID(cashAccountID),
 			input.DestinationAssetID, quantity, input.UnitPriceMinor, input.PurchaseFeeMinor,
-			reinvestNote, input.CashflowID).Scan(&transactionID)
+			reinvestNote, transactionSource, input.CashflowID).Scan(&transactionID)
 		if err != nil {
 			return BondCashflow{}, err
 		}
@@ -629,7 +642,7 @@ func (s *BondStore) ConfirmCoupon(ctx context.Context, userID, assetID string, i
 		returning id, asset_id, coalesce(cash_account_id::text, '') as cash_account_id, event_type, disposition, scheduled_date::text,
 		          gross_amount_minor, tax_amount_minor, net_amount_minor, status, posted_transaction_id,
 		          destination_asset_id, reinvest_transaction_id, payment_date::text, confirmed_at::text
-	`, input.CashAccountID, disposition, input.GrossAmountMinor, input.TaxAmountMinor, netAmountMinor,
+	`, nullableAccountID(cashAccountID), disposition, input.GrossAmountMinor, input.TaxAmountMinor, netAmountMinor,
 		incomeTransactionID, destinationAssetID, reinvestTransactionID, input.PaymentDate, input.CashflowID).Scan(
 		&result.ID,
 		&result.AssetID,
@@ -745,7 +758,7 @@ func validateCouponConfirmation(input ConfirmBondCouponInput) (int64, float64, e
 	if strings.TrimSpace(input.CashflowID) == "" {
 		return 0, 0, errors.New("cashflowId is required")
 	}
-	if strings.TrimSpace(input.CashAccountID) == "" {
+	if !input.HistoricalBackfill && strings.TrimSpace(input.CashAccountID) == "" {
 		return 0, 0, errors.New("cashAccountId is required")
 	}
 	if input.GrossAmountMinor <= 0 {
@@ -763,6 +776,14 @@ func validateCouponConfirmation(input ConfirmBondCouponInput) (int64, float64, e
 	case "", "cash":
 		return netAmountMinor, 0, nil
 	case "stock":
+		// A live coupon lands in the settlement account first. Buying the stock
+		// is a separate decision made at the broker, on its own date and at its
+		// own price, so it is recorded as its own purchase rather than assumed
+		// here. Only a historical coupon, where both legs already happened, can
+		// be booked in one step.
+		if !input.HistoricalBackfill {
+			return 0, 0, errors.New("a coupon is paid into the settlement account; record the reinvestment as a stock purchase once the money has arrived")
+		}
 		if strings.TrimSpace(input.DestinationAssetID) == "" {
 			return 0, 0, errors.New("destinationAssetId is required for stock reinvestment")
 		}

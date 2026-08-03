@@ -69,6 +69,33 @@ describe("AssetDetailPage", () => {
       }
       if (path === "/v1/assets/asset-1" && options?.method === "DELETE") return Promise.resolve(undefined);
       if (path === "/v1/assets/asset-1" && options?.method === "PATCH") return Promise.resolve(undefined);
+      if (path === "/v1/assets/asset-1/dividends" && options?.method === "POST") return Promise.resolve({});
+      if (path === "/v1/bonds/asset-1/projection") return Promise.resolve({
+        bond: {
+          cashAccountId: "",
+          principalMinor: 100_000,
+          purchaseFeeMinor: 0,
+          issueDate: "2024-01-01",
+          maturityDate: "2028-01-01",
+        },
+        totalProjectedPayoutMinor: 126_000,
+        totalGrossCouponMinor: 6_500,
+        totalCouponTaxMinor: 500,
+        totalCouponMinor: 6_000,
+        totalCashBalanceMinor: 0,
+        totalReinvestedMinor: 0,
+        cashflows: [{
+          id: "coupon-1",
+          eventType: "coupon",
+          disposition: "cash_balance",
+          scheduledDate: "2025-08-01",
+          grossAmountMinor: 6_500,
+          taxAmountMinor: 500,
+          netAmountMinor: 6_000,
+          status: "projected",
+        }],
+      });
+      if (path === "/v1/bonds/asset-1/cashflows/coupon-1/confirm" && options?.method === "POST") return Promise.resolve({});
       return Promise.reject(new Error(`unexpected path ${path}`));
     });
   });
@@ -150,5 +177,63 @@ describe("AssetDetailPage", () => {
       "href",
       "/investments/add",
     );
+  });
+
+  it("records a past dividend as historical without a cash account", async () => {
+    render(<AssetDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Record a dividend/ }));
+    const dialog = screen.getByRole("dialog", { name: "Record a dividend" });
+    fireEvent.change(within(dialog).getByLabelText("Dividend amount (ZMW)"), { target: { value: "125.50" } });
+    fireEvent.change(within(dialog).getByLabelText("Date received"), { target: { value: "2025-08-01" } });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Record as a historical dividend/ }));
+    expect(within(dialog).getByText("No account will be changed")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save dividend" }));
+
+    await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith(
+      "/v1/assets/asset-1/dividends",
+      {
+        method: "POST",
+        body: {
+          cashAccountId: undefined,
+          amountMinor: 12_550,
+          reinvestmentPriceMinor: undefined,
+          dividendDisposition: "cash",
+          currency: "ZMW",
+          executionDate: "2025-08-01",
+          note: undefined,
+          historicalBackfill: true,
+        },
+      },
+    ));
+  });
+
+  it("records a past coupon as historical without a settlement account", async () => {
+    mocks.assetClass = "bond";
+    render(<AssetDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm coupon" }));
+    const dialog = screen.getByRole("dialog", { name: "Confirm coupon payment" });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Record as a historical coupon/ }));
+    expect(within(dialog).getByText("No account will be changed")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm coupon" }));
+
+    await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith(
+      "/v1/bonds/asset-1/cashflows/coupon-1/confirm",
+      {
+        method: "POST",
+        body: {
+          cashAccountId: undefined,
+          grossAmountMinor: 6_500,
+          taxAmountMinor: 500,
+          paymentDate: "2025-08-01",
+          destination: "cash",
+          destinationAssetId: undefined,
+          unitPriceMinor: undefined,
+          purchaseFeeMinor: undefined,
+          historicalBackfill: true,
+        },
+      },
+    ));
   });
 });

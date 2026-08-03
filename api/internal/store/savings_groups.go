@@ -9,17 +9,19 @@ import (
 )
 
 type SavingsGroup struct {
-	ID                string `json:"id"`
-	UserID            string `json:"userId"`
-	AccountID         string `json:"accountId"`
-	Name              string `json:"name"`
-	IsShareoutGroup   bool   `json:"isShareoutGroup"`
-	CycleStart        string `json:"cycleStart"`
-	CycleLengthMonths int    `json:"cycleLengthMonths"`
-	Status            string `json:"status"`
-	TargetMinor       *int64 `json:"targetMinor"`
-	ContributedMinor  int64  `json:"contributedMinor"`
-	CurrentBalance    int64  `json:"currentBalance"`
+	ID                  string `json:"id"`
+	UserID              string `json:"userId"`
+	AccountID           string `json:"accountId"`
+	Name                string `json:"name"`
+	IsShareoutGroup     bool   `json:"isShareoutGroup"`
+	CycleStart          string `json:"cycleStart"`
+	CycleLengthMonths   int    `json:"cycleLengthMonths"`
+	Status              string `json:"status"`
+	TargetMinor         *int64 `json:"targetMinor"`
+	ContributedMinor    int64  `json:"contributedMinor"`
+	LoanRepaymentsMinor int64  `json:"loanRepaymentsMinor"`
+	PendingLoanMinor    int64  `json:"pendingLoanMinor"`
+	CurrentBalance      int64  `json:"currentBalance"`
 	// Currency of the group's account. Without it the portfolio has to assume
 	// every group is in the reporting currency and would sum across currencies.
 	Currency  string `json:"currency"`
@@ -453,6 +455,44 @@ func (s *SavingsGroupStore) decorate(ctx context.Context, group *SavingsGroup) e
 		return err
 	}
 	group.ContributedMinor = contributed
+	if err := s.db.QueryRow(ctx, `
+		select coalesce(sum(amount), 0)::bigint
+		from transactions
+		where user_id = $1
+		  and account_id = $2
+		  and entry_kind = 'savings_group_loan_repayment'
+		  and deleted_at is null
+		  and transaction_date >= $3
+	`, group.UserID, group.AccountID, group.CycleStart).Scan(&group.LoanRepaymentsMinor); err != nil {
+		return err
+	}
+	if err := s.db.QueryRow(ctx, `
+		select coalesce(sum(case when coalesce(tx.principal_borrowed, 0) > 0 then greatest(0,
+			l.fixed_interest_minor
+			+ coalesce(tx.principal_borrowed, 0)
+			+ coalesce(ch.charged, 0)
+			- coalesce(tx.principal_repaid, 0)
+			- coalesce(tx.interest_paid, 0)
+			- coalesce(tx.fees_paid, 0)
+		) else 0 end), 0)::bigint
+		from loans l
+		left join lateral (
+			select
+				coalesce(sum(case when account_id = l.liability_account_id and entry_kind = 'income_borrowed' then amount else 0 end), 0)::bigint principal_borrowed,
+				coalesce(sum(case when destination_account_id = l.liability_account_id and entry_kind = 'debt_principal_payment' then amount else 0 end), 0)::bigint principal_repaid,
+				coalesce(sum(case when entry_kind = 'expense_interest' then amount else 0 end), 0)::bigint interest_paid,
+				coalesce(sum(case when entry_kind = 'expense_fee' then amount else 0 end), 0)::bigint fees_paid
+			from transactions
+			where user_id = l.user_id and loan_id = l.id and deleted_at is null
+		) tx on true
+		left join lateral (
+			select coalesce(sum(amount_minor), 0)::bigint charged
+			from loan_charges where user_id = l.user_id and loan_id = l.id
+		) ch on true
+		where l.user_id = $1 and l.group_id = $2 and l.status = 'active'
+	`, group.UserID, group.ID).Scan(&group.PendingLoanMinor); err != nil {
+		return err
+	}
 	return s.db.QueryRow(ctx, `
 		select
 		a.currency,
@@ -462,7 +502,7 @@ func (s *SavingsGroupStore) decorate(ctx context.Context, group *SavingsGroup) e
 				case
 					when t.account_id = a.id then
 						case
-							when t.entry_kind in ('income_earned', 'income_borrowed', 'investment_income', 'investment_sell', 'bond_principal_redemption') then t.amount::bigint
+							when t.entry_kind in ('income_earned', 'income_borrowed', 'investment_income', 'investment_sell', 'bond_principal_redemption', 'savings_group_loan_repayment') then t.amount::bigint
 							when t.entry_kind in ('expense_living', 'expense_interest', 'expense_fee', 'saving_transfer', 'loan_receivable_advance', 'loan_receivable_repayment', 'investment_buy', 'investment_loss', 'debt_principal_payment') then -t.amount::bigint
 							else 0
 						end

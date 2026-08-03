@@ -26,6 +26,8 @@ type SavingsGroup = {
   status: string;
   targetMinor?: number | null;
   contributedMinor: number;
+  loanRepaymentsMinor: number;
+  pendingLoanMinor: number;
   currentBalance: number;
 };
 
@@ -66,6 +68,7 @@ export default function SavingsGroupsSettingsPage() {
 
   const cashAccounts = useMemo(() => spendableAccounts(accounts), [accounts]);
   const shareoutGroups = useMemo(() => groups.filter((group) => group.isShareoutGroup), [groups]);
+  const selectedShareoutGroup = shareoutGroups.find((group) => group.id === shareout.groupId);
   const groupPendingDeletion = groups.find((group) => group.id === deleteId);
 
   const loadData = useCallback(async () => {
@@ -220,6 +223,8 @@ export default function SavingsGroupsSettingsPage() {
                     <th className="font-semibold">Cycle</th>
                     <th className="font-semibold">Balance</th>
                     <th className="font-semibold">Contributed</th>
+                    <th className="font-semibold">Loan repayments</th>
+                    <th className="font-semibold">Pending from loans</th>
                     <th className="font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -230,6 +235,8 @@ export default function SavingsGroupsSettingsPage() {
                       <td data-label="Cycle" className="text-on-surface-soft">{`${new Date(group.cycleStart).toLocaleDateString()} · ${group.cycleLengthMonths} months`}</td>
                       <td data-label="Balance" className="text-on-surface">{formatMoney(group.currentBalance, userCurrency)}</td>
                       <td data-label="Contributed" className="text-on-surface-soft">{formatMoney(group.contributedMinor, userCurrency)}</td>
+                      <td data-label="Loan repayments" className="text-on-surface-soft">{formatMoney(group.loanRepaymentsMinor, userCurrency)}</td>
+                      <td data-label="Pending from loans" className="text-on-surface-soft">{group.pendingLoanMinor > 0 ? formatMoney(group.pendingLoanMinor, userCurrency) : "—"}</td>
                       <td data-label="Actions">
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -388,6 +395,12 @@ export default function SavingsGroupsSettingsPage() {
               <input type="date" value={shareout.cycleEnd} onChange={(event) => setShareout((current) => ({ ...current, cycleEnd: event.target.value }))} required />
             </div>
           </div>
+          {selectedShareoutGroup ? (
+            <div className="rounded-md border border-outline bg-surface-soft p-3 text-sm text-on-surface-soft">
+              Saved this cycle: {formatMoney(selectedShareoutGroup.contributedMinor, userCurrency)} · loan repayments returned: {formatMoney(selectedShareoutGroup.loanRepaymentsMinor, userCurrency)}.
+              {selectedShareoutGroup.pendingLoanMinor > 0 ? ` ${formatMoney(selectedShareoutGroup.pendingLoanMinor, userCurrency)} is still pending from linked loans.` : " No linked loan money is pending."}
+            </div>
+          ) : null}
           <div className="field">
             <label>Note</label>
             <input value={shareout.note} onChange={(event) => setShareout((current) => ({ ...current, note: event.target.value }))} />

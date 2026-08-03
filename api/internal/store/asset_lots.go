@@ -53,6 +53,7 @@ type DividendInput struct {
 	ExecutionDate       string `json:"executionDate"`
 	Note                string `json:"note"`
 	DividendDisposition string `json:"dividendDisposition"`
+	HistoricalBackfill  bool   `json:"historicalBackfill"`
 }
 
 type EquityActionResult struct {
@@ -364,15 +365,37 @@ func (s *AssetLotStore) SellFIFO(ctx context.Context, userID string, input Equit
 	}, nil
 }
 
-func (s *AssetLotStore) RecordDividend(ctx context.Context, userID string, input DividendInput) (EquityActionResult, error) {
+// validateDividendInput applies the rules that do not need the database. A live
+// dividend is paid into a cash account and stops there: buying more shares with
+// it happens at the broker, on its own date and price, and is recorded as its
+// own purchase. Only a historical dividend, where both legs already happened,
+// may be booked as a reinvestment in one step.
+func validateDividendInput(input DividendInput) error {
 	if input.AmountMinor <= 0 {
-		return EquityActionResult{}, errors.New("amount is required")
+		return errors.New("amount is required")
+	}
+	if input.DividendDisposition == "drip" && !input.HistoricalBackfill {
+		return errors.New("a dividend is paid into a cash account; record the reinvestment as a stock purchase once the money has arrived")
+	}
+	return nil
+}
+
+func (s *AssetLotStore) RecordDividend(ctx context.Context, userID string, input DividendInput) (EquityActionResult, error) {
+	if input.DividendDisposition == "" {
+		input.DividendDisposition = "cash"
+	}
+	if err := validateDividendInput(input); err != nil {
+		return EquityActionResult{}, err
 	}
 	if input.Currency == "" {
 		input.Currency = "ZMW"
 	}
-	if input.DividendDisposition == "" {
-		input.DividendDisposition = "cash"
+	if input.HistoricalBackfill {
+		input.CashAccountID = ""
+	}
+	transactionSource := "manual"
+	if input.HistoricalBackfill {
+		transactionSource = "historical_backfill"
 	}
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
@@ -409,7 +432,7 @@ func (s *AssetLotStore) RecordDividend(ctx context.Context, userID string, input
 			Quantity:        &quantity,
 			UnitPrice:       &input.ReinvestmentPrice,
 			Note:            &note,
-			Source:          "manual",
+			Source:          transactionSource,
 			OriginEventID:   &originEventID,
 			OriginEventType: &originType,
 		})
@@ -437,7 +460,7 @@ func (s *AssetLotStore) RecordDividend(ctx context.Context, userID string, input
 			AccountID:       input.CashAccountID,
 			AssetID:         &input.AssetID,
 			Note:            &note,
-			Source:          "manual",
+			Source:          transactionSource,
 			OriginEventID:   &originEventID,
 			OriginEventType: &originType,
 		})

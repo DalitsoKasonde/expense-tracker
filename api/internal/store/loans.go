@@ -46,16 +46,21 @@ type LoanSummary struct {
 }
 
 type CreateLoanInput struct {
-	CreditorName       string  `json:"creditorName"`
-	LoanType           string  `json:"loanType"`
-	InterestMethod     string  `json:"interestMethod"`
-	InterestRateBPS    *int    `json:"interestRateBps"`
-	FixedInterestMinor int64   `json:"fixedInterestMinor"`
-	StatedPeriodEnd    *string `json:"statedPeriodEnd"`
-	IsForced           bool    `json:"isForced"`
-	GroupID            *string `json:"groupId"`
-	OpenedAt           string  `json:"openedAt"`
-	Currency           string  `json:"currency"`
+	CreditorName        string  `json:"creditorName"`
+	LoanType            string  `json:"loanType"`
+	InterestMethod      string  `json:"interestMethod"`
+	InterestRateBPS     *int    `json:"interestRateBps"`
+	FixedInterestMinor  int64   `json:"fixedInterestMinor"`
+	StatedPeriodEnd     *string `json:"statedPeriodEnd"`
+	IsForced            bool    `json:"isForced"`
+	GroupID             *string `json:"groupId"`
+	OpenedAt            string  `json:"openedAt"`
+	Currency            string  `json:"currency"`
+	InitialAmountMinor  int64   `json:"initialAmountMinor"`
+	CashAccountID       string  `json:"cashAccountId"`
+	TransactionFeeMinor int64   `json:"transactionFeeMinor"`
+	TransactionDate     string  `json:"transactionDate"`
+	Note                string  `json:"note"`
 }
 
 type RecordBorrowedInput struct {
@@ -151,9 +156,6 @@ func (s *LoanStore) GetSummary(ctx context.Context, userID, loanID string) (Loan
 
 func (s *LoanStore) Create(ctx context.Context, userID string, input CreateLoanInput) (LoanSummary, error) {
 	name := strings.TrimSpace(input.CreditorName)
-	if name == "" {
-		return LoanSummary{}, errors.New("creditor name is required")
-	}
 	if input.LoanType == "" {
 		input.LoanType = "personal"
 	}
@@ -166,12 +168,44 @@ func (s *LoanStore) Create(ctx context.Context, userID string, input CreateLoanI
 	if input.OpenedAt == "" {
 		input.OpenedAt = "now"
 	}
+	if input.InitialAmountMinor < 0 {
+		return LoanSummary{}, errors.New("initial amount cannot be negative")
+	}
+	if input.TransactionFeeMinor < 0 {
+		return LoanSummary{}, errors.New("transaction fee cannot be negative")
+	}
+	if input.InitialAmountMinor > 0 && input.CashAccountID == "" {
+		return LoanSummary{}, errors.New("destination account is required")
+	}
+	if input.InitialAmountMinor > 0 && input.TransactionDate == "" {
+		input.TransactionDate = input.OpenedAt
+		if input.TransactionDate == "now" {
+			input.TransactionDate = ""
+		}
+	}
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return LoanSummary{}, err
 	}
 	defer tx.Rollback(ctx)
+	if input.GroupID != nil {
+		var groupCurrency string
+		if err := tx.QueryRow(ctx, `
+			select sg.name, a.currency
+			from savings_groups sg
+			join accounts a on a.id = sg.account_id
+			where sg.id = $1 and sg.user_id = $2
+		`, *input.GroupID, userID).Scan(&name, &groupCurrency); err != nil {
+			return LoanSummary{}, normalizeWriteError(err)
+		}
+		if groupCurrency != input.Currency {
+			return LoanSummary{}, errors.New("loan and savings group currencies must match")
+		}
+	}
+	if name == "" {
+		return LoanSummary{}, errors.New("creditor name is required")
+	}
 
 	var accountID string
 	if err := tx.QueryRow(ctx, `
@@ -218,6 +252,15 @@ func (s *LoanStore) Create(ctx context.Context, userID string, input CreateLoanI
 	if err != nil {
 		return LoanSummary{}, normalizeWriteError(err)
 	}
+	if input.InitialAmountMinor > 0 {
+		if _, err := s.recordBorrowedWithTx(ctx, tx, userID, loan, RecordBorrowedInput{
+			LoanID: loan.ID, CashAccountID: input.CashAccountID, AmountMinor: input.InitialAmountMinor,
+			TransactionFeeMinor: input.TransactionFeeMinor, Currency: input.Currency,
+			TransactionDate: input.TransactionDate, Note: input.Note,
+		}); err != nil {
+			return LoanSummary{}, err
+		}
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return LoanSummary{}, err
@@ -251,6 +294,31 @@ func (s *LoanStore) RecordBorrowed(ctx context.Context, userID string, input Rec
 	}
 	defer tx.Rollback(ctx)
 
+	result, err := s.recordBorrowedWithTx(ctx, tx, userID, loan, input)
+	if err != nil {
+		return LoanRepaymentResult{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return LoanRepaymentResult{}, err
+	}
+
+	summary, err := s.GetSummary(ctx, userID, loan.ID)
+	if err != nil {
+		return LoanRepaymentResult{}, err
+	}
+	result.UpdatedSummary = summary
+	return result, nil
+}
+
+func (s *LoanStore) recordBorrowedWithTx(ctx context.Context, tx pgx.Tx, userID string, loan Loan, input RecordBorrowedInput) (LoanRepaymentResult, error) {
+	transactionDate := input.TransactionDate
+	if transactionDate == "" {
+		transactionDate = loan.OpenedAt
+	}
+	if err := validateLoanCashAccount(ctx, tx, userID, input.CashAccountID, input.Currency); err != nil {
+		return LoanRepaymentResult{}, err
+	}
 	var originEventID string
 	if err := tx.QueryRow(ctx, `select gen_random_uuid()::text`).Scan(&originEventID); err != nil {
 		return LoanRepaymentResult{}, err
@@ -260,11 +328,10 @@ func (s *LoanStore) RecordBorrowed(ctx context.Context, userID string, input Rec
 	if strings.TrimSpace(note) == "" {
 		note = "Borrowed from " + loan.CreditorName
 	}
-
 	created := make([]Transaction, 0, 3)
 	cashTx, err := insertLoanTransaction(ctx, tx, Transaction{
 		UserID:          userID,
-		TransactionDate: input.TransactionDate,
+		TransactionDate: transactionDate,
 		EntryKind:       "income_borrowed",
 		Amount:          input.AmountMinor,
 		Currency:        input.Currency,
@@ -276,14 +343,14 @@ func (s *LoanStore) RecordBorrowed(ctx context.Context, userID string, input Rec
 		OriginEventType: &originType,
 	})
 	if err != nil {
-		return LoanRepaymentResult{}, err
+		return LoanRepaymentResult{}, normalizeWriteError(err)
 	}
 	created = append(created, cashTx)
 
 	liabilityNote := "Liability increase for " + loan.CreditorName
 	liabilityTx, err := insertLoanTransaction(ctx, tx, Transaction{
 		UserID:          userID,
-		TransactionDate: input.TransactionDate,
+		TransactionDate: transactionDate,
 		EntryKind:       "income_borrowed",
 		Amount:          input.AmountMinor,
 		Currency:        input.Currency,
@@ -295,30 +362,20 @@ func (s *LoanStore) RecordBorrowed(ctx context.Context, userID string, input Rec
 		OriginEventType: &originType,
 	})
 	if err != nil {
-		return LoanRepaymentResult{}, err
+		return LoanRepaymentResult{}, normalizeWriteError(err)
 	}
 	created = append(created, liabilityTx)
 	if input.TransactionFeeMinor > 0 {
 		feeTx, err := NewTransactionStore(s.db).CreateMovementFeeWithTx(ctx, tx, cashTx, input.CashAccountID, input.TransactionFeeMinor)
 		if err != nil {
-			return LoanRepaymentResult{}, err
+			return LoanRepaymentResult{}, normalizeWriteError(err)
 		}
 		created = append(created, feeTx)
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return LoanRepaymentResult{}, err
-	}
-
-	summary, err := s.GetSummary(ctx, userID, loan.ID)
-	if err != nil {
-		return LoanRepaymentResult{}, err
-	}
-
 	return LoanRepaymentResult{
-		OriginEventID:  originEventID,
-		Transactions:   created,
-		UpdatedSummary: summary,
+		OriginEventID: originEventID,
+		Transactions:  created,
 	}, nil
 }
 
@@ -360,6 +417,9 @@ func (s *LoanStore) RecordRepayment(ctx context.Context, userID string, input Re
 		return LoanRepaymentResult{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := validateLoanCashAccount(ctx, tx, userID, input.CashAccountID, input.Currency); err != nil {
+		return LoanRepaymentResult{}, err
+	}
 
 	var originEventID string
 	if err := tx.QueryRow(ctx, `select gen_random_uuid()::text`).Scan(&originEventID); err != nil {
@@ -447,6 +507,28 @@ func (s *LoanStore) RecordRepayment(ctx context.Context, userID string, input Re
 			return LoanRepaymentResult{}, err
 		}
 		created = append(created, feeTx)
+	}
+	if summary.GroupID != nil {
+		var groupAccountID string
+		if err := tx.QueryRow(ctx, `
+			select account_id
+			from savings_groups
+			where id = $1 and user_id = $2
+		`, *summary.GroupID, userID).Scan(&groupAccountID); err != nil {
+			return LoanRepaymentResult{}, normalizeWriteError(err)
+		}
+		groupNote := "Loan repayment returned to " + summary.CreditorName
+		groupTx, err := insertLoanTransaction(ctx, tx, Transaction{
+			UserID: userID, TransactionDate: input.TransactionDate,
+			EntryKind: "savings_group_loan_repayment", Amount: input.AmountMinor,
+			Currency: input.Currency, AccountID: groupAccountID, LoanID: &summary.ID,
+			Note: &groupNote, Source: "manual", OriginEventID: &originEventID,
+			OriginEventType: &originType,
+		})
+		if err != nil {
+			return LoanRepaymentResult{}, normalizeWriteError(err)
+		}
+		created = append(created, groupTx)
 	}
 
 	if feesPaid == summary.OutstandingFees && interestPaid == summary.OutstandingInterest && principalPaid == summary.RemainingPrincipal {
@@ -568,6 +650,7 @@ func insertLoanTransaction(ctx context.Context, tx pgx.Tx, item Transaction) (Tr
 	}
 
 	var result Transaction
+	var accountID *string
 	err := tx.QueryRow(ctx, `
 		insert into transactions (
 			user_id, transaction_date, entry_kind, amount, currency, account_id, destination_account_id,
@@ -577,7 +660,7 @@ func insertLoanTransaction(ctx context.Context, tx pgx.Tx, item Transaction) (Tr
 		returning id, user_id, transaction_date::text, entry_kind, amount::bigint, currency, account_id, destination_account_id,
 		          category_id, income_source_id, business_id, asset_id, loan_id, quantity, unit_price::bigint, fees::bigint,
 		          note, source, import_id, origin_event_id::text, origin_event_type, deleted_at::text, created_at::text, updated_at::text
-	`, item.UserID, item.TransactionDate, item.EntryKind, item.Amount, item.Currency, item.AccountID, item.DestinationAccountID,
+	`, item.UserID, item.TransactionDate, item.EntryKind, item.Amount, item.Currency, nullableAccountID(item.AccountID), item.DestinationAccountID,
 		item.CategoryID, item.IncomeSourceID, item.BusinessID, item.AssetID, item.LoanID, item.Quantity, item.UnitPrice, fees,
 		note, item.Source, item.ImportID, item.OriginEventID, item.OriginEventType).Scan(
 		&result.ID,
@@ -586,7 +669,7 @@ func insertLoanTransaction(ctx context.Context, tx pgx.Tx, item Transaction) (Tr
 		&result.EntryKind,
 		&result.Amount,
 		&result.Currency,
-		&result.AccountID,
+		&accountID,
 		&result.DestinationAccountID,
 		&result.CategoryID,
 		&result.IncomeSourceID,
@@ -605,6 +688,9 @@ func insertLoanTransaction(ctx context.Context, tx pgx.Tx, item Transaction) (Tr
 		&result.CreatedAt,
 		&result.UpdatedAt,
 	)
+	if accountID != nil {
+		result.AccountID = *accountID
+	}
 	return result, err
 }
 
@@ -620,4 +706,20 @@ func maxInt64(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+func validateLoanCashAccount(ctx context.Context, tx pgx.Tx, userID, accountID, currency string) error {
+	var valid bool
+	if err := tx.QueryRow(ctx, `
+		select exists (
+			select 1 from accounts
+			where id = $1 and user_id = $2 and currency = $3 and account_class = 'asset'
+		)
+	`, accountID, userID, currency).Scan(&valid); err != nil {
+		return err
+	}
+	if !valid {
+		return errors.New("select an account in the loan currency")
+	}
+	return nil
 }
