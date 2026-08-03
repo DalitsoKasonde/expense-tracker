@@ -1,14 +1,49 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Breadcrumbs, EmptyState, LoadingSkeleton, PageHeader, PageShell } from "@/components/ui";
+import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
 import { gainPercent } from "@/lib/portfolio-holdings";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 
+type BondPosition = {
+  assetId: string;
+  issueDate: string;
+  maturityDate: string;
+};
+
+function formatMonth(value: string) {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
 export default function BondsDashboardPage() {
+  const apiCall = useApiCall();
   const { data, loading } = useUnifiedDashboard();
+  const [positions, setPositions] = useState<BondPosition[]>([]);
+
+  useEffect(() => {
+    let ignore = false;
+    void apiCall<BondPosition[]>("/v1/bonds")
+      .then((result) => {
+        if (!ignore) setPositions(result ?? []);
+      })
+      // Dates are supporting detail; the holdings themselves still render
+      // without them, so a failure here does not block the page.
+      .catch(() => undefined);
+    return () => {
+      ignore = true;
+    };
+  }, [apiCall]);
+
+  const datesByAsset = useMemo(
+    () => new Map(positions.map((position) => [position.assetId, position])),
+    [positions],
+  );
   const bonds = useMemo(
     () => (data?.assets ?? []).filter((asset) => asset.assetClass === "bond").sort((a, b) => b.currentValueMinor - a.currentValueMinor),
     [data?.assets],
@@ -61,12 +96,22 @@ export default function BondsDashboardPage() {
           <section className="card card-flush overflow-hidden">
             <div className="border-b border-outline p-5"><h2 className="font-semibold text-on-surface">Bond holdings</h2></div>
             <ul>
-              {bonds.map((bond) => (
+              {bonds.map((bond) => {
+                const dates = datesByAsset.get(bond.assetId);
+                const issued = dates ? formatMonth(dates.issueDate) : "";
+                const matures = dates ? formatMonth(dates.maturityDate) : "";
+                return (
                 <li key={bond.assetId} className="border-b border-outline last:border-0">
                   <Link href={`/investments/${bond.assetId}`} className="flex items-start justify-between gap-4 px-5 py-4 hover:bg-surface-soft">
                     <div className="min-w-0">
                       <p className="font-semibold text-on-surface">{bond.name}</p>
-                      <p className="mt-1 text-xs text-on-surface-soft">{bond.symbol || "Government bond"} · Manage coupons and maturity</p>
+                      <p className="mt-1 text-xs text-on-surface-soft">
+                        {[
+                          bond.symbol || "Government bond",
+                          issued ? `Bought ${issued}` : "",
+                          matures ? `Matures ${matures}` : "",
+                        ].filter(Boolean).join(" · ")}
+                      </p>
                     </div>
                     {bond.hasPosition ? (
                       <div className="shrink-0 text-right">
@@ -76,7 +121,8 @@ export default function BondsDashboardPage() {
                     ) : <span className="shrink-0 text-sm text-on-surface-soft">Nothing invested yet</span>}
                   </Link>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </section>
         </>
