@@ -174,6 +174,7 @@ func (s *UnifiedDashboardStore) Get(ctx context.Context, userID, currency string
 	}
 	defer accountRows.Close()
 
+	var accountAssetBalance int64
 	for accountRows.Next() {
 		var item DashboardAccountBalance
 		if err := accountRows.Scan(&item.AccountID, &item.Name, &item.AccountType, &item.AccountClass, &item.Currency, &item.BalanceMinor); err != nil {
@@ -186,7 +187,10 @@ func (s *UnifiedDashboardStore) Get(ctx context.Context, userID, currency string
 			continue
 		}
 
-		dashboard.CashBalance += item.BalanceMinor
+		accountAssetBalance += item.BalanceMinor
+		if isAvailableBalanceAccount(item) {
+			dashboard.CashBalance += item.BalanceMinor
+		}
 	}
 	if err := accountRows.Err(); err != nil {
 		return UnifiedDashboard{}, err
@@ -273,10 +277,22 @@ func (s *UnifiedDashboardStore) Get(ctx context.Context, userID, currency string
 		return UnifiedDashboard{}, err
 	}
 
-	dashboard.TotalAssets = dashboard.CashBalance + dashboard.InvestmentValue
+	dashboard.TotalAssets = accountAssetBalance + dashboard.InvestmentValue
 	dashboard.NetWorth = dashboard.TotalAssets - dashboard.TotalLiabilities
 
 	return dashboard, nil
+}
+
+func isAvailableBalanceAccount(account DashboardAccountBalance) bool {
+	if account.AccountClass != "asset" {
+		return false
+	}
+	switch account.AccountType {
+	case "cash", "mobile_money", "bank":
+		return true
+	default:
+		return false
+	}
 }
 
 func absInt64(value int64) int64 {
