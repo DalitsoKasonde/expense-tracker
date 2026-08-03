@@ -1,4 +1,4 @@
-import { LoansWorkspace } from "@/components/loans-workspace";
+import { LendingWorkspace } from "@/components/lending-workspace";
 import {
   PageHeader,
   PageShell,
@@ -9,10 +9,10 @@ export default function LoansPage() {
     <PageShell>
       <PageHeader
         title="Loans"
-        subtitle="Manage creditors, record borrowed cash, and track repayments alongside the rest of your capital picture."
+        subtitle="Manage creditors, record borrowed cash, and keep track of what people owe you."
         eyebrow="Loans"
       />
-      <LoansWorkspace />
+      <LendingWorkspace />
     </PageShell>
   );
 }

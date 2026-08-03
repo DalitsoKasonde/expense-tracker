@@ -15,7 +15,7 @@ import { spendableAccounts as filterSpendableAccounts } from "@/lib/spendable-ac
 import type { MarketStockDirectory } from "@/lib/market-data";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
-type EntryKind =
+export type EntryKind =
   | ""
   | "expense_living"
   | "income_earned"
@@ -183,9 +183,15 @@ type AddEntryDialogProps = {
   open: boolean;
   onClose: () => void;
   onSaved?: () => void;
+  // Opening straight onto a kind (and, for lending, the person it concerns) is
+  // what lets a row action mean one click instead of re-picking what the row
+  // already says. Omitted, the dialog still opens on the kind picker.
+  initialEntryKind?: EntryKind;
+  initialReceivableAccountId?: string;
+  initialCounterpartyName?: string;
 };
 
-export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) {
+export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initialReceivableAccountId, initialCounterpartyName }: AddEntryDialogProps) {
   const { data: session } = useSession();
   const apiCall = useApiCall();
   const { currency: userCurrency } = useUserCurrency();
@@ -307,14 +313,16 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
         const firstStock = (loadedAssets ?? []).find((asset) => asset.assetClass !== "bond");
         setFormData({
           transactionDate: today(),
-          entryKind: "",
+          entryKind: initialEntryKind ?? "",
           amount: "",
           currency: defaultSourceAccount?.currency ?? userCurrency,
           accountId: defaultSourceAccount?.id ?? "",
           destinationAccountId: defaultDestinationAccount?.id ?? "",
           receivableAccountId:
-            (loadedAccounts ?? []).find((account) => account.accountType === "receivable")?.id ?? "",
-          counterpartyName: "",
+            initialReceivableAccountId
+            ?? (loadedAccounts ?? []).find((account) => account.accountType === "receivable")?.id
+            ?? "",
+          counterpartyName: initialCounterpartyName ?? "",
           categoryId: "",
           businessId: "",
           loanId: loadedLoans?.[0]?.id ?? "",
@@ -356,7 +364,7 @@ export function AddEntryDialog({ open, onClose, onSaved }: AddEntryDialogProps) 
     return () => {
       ignore = true;
     };
-  }, [open, session?.accessToken, apiCall, userCurrency]);
+  }, [open, session?.accessToken, apiCall, userCurrency, initialEntryKind, initialReceivableAccountId, initialCounterpartyName]);
 
   useEffect(() => {
     setFormData((current) =>
