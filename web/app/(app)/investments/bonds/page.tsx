@@ -63,17 +63,17 @@ export default function BondsDashboardPage() {
             <ul>
               {bonds.map((bond) => (
                 <li key={bond.assetId} className="border-b border-outline last:border-0">
-                  <Link href={`/investments/${bond.assetId}`} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 hover:bg-surface-soft">
-                    <div>
+                  <Link href={`/investments/${bond.assetId}`} className="flex items-start justify-between gap-4 px-5 py-4 hover:bg-surface-soft">
+                    <div className="min-w-0">
                       <p className="font-semibold text-on-surface">{bond.name}</p>
                       <p className="mt-1 text-xs text-on-surface-soft">{bond.symbol || "Government bond"} · Manage coupons and maturity</p>
                     </div>
                     {bond.hasPosition ? (
-                      <div className="text-right">
+                      <div className="shrink-0 text-right">
                         <p className="font-semibold tabular-nums text-on-surface">{formatMoney(bond.currentValueMinor, bond.currency)}</p>
                         <p className="mt-1 text-xs text-on-surface-soft">Principal {formatMoney(bond.investedAmountMinor, bond.currency)}</p>
                       </div>
-                    ) : <span className="text-sm text-on-surface-soft">Nothing invested yet</span>}
+                    ) : <span className="shrink-0 text-sm text-on-surface-soft">Nothing invested yet</span>}
                   </Link>
                 </li>
               ))}

@@ -189,8 +189,11 @@ export default function StocksDashboardPage() {
                 const percent = gainPercent(stock.displayValueMinor, stock.investedAmountMinor);
                 return (
                   <li key={stock.assetId} className="border-b border-outline last:border-0">
-                    <Link href={`/investments/${stock.assetId}`} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 hover:bg-surface-soft">
-                      <div>
+                    {/* No wrapping: a long company name used to push the value onto
+                        its own line, where a right-aligned amount reads as if it
+                        belongs to no column at all. The name column shrinks instead. */}
+                    <Link href={`/investments/${stock.assetId}`} className="flex items-start justify-between gap-4 px-5 py-4 hover:bg-surface-soft">
+                      <div className="min-w-0">
                         <p className="font-semibold text-on-surface">{stock.name}</p>
                         <p className="mt-1 text-xs text-on-surface-soft">
                           {stock.symbol || "Ticker missing"} · {stock.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} shares
@@ -198,14 +201,14 @@ export default function StocksDashboardPage() {
                         </p>
                       </div>
                       {stock.hasPosition ? (
-                        <div className="text-right">
+                        <div className="shrink-0 text-right">
                           <p className="font-semibold tabular-nums text-on-surface">{formatMoney(stock.displayValueMinor, stock.currency)}</p>
                           <p className={`mt-1 text-xs font-semibold tabular-nums ${difference >= 0 ? "text-positive" : "text-negative"}`}>
                             {difference >= 0 ? "+" : ""}{formatMoney(difference, stock.currency)}
                             {percent === null ? "" : ` (${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%)`}
                           </p>
                         </div>
-                      ) : <span className="text-sm text-on-surface-soft">Nothing bought yet</span>}
+                      ) : <span className="shrink-0 text-sm text-on-surface-soft">Nothing bought yet</span>}
                     </Link>
                   </li>
                 );
