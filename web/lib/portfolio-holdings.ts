@@ -118,7 +118,7 @@ export function buildPortfolioHoldings(input: {
   const groupHoldings = input.savingsGroups.map<PortfolioHolding>((group) => ({
     id: group.id,
     name: group.name,
-    href: "/settings/savings-groups" as Route,
+    href: "/investments/savings-groups" as Route,
     kind: "savings_group",
     meta: group.isShareoutGroup ? "Share-out group" : "Savings group",
     // Groups created before the API returned a currency fall back to the

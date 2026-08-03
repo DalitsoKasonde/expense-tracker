@@ -104,6 +104,12 @@ export default function AddInvestmentPage() {
     isShareoutGroup: true,
   });
 
+  useEffect(() => {
+    const requestedType = new URLSearchParams(window.location.search).get("type");
+    if (requestedType === "bond") setKind("bond");
+    if (requestedType === "group") setKind("group");
+  }, []);
+
   const usableAccounts = useMemo(
     () => spendableAccounts(accounts).filter((account) => account.currency === form.currency),
     [accounts, form.currency]

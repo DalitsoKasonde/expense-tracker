@@ -40,7 +40,7 @@ describe("buildPortfolioHoldings", () => {
     expect(holdings.map((holding) => holding.kind)).toEqual(["stock", "savings_group"]);
     expect(holdings[1]).toMatchObject({
       name: "Chilimba",
-      href: "/settings/savings-groups",
+      href: "/investments/savings-groups",
       meta: "Share-out group",
       currentValueMinor: 50_000,
       investedAmountMinor: 45_000,

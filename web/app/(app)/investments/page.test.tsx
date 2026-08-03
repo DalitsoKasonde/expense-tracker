@@ -62,20 +62,17 @@ describe("InvestmentsPage", () => {
     ]);
   });
 
-  it("lists every kind of holding in one page, grouped", async () => {
+  it("links to a compact dashboard for every managed investment type", async () => {
     render(<InvestmentsPage />);
 
-    expect(await screen.findByText("Zambeef")).toBeInTheDocument();
-    expect(screen.getByText("GRZ 2029")).toBeInTheDocument();
-    // Savings groups sit alongside market holdings rather than in their own
-    // disconnected section at the bottom of the page.
-    await waitFor(() => expect(screen.getByText("Chilimba")).toBeInTheDocument());
-    expect(screen.getByText("Stocks")).toBeInTheDocument();
-    expect(screen.getByText("Government bonds")).toBeInTheDocument();
-    expect(screen.getByText("Savings groups")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /Stocks/ })).toHaveAttribute("href", "/investments/stocks");
+    expect(screen.getByRole("link", { name: /Government bonds/ })).toHaveAttribute("href", "/investments/bonds");
+    await waitFor(() => expect(screen.getByRole("link", { name: /Savings groups/ })).toHaveAttribute("href", "/investments/savings-groups"));
+    expect(screen.queryByText("Zambeef")).not.toBeInTheDocument();
+    expect(screen.queryByText("GRZ 2029")).not.toBeInTheDocument();
   });
 
-  it("keeps holdings with no position out of the totals but visible", async () => {
+  it("keeps holdings with no position out of totals and summarizes them on the type card", async () => {
     render(<InvestmentsPage />);
 
     const summary = await screen.findByRole("region", { name: "Portfolio summary" });
@@ -83,9 +80,8 @@ describe("InvestmentsPage", () => {
     await waitFor(() =>
       expect(within(summary).getByText(/6,700\.00/)).toBeInTheDocument(),
     );
-    expect(within(summary).getByText("3")).toBeInTheDocument();
-    expect(screen.getByText("Untraded")).toBeInTheDocument();
-    expect(screen.getByText("Nothing bought yet")).toBeInTheDocument();
+    expect(within(summary).getByText(/3 active holdings/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Stocks/ })).toHaveTextContent("1 waiting");
   });
 
   it("never adds currencies together", async () => {
@@ -106,8 +102,6 @@ describe("InvestmentsPage", () => {
     const summary = await screen.findByRole("region", { name: "Portfolio summary" });
     expect(within(summary).getByText(/\$9,000\.00|USD\s?9,000\.00/)).toBeInTheDocument();
     expect(within(summary).getByText(/5,000\.00/)).toBeInTheDocument();
-    expect(
-      within(summary).getByText(/Currencies are never\s+added together/),
-    ).toBeInTheDocument();
+    expect(within(summary).getAllByText(/9,000\.00|5,000\.00/)).toHaveLength(2);
   });
 });
