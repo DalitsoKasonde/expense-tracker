@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   refresh: vi.fn(),
   reload: vi.fn(),
+  assetClass: "stock",
 }));
 
 vi.mock("next/navigation", () => ({
@@ -26,7 +27,7 @@ vi.mock("@/lib/use-unified-dashboard", () => ({
         assetId: "asset-1",
         name: "Zanaco",
         symbol: "ZNCO",
-        assetClass: "stock",
+        assetClass: mocks.assetClass,
         currency: "ZMW",
         investedAmountMinor: 10_000,
         currentValueMinor: 11_000,
@@ -41,6 +42,7 @@ describe("AssetDetailPage", () => {
     mocks.apiCall.mockReset();
     mocks.push.mockReset();
     mocks.refresh.mockReset();
+    mocks.assetClass = "stock";
     mocks.apiCall.mockImplementation((path: string, options?: { method?: string }) => {
       if (path === "/v1/accounts") return Promise.resolve([]);
       if (path === "/v1/assets/asset-1/holding") {
@@ -69,6 +71,27 @@ describe("AssetDetailPage", () => {
       if (path === "/v1/assets/asset-1" && options?.method === "PATCH") return Promise.resolve(undefined);
       return Promise.reject(new Error(`unexpected path ${path}`));
     });
+  });
+
+  it("places a stock under the stocks category in the breadcrumb trail", () => {
+    render(<AssetDetailPage />);
+
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(trail).getByRole("link", { name: "Stocks" })).toHaveAttribute("href", "/investments/stocks");
+    expect(within(trail).getAllByRole("listitem").map((item) => item.textContent?.replace(/^\//, "").trim())).toEqual([
+      "Home",
+      "Portfolio",
+      "Stocks",
+      "Zanaco",
+    ]);
+  });
+
+  it("places a bond under the bonds category in the breadcrumb trail", () => {
+    mocks.assetClass = "bond";
+    render(<AssetDetailPage />);
+
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(trail).getByRole("link", { name: "Government bonds" })).toHaveAttribute("href", "/investments/bonds");
   });
 
   it("deletes a mistaken investment after confirmation", async () => {

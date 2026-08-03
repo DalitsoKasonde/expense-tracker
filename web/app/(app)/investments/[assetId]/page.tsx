@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import type { Crumb } from "@/components/ui";
 import {
   Breadcrumbs,
   ConfirmationDialog,
@@ -13,6 +14,7 @@ import {
 import { useApiCall } from "@/lib/client-api";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { formatMoney } from "@/lib/format-money";
+import { isPastDate } from "@/lib/date-terms";
 import type { MarketStockDirectory } from "@/lib/market-data";
 import { isSpendableAccount } from "@/lib/spendable-accounts";
 
@@ -84,6 +86,7 @@ interface AssetTransaction {
   assetId?: string;
   note?: string;
   originEventType?: string;
+  source?: string;
 }
 
 interface MarketQuote {
@@ -108,6 +111,19 @@ function today() {
 
 function toMinor(value: string) {
   return Math.round((parseFloat(value || "0") || 0) * 100);
+}
+
+// Labels and hrefs mirror the category pages' own breadcrumbs so the trail
+// reads the same wherever you entered from. Classes without a category page
+// (cash_equivalent, other) fall back to Portfolio rather than linking nowhere.
+function assetCategoryCrumb(assetClass: string): Crumb[] {
+  if (assetClass === "stock") {
+    return [{ label: "Stocks", href: "/investments/stocks" }];
+  }
+  if (assetClass === "bond") {
+    return [{ label: "Government bonds", href: "/investments/bonds" }];
+  }
+  return [];
 }
 
 function formatPurchaseDate(value: string) {
@@ -182,6 +198,7 @@ export default function AssetDetailPage() {
     reinvestmentPrice: "",
     executionDate: today(),
     disposition: "cash",
+    historicalBackfill: false,
     note: "",
   });
   const [valuationForm, setValuationForm] = useState({
@@ -199,6 +216,7 @@ export default function AssetDetailPage() {
     destinationAssetId: "",
     unitPrice: "",
     purchaseFee: "0",
+    historicalBackfill: false,
   });
   const asset = data?.assets.find((item) => item.assetId === assetId) ?? null;
   const cashAccounts = accounts.filter(
@@ -217,7 +235,23 @@ export default function AssetDetailPage() {
       ? Math.max(0, couponNetMinor - couponPurchaseFeeMinor) / couponUnitPriceMinor
       : 0;
   const dividendTotalMinor = dividends.reduce((total, dividend) => total + dividend.amount, 0);
+  const dividendHistoricalEligible = isPastDate(dividendForm.executionDate, today());
+  const dividendHistoricalBackfill = dividendHistoricalEligible && dividendForm.historicalBackfill;
+  const couponHistoricalEligible = isPastDate(couponForm.paymentDate, today());
+  const couponHistoricalBackfill = couponHistoricalEligible && couponForm.historicalBackfill;
   const luseTicker = asset ? inferLuSETicker(asset.symbol, asset.name) : "";
+
+  useEffect(() => {
+    if (!dividendHistoricalEligible && dividendForm.historicalBackfill) {
+      setDividendForm((current) => ({ ...current, historicalBackfill: false }));
+    }
+  }, [dividendForm.historicalBackfill, dividendHistoricalEligible]);
+
+  useEffect(() => {
+    if (!couponHistoricalEligible && couponForm.historicalBackfill) {
+      setCouponForm((current) => ({ ...current, historicalBackfill: false }));
+    }
+  }, [couponForm.historicalBackfill, couponHistoricalEligible]);
 
   useEffect(() => {
     if (!assetId) {
@@ -411,6 +445,7 @@ export default function AssetDetailPage() {
       destinationAssetId: destinationStocks[0]?.assetId ?? "",
       unitPrice: "",
       purchaseFee: "0",
+      historicalBackfill: false,
     });
   }
 
@@ -426,7 +461,7 @@ export default function AssetDetailPage() {
       setCouponError("Enter a positive gross coupon and tax between zero and the gross amount.");
       return;
     }
-    if (!couponForm.cashAccountId) {
+    if (!couponHistoricalBackfill && !couponForm.cashAccountId) {
       setCouponError("Select the account that receives the coupon.");
       return;
     }
@@ -446,7 +481,7 @@ export default function AssetDetailPage() {
         {
           method: "POST",
           body: {
-            cashAccountId: couponForm.cashAccountId,
+            cashAccountId: couponHistoricalBackfill ? undefined : couponForm.cashAccountId,
             grossAmountMinor,
             taxAmountMinor,
             paymentDate: couponForm.paymentDate,
@@ -456,6 +491,7 @@ export default function AssetDetailPage() {
             unitPriceMinor: couponForm.destination === "stock" ? unitPriceMinor : undefined,
             purchaseFeeMinor:
               couponForm.destination === "stock" ? purchaseFeeMinor : undefined,
+            historicalBackfill: couponHistoricalBackfill || undefined,
           },
         },
       );
@@ -511,16 +547,17 @@ export default function AssetDetailPage() {
       await apiCallRef.current(`/v1/assets/${assetId}/dividends`, {
         method: "POST",
         body: {
-          cashAccountId: dividendForm.cashAccountId,
+          cashAccountId: dividendHistoricalBackfill ? undefined : dividendForm.cashAccountId,
           amountMinor: toMinor(dividendForm.amount),
           reinvestmentPriceMinor: dividendForm.disposition === "drip" ? toMinor(dividendForm.reinvestmentPrice) : undefined,
           dividendDisposition: dividendForm.disposition,
           currency: asset?.currency ?? "ZMW",
           executionDate: dividendForm.executionDate,
           note: dividendForm.note || undefined,
+          historicalBackfill: dividendHistoricalBackfill || undefined,
         },
       });
-      setDividendForm((current) => ({ ...current, amount: "", reinvestmentPrice: "", note: "" }));
+      setDividendForm((current) => ({ ...current, amount: "", reinvestmentPrice: "", historicalBackfill: false, note: "" }));
       await Promise.all([refreshHolding(), refreshDividends()]);
       setEquityDialog(null);
       setActionStatus(
@@ -588,6 +625,7 @@ export default function AssetDetailPage() {
           items={[
             { label: "Home", href: "/today" },
             { label: "Portfolio", href: "/investments" },
+            ...assetCategoryCrumb(asset.assetClass),
             { label: asset.name },
           ]}
         />
@@ -751,6 +789,7 @@ export default function AssetDetailPage() {
                 {dividends.map((dividend) => {
                   const account = accounts.find((item) => item.id === dividend.accountId);
                   const reinvested = dividend.entryKind === "dividend_drip";
+                  const historical = dividend.source === "historical_backfill";
                   return (
                     <div className="dividendRow" key={dividend.id}>
                       <div className="dividendDate">
@@ -764,7 +803,13 @@ export default function AssetDetailPage() {
                       </div>
                       <div className="dividendDetails">
                         <strong>{reinvested ? "Reinvested dividend" : "Cash dividend"}</strong>
-                        <span>{account?.name ?? (reinvested ? "Added to this investment" : "Cash account")}</span>
+                        <span>
+                          {historical
+                            ? reinvested
+                              ? "Historical · added to this investment"
+                              : "Historical · no account adjustment"
+                            : account?.name ?? (reinvested ? "Added to this investment" : "Cash account")}
+                        </span>
                       </div>
                       <strong className="dividendAmount">
                         +{formatMoney(dividend.amount, dividend.currency)}
@@ -836,7 +881,11 @@ export default function AssetDetailPage() {
                     <div className="ledgerPrimary">
                       <p className="ledgerTitle">{cashflow.eventType.replaceAll("_", " ")}</p>
                       <div className="ledgerMeta">
-                        <span className="metaBadge">{cashflow.disposition.replaceAll("_", " ")}</span>
+                        <span className="metaBadge">
+                          {cashflow.disposition === "historical_cash"
+                            ? "historical · no account adjustment"
+                            : cashflow.disposition.replaceAll("_", " ")}
+                        </span>
                         <span className="muted">
                           Scheduled {new Date(`${cashflow.scheduledDate}T00:00:00`).toLocaleDateString()}
                         </span>
@@ -1004,14 +1053,41 @@ export default function AssetDetailPage() {
                 />
               </div>
             </div>
-            <ActionAccountSelect
-              inputId="dividend-cash-account"
-              accounts={cashAccounts}
-              value={dividendForm.cashAccountId}
-              onChange={(value) =>
-                setDividendForm((current) => ({ ...current, cashAccountId: value }))
-              }
-            />
+            {dividendHistoricalBackfill ? (
+              <div className="rounded-md border border-outline bg-surface-soft p-4">
+                <strong className="block text-sm text-on-surface">No account will be changed</strong>
+                <span className="mt-1 block text-xs text-on-surface-soft">
+                  The dividend remains in your investment history and reports only.
+                </span>
+              </div>
+            ) : (
+              <ActionAccountSelect
+                inputId="dividend-cash-account"
+                accounts={cashAccounts}
+                value={dividendForm.cashAccountId}
+                onChange={(value) =>
+                  setDividendForm((current) => ({ ...current, cashAccountId: value }))
+                }
+              />
+            )}
+            {dividendHistoricalEligible ? (
+              <label className="flex cursor-pointer items-start gap-3 rounded-md border border-outline bg-surface-soft p-4">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4 accent-primary"
+                  checked={dividendForm.historicalBackfill}
+                  onChange={(event) =>
+                    setDividendForm((current) => ({ ...current, historicalBackfill: event.target.checked }))
+                  }
+                />
+                <span>
+                  <strong className="block text-sm text-on-surface">Record as a historical dividend</strong>
+                  <span className="mt-1 block text-xs text-on-surface-soft">
+                    Use this for a dividend received before tracking it here. It will not change an account balance.
+                  </span>
+                </span>
+              </label>
+            ) : null}
             {dividendForm.disposition === "drip" ? (
               <div className="field">
                 <label htmlFor="dividend-reinvestment-price">Share price when reinvested ({asset.currency})</label>
@@ -1261,25 +1337,51 @@ export default function AssetDetailPage() {
                   required
                 />
               </div>
-              <div className="field">
-                <label htmlFor="coupon-cash-account">Settlement account</label>
-                <select
-                  id="coupon-cash-account"
-                  value={couponForm.cashAccountId}
-                  onChange={(event) =>
-                    setCouponForm((current) => ({ ...current, cashAccountId: event.target.value }))
-                  }
-                  required
-                >
-                  <option value="">Select account</option>
-                  {cashAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name} · {account.currency}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {couponHistoricalBackfill ? (
+                <div className="rounded-md border border-outline bg-surface-soft p-4">
+                  <strong className="block text-sm text-on-surface">No account will be changed</strong>
+                  <span className="mt-1 block text-xs text-on-surface-soft">The coupon remains in bond history and reports only.</span>
+                </div>
+              ) : (
+                <div className="field">
+                  <label htmlFor="coupon-cash-account">Settlement account</label>
+                  <select
+                    id="coupon-cash-account"
+                    value={couponForm.cashAccountId}
+                    onChange={(event) =>
+                      setCouponForm((current) => ({ ...current, cashAccountId: event.target.value }))
+                    }
+                    required
+                  >
+                    <option value="">Select account</option>
+                    {cashAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} · {account.currency}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
+
+            {couponHistoricalEligible ? (
+              <label className="flex cursor-pointer items-start gap-3 rounded-md border border-outline bg-surface-soft p-4">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4 accent-primary"
+                  checked={couponForm.historicalBackfill}
+                  onChange={(event) =>
+                    setCouponForm((current) => ({ ...current, historicalBackfill: event.target.checked }))
+                  }
+                />
+                <span>
+                  <strong className="block text-sm text-on-surface">Record as a historical coupon</strong>
+                  <span className="mt-1 block text-xs text-on-surface-soft">
+                    Use this for a coupon received before tracking it here. It will not change an account balance.
+                  </span>
+                </span>
+              </label>
+            ) : null}
 
             <div className="field">
               <label htmlFor="coupon-destination">Use net coupon for</label>
