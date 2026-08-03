@@ -319,11 +319,15 @@ export default function OnboardingPage() {
   if (sessionStatus === "unauthenticated" || !session) {
     return (
       <main className="grid min-h-dvh place-items-center bg-background p-6">
-        <section className="card grid max-w-md gap-4 text-center">
-          <h1 className="text-2xl font-semibold text-on-surface">Sign in to continue</h1>
-          <p className="text-on-surface-soft">Your setup is tied to your Expenses account.</p>
-          <Link href="/login" className="btn btn-primary justify-center">Go to sign in</Link>
-        </section>
+        {/* Same reason as the auth cards: `.card` caps max-width after
+            Tailwind's utilities, so the cap goes on a wrapper. */}
+        <div className="w-full max-w-md">
+          <section className="card grid gap-4 text-center">
+            <h1 className="text-2xl font-semibold text-on-surface">Sign in to continue</h1>
+            <p className="text-on-surface-soft">Your setup is tied to your Expenses account.</p>
+            <Link href="/login" className="btn btn-primary justify-center">Go to sign in</Link>
+          </section>
+        </div>
       </main>
     );
   }
