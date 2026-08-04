@@ -34,6 +34,7 @@ func (s *Server) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DefaultCurrency      string `json:"defaultCurrency"`
 		Theme                string `json:"theme"`
+		ColorScheme          string `json:"colorScheme"`
 		NotificationsEnabled bool   `json:"notificationsEnabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -56,7 +57,16 @@ func (s *Server) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prefs, err := s.userPreferences.Update(r.Context(), claims.UserID, currency, req.Theme, req.NotificationsEnabled)
+	req.ColorScheme = strings.ToLower(strings.TrimSpace(req.ColorScheme))
+	if req.ColorScheme == "" {
+		req.ColorScheme = "default"
+	}
+	if req.ColorScheme != "default" && req.ColorScheme != "sonto" {
+		http.Error(w, "colorScheme must be default or sonto", http.StatusBadRequest)
+		return
+	}
+
+	prefs, err := s.userPreferences.Update(r.Context(), claims.UserID, currency, req.Theme, req.ColorScheme, req.NotificationsEnabled)
 	if err != nil {
 		http.Error(w, "failed to update preferences", http.StatusInternalServerError)
 		return

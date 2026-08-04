@@ -37,6 +37,7 @@ type OnboardingDraft = {
 type Preferences = {
   defaultCurrency: string;
   theme: "light" | "dark";
+  colorScheme?: "default" | "sonto";
   notificationsEnabled: boolean;
 };
 
@@ -270,6 +271,7 @@ export default function OnboardingPage() {
     const currentPreferences = await apiCall<Preferences>("/v1/user/preferences").catch(() => ({
       defaultCurrency: body.defaultCurrency,
       theme: "light" as const,
+      colorScheme: "default" as const,
       notificationsEnabled: false,
     }));
     await apiCall("/v1/user/preferences", {
@@ -277,6 +279,7 @@ export default function OnboardingPage() {
       body: {
         defaultCurrency: body.defaultCurrency,
         theme: currentPreferences.theme,
+        colorScheme: currentPreferences.colorScheme ?? "default",
         notificationsEnabled: currentPreferences.notificationsEnabled,
       },
     });

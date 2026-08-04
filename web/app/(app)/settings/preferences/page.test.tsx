@@ -15,8 +15,8 @@ describe("PreferencesSettingsPage", () => {
     vi.useFakeTimers();
     mocks.apiCall.mockReset();
     mocks.apiCall
-      .mockResolvedValueOnce({ defaultCurrency: "ZMW", theme: "light", notificationsEnabled: false })
-      .mockResolvedValueOnce({ defaultCurrency: "USD", theme: "light", notificationsEnabled: false });
+      .mockResolvedValueOnce({ defaultCurrency: "ZMW", theme: "light", colorScheme: "default", notificationsEnabled: false })
+      .mockResolvedValueOnce({ defaultCurrency: "USD", theme: "light", colorScheme: "default", notificationsEnabled: false });
   });
 
   afterEach(() => {
@@ -47,7 +47,28 @@ describe("PreferencesSettingsPage", () => {
     expect(screen.getByText("Preferences saved.")).toBeInTheDocument();
     expect(mocks.apiCall).toHaveBeenLastCalledWith("/v1/user/preferences", {
       method: "PATCH",
-      body: { defaultCurrency: "USD", theme: "light", notificationsEnabled: false },
+      body: { defaultCurrency: "USD", theme: "light", colorScheme: "default", notificationsEnabled: false },
+    });
+  });
+
+  it("lets the user switch to the sonto color scheme", async () => {
+    render(<PreferencesSettingsPage />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByLabelText("Color scheme"), { target: { value: "sonto" } });
+    expect(screen.getByText("Saving preferences...")).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      await Promise.resolve();
+    });
+
+    expect(mocks.apiCall).toHaveBeenLastCalledWith("/v1/user/preferences", {
+      method: "PATCH",
+      body: { defaultCurrency: "ZMW", theme: "light", colorScheme: "sonto", notificationsEnabled: false },
     });
   });
 });

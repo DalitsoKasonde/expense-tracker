@@ -3,14 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
 import { supportedCurrencies } from "@/lib/currencies";
-import { applyTheme } from "@/components/preference-theme-sync";
+import { applyColorScheme, applyTheme } from "@/components/preference-theme-sync";
 import { primeUserCurrency } from "@/lib/use-user-currency";
+import type { ColorScheme } from "@/lib/theme";
 
 type UserPreferences = {
   defaultCurrency: string;
   theme: "light" | "dark";
+  colorScheme: ColorScheme;
   notificationsEnabled: boolean;
 };
+
+const colorSchemes: Array<{ value: ColorScheme; label: string }> = [
+  { value: "default", label: "Default (blue)" },
+  { value: "sonto", label: "Sonto (purple pastel)" },
+];
 
 export default function PreferencesSettingsPage() {
   const apiCall = useApiCall();
@@ -19,6 +26,7 @@ export default function PreferencesSettingsPage() {
   const [form, setForm] = useState<UserPreferences>({
     defaultCurrency: "ZMW",
     theme: "light",
+    colorScheme: "default",
     notificationsEnabled: false,
   });
   const [loading, setLoading] = useState(true);
@@ -34,6 +42,7 @@ export default function PreferencesSettingsPage() {
         lastSavedRef.current = JSON.stringify(prefs);
         primeUserCurrency(prefs.defaultCurrency);
         applyTheme(prefs.theme);
+        applyColorScheme(prefs.colorScheme ?? "default");
         setHasLoaded(true);
       })
       .catch((error) => setStatus(error instanceof Error ? error.message : "Failed to load preferences"))
@@ -67,6 +76,7 @@ export default function PreferencesSettingsPage() {
           lastSavedRef.current = JSON.stringify(prefs);
           primeUserCurrency(prefs.defaultCurrency);
           applyTheme(prefs.theme);
+          applyColorScheme(prefs.colorScheme ?? "default");
           setStatus("Preferences saved.");
         })
         .catch((error) => {
@@ -110,6 +120,22 @@ export default function PreferencesSettingsPage() {
           >
             <option value="light">Light</option>
             <option value="dark">Dark</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label htmlFor="colorScheme">Color scheme</label>
+          <select
+            id="colorScheme"
+            value={form.colorScheme}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, colorScheme: event.target.value as ColorScheme }))
+            }
+            disabled={loading}
+          >
+            {colorSchemes.map((scheme) => (
+              <option key={scheme.value} value={scheme.value}>{scheme.label}</option>
+            ))}
           </select>
         </div>
 
