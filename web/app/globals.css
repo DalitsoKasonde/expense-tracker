@@ -200,6 +200,137 @@ html[data-theme="dark"] {
   --focus-ring: 0 0 0 3px rgba(130, 187, 255, 0.28);
 }
 
+/* ============================================================================
+   COLOR SCHEME: SONTO (purple pastel)
+   ----------------------------------------------------------------------------
+   An alternate palette selectable independently of light/dark mode
+   (Settings -> Preferences -> Color scheme). Same token set as the default
+   blue scheme above, so every primitive that reads a token repaints for free.
+   [data-scheme="sonto"] supplies the light variant; the combined
+   [data-scheme="sonto"][data-theme="dark"] selector (two attributes, so it
+   always outranks either alone) supplies the dark variant.
+   ========================================================================== */
+
+html[data-scheme="sonto"] {
+  color-scheme: light;
+
+  --background: #f7f3fc;
+  --background-soft: #f2ecfa;
+  --background-strong: #ece3f7;
+  --surface: #ffffff;
+  --surface-soft: #f8f4fd;
+  --surface-muted: #f0e8fa;
+  --surface-strong: #e4d6f5;
+  --surface-soft-2: #f0e8fa;
+  --surface-raised: #ffffff;
+
+  --primary: #7c5cbf;
+  --primary-strong: #5f3fa0;
+  --primary-deep: #3c2566;
+  --primary-soft: #e6dbf7;
+  --primary-softer: #f4eefb;
+  --highlight: #9b6bd6;
+  --highlight-soft: #c3a3ea;
+  --accent: #9b6bd6;
+
+  --action: #7c5cbf;
+  --action-hover: #5f3fa0;
+  --action-contrast: #ffffff;
+  --focus: #9b6bd6;
+
+  --border: #e9ddf5;
+  --border-strong: #d9c3ec;
+  --text: #2c2140;
+  --text-strong: #1c1330;
+  --text-muted: #6f5f8a;
+  --on-surface: #2c2140;
+  --on-surface-soft: #6f5f8a;
+
+  --income: #4f9d6e;
+  --income-soft: #e3f3e9;
+  --expense: #c2577d;
+  --expense-soft: #f8e6ee;
+  --savings: #6a8fd8;
+  --savings-soft: #e7edfa;
+  --investment: #9358b5;
+  --investment-soft: #f3e3f5;
+  --positive: var(--income);
+  --positive-soft: var(--income-soft);
+  --negative: var(--expense);
+  --negative-soft: var(--expense-soft);
+  --warning: #b98110;
+  --warning-soft: #faf0d9;
+
+  --tint: rgba(124, 92, 191, 0.05);
+  --tint-strong: rgba(124, 92, 191, 0.09);
+  --tint-highlight: rgba(155, 107, 214, 0.12);
+
+  --shadow-card: 0 1px 2px rgba(60, 37, 102, 0.05), 0 12px 28px -24px rgba(60, 37, 102, 0.22);
+  --shadow-soft: 0 1px 2px rgba(60, 37, 102, 0.05);
+  --shadow-raised: 0 1px 2px rgba(60, 37, 102, 0.06), 0 18px 40px -30px rgba(60, 37, 102, 0.32);
+  --focus-ring: 0 0 0 3px rgba(155, 107, 214, 0.2);
+}
+
+html[data-scheme="sonto"][data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #1a1330;
+  --background-soft: #150f28;
+  --background-strong: #120c22;
+  --surface: #241a3d;
+  --surface-soft: #2b2049;
+  --surface-muted: #302553;
+  --surface-strong: #3c2e66;
+  --surface-soft-2: #302553;
+  --surface-raised: #2b2049;
+
+  --primary: #d9c7f5;
+  --primary-strong: #f0e6fb;
+  --primary-deep: #ffffff;
+  --highlight: #b98af0;
+  --highlight-soft: #cfa8f5;
+  --accent: #b98af0;
+  --primary-soft: #3c2e66;
+  --primary-softer: #2c2049;
+
+  --action: #b98af0;
+  --action-hover: #cfa8f5;
+  --action-contrast: #1a1330;
+  --focus: #cfa8f5;
+
+  --border: #3a2c5e;
+  --border-strong: #4d3b7a;
+  --text: #ece3f9;
+  --text-strong: #ffffff;
+  --text-muted: #b6a3d6;
+  --on-surface: #ece3f9;
+  --on-surface-soft: #b6a3d6;
+
+  --income: #8bdcae;
+  --income-soft: #1f3f30;
+  --expense: #f2a8c8;
+  --expense-soft: #4a2740;
+  --savings: #a9c0f2;
+  --savings-soft: #26365f;
+  --investment: #d0aef7;
+  --investment-soft: #3a2c5e;
+  --positive: var(--income);
+  --positive-soft: var(--income-soft);
+  --negative: var(--expense);
+  --negative-soft: var(--expense-soft);
+  --warning: #ffd98a;
+  --warning-soft: #4a3a1c;
+
+  --tint: rgba(255, 255, 255, 0.05);
+  --tint-strong: rgba(255, 255, 255, 0.08);
+  --tint-highlight: rgba(185, 138, 240, 0.18);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 18px 36px -26px rgba(0, 0, 0, 0.6);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-raised: 0 20px 44px -28px rgba(0, 0, 0, 0.65);
+  --focus-ring: 0 0 0 3px rgba(207, 168, 245, 0.28);
+}
+
 * {
   box-sizing: border-box;
 }

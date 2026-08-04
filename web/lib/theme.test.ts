@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { THEME_STORAGE_KEY, applyTheme, themeBootstrapScript } from "./theme";
+import {
+  COLOR_SCHEME_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  applyColorScheme,
+  applyTheme,
+  themeBootstrapScript,
+} from "./theme";
 
 /** jsdom here runs without localStorage, so the tests provide one. */
 function installStorage(store: Map<string, string> | null) {
@@ -47,6 +53,7 @@ describe("theme bootstrap", () => {
     store = new Map();
     installStorage(store);
     document.documentElement.removeAttribute("data-theme");
+    document.documentElement.removeAttribute("data-scheme");
     document.documentElement.style.colorScheme = "";
   });
 
@@ -110,5 +117,47 @@ describe("theme bootstrap", () => {
 
     expect(() => applyTheme("dark")).not.toThrow();
     expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+
+  it("applies the stored color scheme before the app renders", () => {
+    store.set(THEME_STORAGE_KEY, "light");
+    store.set(COLOR_SCHEME_STORAGE_KEY, "sonto");
+    setPrefersDark(false);
+
+    runBootstrap();
+
+    expect(document.documentElement.dataset.scheme).toBe("sonto");
+  });
+
+  it("leaves data-scheme unset for the default color scheme", () => {
+    store.set(THEME_STORAGE_KEY, "light");
+    setPrefersDark(false);
+
+    runBootstrap();
+
+    expect(document.documentElement.dataset.scheme).toBeUndefined();
+  });
+
+  it("persists and applies a non-default color scheme", () => {
+    applyColorScheme("sonto");
+
+    expect(store.get(COLOR_SCHEME_STORAGE_KEY)).toBe("sonto");
+    expect(document.documentElement.dataset.scheme).toBe("sonto");
+  });
+
+  it("clears data-scheme when returning to the default color scheme", () => {
+    document.documentElement.dataset.scheme = "sonto";
+
+    applyColorScheme("default");
+
+    expect(store.get(COLOR_SCHEME_STORAGE_KEY)).toBe("default");
+    expect(document.documentElement.dataset.scheme).toBeUndefined();
+  });
+
+  it("applies the color scheme even when it cannot be persisted", () => {
+    installStorage(null);
+
+    expect(() => applyColorScheme("sonto")).not.toThrow();
+    expect(document.documentElement.dataset.scheme).toBe("sonto");
   });
 });

@@ -4,13 +4,14 @@ import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { primeUserCurrency } from "@/lib/use-user-currency";
 import { getApiBaseUrl } from "@/lib/client-api";
-import { applyTheme } from "@/lib/theme";
+import { applyColorScheme, applyTheme, type ColorScheme } from "@/lib/theme";
 
 type UserPreferences = {
   theme: "light" | "dark";
+  colorScheme?: ColorScheme;
 };
 
-export { applyTheme };
+export { applyColorScheme, applyTheme };
 
 /**
  * Reconciles the locally applied theme with the account preference.
@@ -40,6 +41,7 @@ export function PreferenceThemeSync() {
           if (!cancelled) {
             primeUserCurrency(prefs.defaultCurrency);
             applyTheme(prefs.theme);
+            applyColorScheme(prefs.colorScheme ?? "default");
           }
         }
       } catch {
