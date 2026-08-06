@@ -21,12 +21,14 @@ describe("loans workspace", () => {
     });
   });
 
-  it("adds a savings-group loan and sends the proceeds to the selected account", async () => {
+  it("adds a savings-group loan with a monthly interest percentage and sends the proceeds to the selected account", async () => {
     render(<LoansWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: "Add loan" }));
     const dialog = screen.getByRole("dialog", { name: "Add loan" });
     fireEvent.change(within(dialog).getByLabelText("Amount received"), { target: { value: "245" } });
-    fireEvent.change(within(dialog).getByLabelText("Total fixed interest (optional)"), { target: { value: "25" } });
+    fireEvent.click(within(dialog).getByLabelText("This loan charges interest"));
+    fireEvent.change(within(dialog).getByLabelText("Interest rate (% per month)"), { target: { value: "10" } });
+    fireEvent.change(within(dialog).getByLabelText("Loan term (months)"), { target: { value: "6" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add loan" }));
 
     await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith("/v1/loans", expect.objectContaining({
@@ -36,7 +38,9 @@ describe("loans workspace", () => {
         groupId: "group-1",
         cashAccountId: "cash-1",
         initialAmountMinor: 24_500,
-        fixedInterestMinor: 2_500,
+        interestMethod: "percentage",
+        interestRateBps: 1_000,
+        interestTermMonths: 6,
       }),
     })));
   });
@@ -57,5 +61,40 @@ describe("loans workspace", () => {
     render(<LoansWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: "Record repayment" }));
     expect(screen.getByRole("dialog", { name: "Repay SL Group" })).toHaveTextContent("increase SL Group's balance");
+  });
+
+  it("edits a loan's amount and interest rate", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/loans") return Promise.resolve([{
+        id: "loan-1", creditorName: "SL Group", loanType: "forced", isForced: true,
+        interestMethod: "fixed", interestRateBps: null, interestTermMonths: null, fixedInterestMinor: 0,
+        groupId: "group-1", status: "active", principalBorrowed: 20_000,
+        remainingPrincipal: 20_000, outstandingInterest: 0, outstandingFees: 0,
+        totalRemainingBalance: 20_000, interestAndFeesPaid: 0, availablePayoffPriority: "forced",
+      }]);
+      if (path === "/v1/accounts") return Promise.resolve([account]);
+      if (path === "/v1/savings-groups") return Promise.resolve([group]);
+      return Promise.resolve({});
+    });
+
+    render(<LoansWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit SL Group" });
+    fireEvent.change(within(dialog).getByLabelText("Amount received"), { target: { value: "250" } });
+    fireEvent.click(within(dialog).getByLabelText("This loan charges interest"));
+    fireEvent.change(within(dialog).getByLabelText("Interest rate (% per month)"), { target: { value: "10" } });
+    fireEvent.change(within(dialog).getByLabelText("Loan term (months)"), { target: { value: "3" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith("/v1/loans/loan-1", expect.objectContaining({
+      method: "PATCH",
+      body: expect.objectContaining({
+        creditorName: "SL Group",
+        principalAmountMinor: 25_000,
+        interestMethod: "percentage",
+        interestRateBps: 1_000,
+        interestTermMonths: 3,
+      }),
+    })));
   });
 });

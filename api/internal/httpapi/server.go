@@ -151,6 +151,7 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.Get("/v1/loans", s.listLoans)
 		protected.Post("/v1/loans", s.createLoan)
 		protected.Get("/v1/loans/{id}", s.getLoan)
+		protected.Patch("/v1/loans/{id}", s.updateLoan)
 		protected.Post("/v1/loans/borrowed", s.recordBorrowedMoney)
 		protected.Post("/v1/loans/{id}/repayments", s.recordLoanRepayment)
 

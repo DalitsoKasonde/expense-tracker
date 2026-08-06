@@ -69,6 +69,28 @@ func (s *Server) createLoan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, loan)
 }
 
+func (s *Server) updateLoan(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req store.UpdateLoanInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	loan, err := s.loans.Update(r.Context(), claims.UserID, chi.URLParam(r, "id"), req)
+	if err != nil {
+		writeSettingsError(w, err, "failed to update loan")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, loan)
+}
+
 func (s *Server) recordBorrowedMoney(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {

@@ -18,6 +18,7 @@ type Loan struct {
 	LoanType           string  `json:"loanType"`
 	InterestMethod     string  `json:"interestMethod"`
 	InterestRateBPS    *int    `json:"interestRateBps"`
+	InterestTermMonths *int    `json:"interestTermMonths"`
 	FixedInterestMinor int64   `json:"fixedInterestMinor"`
 	StatedPeriodEnd    *string `json:"statedPeriodEnd"`
 	IsForced           bool    `json:"isForced"`
@@ -50,6 +51,7 @@ type CreateLoanInput struct {
 	LoanType            string  `json:"loanType"`
 	InterestMethod      string  `json:"interestMethod"`
 	InterestRateBPS     *int    `json:"interestRateBps"`
+	InterestTermMonths  *int    `json:"interestTermMonths"`
 	FixedInterestMinor  int64   `json:"fixedInterestMinor"`
 	StatedPeriodEnd     *string `json:"statedPeriodEnd"`
 	IsForced            bool    `json:"isForced"`
@@ -61,6 +63,22 @@ type CreateLoanInput struct {
 	TransactionFeeMinor int64   `json:"transactionFeeMinor"`
 	TransactionDate     string  `json:"transactionDate"`
 	Note                string  `json:"note"`
+}
+
+// UpdateLoanInput replaces a loan's editable fields. It mirrors CreateLoanInput
+// rather than doing a partial patch, since the edit form always submits the
+// full set of current values. PrincipalAmountMinor, when set, corrects the
+// amount recorded on the loan's earliest borrowed-money transaction pair.
+type UpdateLoanInput struct {
+	CreditorName         string  `json:"creditorName"`
+	LoanType             string  `json:"loanType"`
+	InterestMethod       string  `json:"interestMethod"`
+	InterestRateBPS      *int    `json:"interestRateBps"`
+	InterestTermMonths   *int    `json:"interestTermMonths"`
+	FixedInterestMinor   int64   `json:"fixedInterestMinor"`
+	StatedPeriodEnd      *string `json:"statedPeriodEnd"`
+	IsForced             bool    `json:"isForced"`
+	PrincipalAmountMinor *int64  `json:"principalAmountMinor"`
 }
 
 type RecordBorrowedInput struct {
@@ -103,7 +121,7 @@ func NewLoanStore(db *pgxpool.Pool) *LoanStore {
 func (s *LoanStore) ListByUser(ctx context.Context, userID string) ([]LoanSummary, error) {
 	rows, err := s.db.Query(ctx, `
 		select id, user_id, liability_account_id, creditor_name, loan_type, interest_method,
-		       interest_rate_bps, fixed_interest_minor, stated_period_end::text, is_forced,
+		       interest_rate_bps, interest_term_months, fixed_interest_minor, stated_period_end::text, is_forced,
 		       group_id, status, opened_at::text, created_at::text, updated_at::text
 		from loans
 		where user_id = $1
@@ -125,6 +143,7 @@ func (s *LoanStore) ListByUser(ctx context.Context, userID string) ([]LoanSummar
 			&loan.LoanType,
 			&loan.InterestMethod,
 			&loan.InterestRateBPS,
+			&loan.InterestTermMonths,
 			&loan.FixedInterestMinor,
 			&loan.StatedPeriodEnd,
 			&loan.IsForced,
@@ -224,14 +243,14 @@ func (s *LoanStore) Create(ctx context.Context, userID string, input CreateLoanI
 	err = tx.QueryRow(ctx, `
 		insert into loans (
 			user_id, liability_account_id, creditor_name, loan_type, interest_method,
-			interest_rate_bps, fixed_interest_minor, stated_period_end, is_forced, group_id,
+			interest_rate_bps, interest_term_months, fixed_interest_minor, stated_period_end, is_forced, group_id,
 			opened_at
 		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, coalesce(nullif($11, '')::date, current_date))
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, coalesce(nullif($12, '')::date, current_date))
 		returning id, user_id, liability_account_id, creditor_name, loan_type, interest_method,
-		          interest_rate_bps, fixed_interest_minor, stated_period_end::text, is_forced,
+		          interest_rate_bps, interest_term_months, fixed_interest_minor, stated_period_end::text, is_forced,
 		          group_id, status, opened_at::text, created_at::text, updated_at::text
-	`, userID, accountID, name, input.LoanType, input.InterestMethod, input.InterestRateBPS,
+	`, userID, accountID, name, input.LoanType, input.InterestMethod, input.InterestRateBPS, input.InterestTermMonths,
 		input.FixedInterestMinor, input.StatedPeriodEnd, input.IsForced, input.GroupID, openedAtSQL).Scan(
 		&loan.ID,
 		&loan.UserID,
@@ -240,6 +259,7 @@ func (s *LoanStore) Create(ctx context.Context, userID string, input CreateLoanI
 		&loan.LoanType,
 		&loan.InterestMethod,
 		&loan.InterestRateBPS,
+		&loan.InterestTermMonths,
 		&loan.FixedInterestMinor,
 		&loan.StatedPeriodEnd,
 		&loan.IsForced,
@@ -564,7 +584,7 @@ func (s *LoanStore) getLoan(ctx context.Context, userID, loanID string) (Loan, e
 	var loan Loan
 	err := s.db.QueryRow(ctx, `
 		select id, user_id, liability_account_id, creditor_name, loan_type, interest_method,
-		       interest_rate_bps, fixed_interest_minor, stated_period_end::text, is_forced,
+		       interest_rate_bps, interest_term_months, fixed_interest_minor, stated_period_end::text, is_forced,
 		       group_id, status, opened_at::text, created_at::text, updated_at::text
 		from loans
 		where id = $1 and user_id = $2
@@ -576,6 +596,7 @@ func (s *LoanStore) getLoan(ctx context.Context, userID, loanID string) (Loan, e
 		&loan.LoanType,
 		&loan.InterestMethod,
 		&loan.InterestRateBPS,
+		&loan.InterestTermMonths,
 		&loan.FixedInterestMinor,
 		&loan.StatedPeriodEnd,
 		&loan.IsForced,
@@ -586,6 +607,87 @@ func (s *LoanStore) getLoan(ctx context.Context, userID, loanID string) (Loan, e
 		&loan.UpdatedAt,
 	)
 	return loan, normalizeWriteError(err)
+}
+
+func (s *LoanStore) Update(ctx context.Context, userID, loanID string, input UpdateLoanInput) (LoanSummary, error) {
+	name := strings.TrimSpace(input.CreditorName)
+	if name == "" {
+		return LoanSummary{}, errors.New("creditor name is required")
+	}
+	if input.LoanType == "" {
+		input.LoanType = "personal"
+	}
+	if input.InterestMethod == "" {
+		input.InterestMethod = "fixed"
+	}
+	if input.InterestMethod == "percentage" {
+		if input.InterestRateBPS == nil || *input.InterestRateBPS < 0 {
+			return LoanSummary{}, errors.New("a monthly interest rate is required")
+		}
+		if input.InterestTermMonths == nil || *input.InterestTermMonths <= 0 {
+			return LoanSummary{}, errors.New("the loan term in months is required")
+		}
+	}
+	if input.FixedInterestMinor < 0 {
+		return LoanSummary{}, errors.New("interest cannot be negative")
+	}
+	if input.PrincipalAmountMinor != nil && *input.PrincipalAmountMinor <= 0 {
+		return LoanSummary{}, errors.New("loan amount must be greater than zero")
+	}
+
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return LoanSummary{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	if input.PrincipalAmountMinor != nil {
+		var originEventID string
+		var currentAmount int64
+		err := tx.QueryRow(ctx, `
+			select origin_event_id, amount
+			from transactions
+			where loan_id = $1 and user_id = $2 and entry_kind = 'income_borrowed' and deleted_at is null
+			order by transaction_date asc, created_at asc
+			limit 1
+		`, loanID, userID).Scan(&originEventID, &currentAmount)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return LoanSummary{}, errors.New("this loan has no recorded borrowed amount to edit")
+			}
+			return LoanSummary{}, err
+		}
+		if *input.PrincipalAmountMinor != currentAmount {
+			if _, err := tx.Exec(ctx, `
+				update transactions
+				set amount = $1, updated_at = now()
+				where loan_id = $2 and user_id = $3 and origin_event_id = $4 and entry_kind = 'income_borrowed'
+			`, *input.PrincipalAmountMinor, loanID, userID, originEventID); err != nil {
+				return LoanSummary{}, normalizeWriteError(err)
+			}
+		}
+	}
+
+	tag, err := tx.Exec(ctx, `
+		update loans
+		set creditor_name = $1, loan_type = $2, interest_method = $3, interest_rate_bps = $4,
+		    interest_term_months = $5, fixed_interest_minor = $6, stated_period_end = $7,
+		    is_forced = $8, updated_at = now()
+		where id = $9 and user_id = $10
+	`, name, input.LoanType, input.InterestMethod, input.InterestRateBPS, input.InterestTermMonths,
+		input.FixedInterestMinor, input.StatedPeriodEnd, input.IsForced, loanID, userID)
+	if err != nil {
+		return LoanSummary{}, normalizeWriteError(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return LoanSummary{}, ErrNotFound
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return LoanSummary{}, err
+	}
+
+	return s.GetSummary(ctx, userID, loanID)
 }
 
 func (s *LoanStore) summaryForLoan(ctx context.Context, loan Loan) (LoanSummary, error) {
@@ -619,7 +721,13 @@ func (s *LoanStore) summaryForLoan(ctx context.Context, loan Loan) (LoanSummary,
 		return LoanSummary{}, err
 	}
 
-	summary.InterestCharged += loan.FixedInterestMinor
+	if loan.InterestMethod == "percentage" && loan.InterestRateBPS != nil && loan.InterestTermMonths != nil {
+		// Simple interest: rate is a monthly percentage (stored in basis points),
+		// charged for interestTermMonths against the total amount ever borrowed.
+		summary.InterestCharged += summary.PrincipalBorrowed * int64(*loan.InterestRateBPS) * int64(*loan.InterestTermMonths) / 10000
+	} else {
+		summary.InterestCharged += loan.FixedInterestMinor
+	}
 	summary.RemainingPrincipal = maxInt64(0, summary.PrincipalBorrowed-summary.PrincipalRepaid)
 	summary.OutstandingInterest = maxInt64(0, summary.InterestCharged-summary.InterestPaid)
 	summary.OutstandingFees = maxInt64(0, summary.FeesCharged-summary.FeesPaid)
