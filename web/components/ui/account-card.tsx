@@ -19,16 +19,16 @@ export function AccountCard({ name, type, accountClass = "asset", balanceMinor, 
     : "";
 
   return (
-    <article className={cardClass({ className: `grid min-h-40 content-between gap-6 ${emphasis}` })}>
+    <article className={cardClass({ className: `grid content-between gap-3 ${emphasis}` })}>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-on-surface-soft">
           {liability ? "Money you owe" : type.replaceAll("_", " ")}
         </p>
-        <h3 className="mt-2 text-lg font-semibold text-on-surface">{name}</h3>
+        <h3 className="mt-1 text-sm font-semibold text-on-surface">{name}</h3>
       </div>
       <div>
         <p
-          className={`font-display text-2xl font-semibold tabular-nums ${
+          className={`font-display text-xl font-semibold tabular-nums ${
             overdrawn ? "text-negative" : "text-on-surface"
           }`}
         >
