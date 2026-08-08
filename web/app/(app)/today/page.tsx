@@ -182,7 +182,7 @@ export default function TodayPage() {
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-        <section className="card min-w-0 overflow-hidden" aria-labelledby="latest-activity-heading">
+        <section className="card min-w-0 self-start overflow-hidden" aria-labelledby="latest-activity-heading">
           <div className="flex min-w-0 items-end justify-between gap-4 border-b border-outline pb-4">
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Activity</p>
