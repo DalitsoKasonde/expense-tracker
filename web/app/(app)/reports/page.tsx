@@ -10,6 +10,7 @@ import {
   PageShell,
 } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
+import { useEntriesChanged } from "@/lib/entries-bus";
 import { formatMoney } from "@/lib/format-money";
 import { annualReportFilename, buildAnnualReportCsv } from "@/lib/report-export";
 import {
@@ -195,6 +196,10 @@ export default function ReportsPage() {
   // first page load fetched the whole report twice.
   const yearInitializedRef = useRef(false);
   const [retryVersion, setRetryVersion] = useState(0);
+
+  // A newly saved entry (from this page or elsewhere in the app) should be
+  // reflected here without a manual reload.
+  useEntriesChanged(() => setRetryVersion((version) => version + 1));
 
   useEffect(() => {
     if (sessionStatus === "loading" || currencyLoading) {

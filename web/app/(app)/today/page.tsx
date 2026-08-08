@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useApiCall } from "@/lib/client-api";
 import { getPendingTransactions } from "@/lib/offline-db";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
+import { useEntriesChanged } from "@/lib/entries-bus";
 import { adaptSavingsGoals, type SavingsGoal } from "@/lib/dashboard-adapters";
 import { formatMoney } from "@/lib/format-money";
 import { buildNextSteps } from "@/lib/next-steps";
@@ -101,6 +102,14 @@ export default function TodayPage() {
     void loadSupportingData();
     return () => { ignore = true; };
   }, [session?.accessToken, secondaryNonce]);
+
+  // Saving an entry anywhere in the app (including from the sidebar/bottom
+  // nav, which live outside this page) should be reflected here without a
+  // manual reload.
+  useEntriesChanged(() => {
+    reloadDashboard();
+    setSecondaryNonce((nonce) => nonce + 1);
+  });
 
   const currency = data?.currency || "ZMW";
   const goals: SavingsGoal[] = useMemo(

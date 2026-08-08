@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AddEntryDialog, type EntryKind } from "@/components/add-entry-dialog";
 import { useApiCall } from "@/lib/client-api";
+import { useEntriesChanged } from "@/lib/entries-bus";
 import { formatMoney } from "@/lib/format-money";
 
 type Account = {
@@ -84,6 +85,12 @@ export function ReceivablesWorkspace() {
       ignore = true;
     };
   }, [loadData]);
+
+  // A lending entry saved elsewhere (e.g. the sidebar/bottom nav "Add entry")
+  // should update balances here without a manual reload.
+  useEntriesChanged(() => {
+    void loadData().catch((caught) => setError(caught instanceof Error ? caught.message : "Failed to load who owes you"));
+  });
 
   // One pass over the transactions: an advance credits the receivable as the
   // destination, a repayment debits it as the source.
