@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { useEntriesChanged } from "@/lib/entries-bus";
 import { getPendingTransactions } from "@/lib/offline-db";
 import { isPositiveEntry } from "@/lib/format-money";
 import {
@@ -38,6 +39,10 @@ export default function TransactionsPage() {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [filters, setFilters] = useState<TransactionFilterValue>({ query: "", direction: "all" });
+  // Bumping this re-runs the fetch effect below so a newly saved entry (added
+  // from this page or from the sidebar/bottom nav) shows up without a manual
+  // reload.
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     if (!session?.accessToken) { setLoading(false); return; }
@@ -62,7 +67,9 @@ export default function TransactionsPage() {
     }
     void load();
     return () => { ignore = true; };
-  }, [session?.accessToken]);
+  }, [session?.accessToken, reloadNonce]);
+
+  useEntriesChanged(() => setReloadNonce((nonce) => nonce + 1));
 
   const filtered = useMemo(() => transactions.filter((transaction) => {
     const query = filters.query.trim().toLowerCase();

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { notifyEntriesChanged } from "@/lib/entries-bus";
 import { buildCategoryRows, type Category } from "@/lib/category-tree";
 import { supportedCurrencies } from "@/lib/currencies";
 import { addYearsToDate, isPastDate } from "@/lib/date-terms";
@@ -801,6 +802,7 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
       }
 
       router.refresh();
+      notifyEntriesChanged();
       onSaved?.();
       onClose();
     } catch (submitError) {

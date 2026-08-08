@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Breadcrumbs, EmptyState, LoadingSkeleton, PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
+import { useEntriesChanged } from "@/lib/entries-bus";
 import { formatMoney } from "@/lib/format-money";
 import {
   buildPortfolioHoldings,
@@ -43,9 +44,12 @@ const dashboardRoutes = {
 
 export default function InvestmentsPage() {
   const apiCall = useApiCall();
-  const { data, loading } = useUnifiedDashboard();
+  const { data, loading, reload } = useUnifiedDashboard();
   const [savingsGroups, setSavingsGroups] = useState<SavingsGroup[]>([]);
   const [savingsPockets, setSavingsPockets] = useState<SavingsPocket[]>([]);
+  // Bumping this re-runs the fetch effect below so a newly saved investment
+  // entry shows up without a manual reload.
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     let ignore = false;
@@ -63,7 +67,12 @@ export default function InvestmentsPage() {
     return () => {
       ignore = true;
     };
-  }, [apiCall]);
+  }, [apiCall, reloadNonce]);
+
+  useEntriesChanged(() => {
+    reload();
+    setReloadNonce((nonce) => nonce + 1);
+  });
 
   const reportingCurrency = data?.currency ?? data?.assets?.[0]?.currency ?? "ZMW";
   const { groups, totals, holdingCount } = useMemo(() => {

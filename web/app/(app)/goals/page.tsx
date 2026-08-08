@@ -11,6 +11,7 @@ import {
   SavingsGoalCard,
 } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
+import { useEntriesChanged } from "@/lib/entries-bus";
 import { useUserCurrency } from "@/lib/use-user-currency";
 
 type SavingsGroup = {
@@ -61,6 +62,13 @@ export default function GoalsPage() {
       .catch((error) => setStatus(error instanceof Error ? error.message : "Failed to load savings goals"))
       .finally(() => setLoading(false));
   }, [loadData]);
+
+  // A transfer into a goal's savings account (e.g. via "Transfer money" above,
+  // or any "Add entry" trigger elsewhere in the app) should update progress
+  // here without a manual reload.
+  useEntriesChanged(() => {
+    void loadData().catch((error) => setStatus(error instanceof Error ? error.message : "Failed to load savings goals"));
+  });
 
   const accountCurrencies = useMemo(
     () => new Map(accounts.map((account) => [account.id, account.currency])),

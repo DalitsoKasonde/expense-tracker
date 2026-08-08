@@ -2,6 +2,7 @@
 
 import { FormDialog } from "@/components/ui/dialogs";
 import { useApiCall } from "@/lib/client-api";
+import { useEntriesChanged } from "@/lib/entries-bus";
 import { formatMoney } from "@/lib/format-money";
 import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
 import { useUserCurrency } from "@/lib/use-user-currency";
@@ -79,6 +80,12 @@ export function LoansWorkspace() {
   }, [apiCall, userCurrency]);
 
   useEffect(() => { void loadData().catch((error) => setStatus(error instanceof Error ? error.message : "Failed to load loans")).finally(() => setLoading(false)); }, [loadData]);
+
+  // A loan entry saved elsewhere (e.g. the sidebar/bottom nav "Add entry")
+  // should update balances here without a manual reload.
+  useEntriesChanged(() => {
+    void loadData().catch((error) => setStatus(error instanceof Error ? error.message : "Failed to load loans"));
+  });
 
   function closeCreate() {
     setCreateOpen(false);
