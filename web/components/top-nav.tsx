@@ -3,9 +3,10 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BellIcon, SettingsIcon } from "./nav-icons";
+import { BellIcon, FeedbackIcon, SettingsIcon } from "./nav-icons";
 import { useApiCall } from "@/lib/client-api";
 import { signOutEverywhere } from "@/lib/browser-auth";
+import { FeedbackButton } from "@/components/feedback-button";
 
 type TopNavProps = {
   initials: string;
@@ -171,6 +172,13 @@ export function TopNav({ initials, email }: TopNavProps) {
                 <strong className="text-sm text-on-surface">{email ?? "Signed in"}</strong>
                 <span className="text-sm text-on-surface-soft">Account menu</span>
               </div>
+              <FeedbackButton
+                className="flex min-h-10 items-center gap-2 rounded-md px-3 text-left text-sm font-semibold text-on-surface-soft transition-colors hover:bg-surface-soft hover:text-on-surface"
+                onTriggerClick={() => setProfileOpen(false)}
+              >
+                <FeedbackIcon className="size-4" />
+                <span>Send feedback</span>
+              </FeedbackButton>
               <Link
                 href="/settings/preferences"
                 className="flex min-h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold text-on-surface-soft transition-colors hover:bg-surface-soft hover:text-on-surface"

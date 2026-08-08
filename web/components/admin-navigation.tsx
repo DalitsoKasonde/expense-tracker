@@ -1,6 +1,7 @@
 const adminNavigation = [
   { href: "#overview", label: "Overview", shortLabel: "Overview" },
   { href: "#users", label: "User access", shortLabel: "Users" },
+  { href: "#feedback", label: "Beta feedback", shortLabel: "Feedback" },
   { href: "#administrators", label: "Administrators", shortLabel: "Admins" },
   { href: "#backups", label: "Database backups", shortLabel: "Backups" },
   { href: "#audit", label: "Audit trail", shortLabel: "Audit" },

@@ -22,6 +22,7 @@ describe("AdminPage", () => {
       }
       if (path === "/v1/admin/backups") return Promise.resolve([]);
       if (path === "/v1/admin/audit") return Promise.resolve([]);
+      if (path === "/v1/admin/feedback") return Promise.resolve([]);
       if (path === "/v1/admin/users/user-1/status" && options?.method === "PATCH") return Promise.resolve(undefined);
       if (path === "/v1/admin/system-admins" && options?.method === "POST") return Promise.resolve({ id: "admin-2", role: "system_admin" });
       return Promise.reject(new Error(`unexpected API call: ${path}`));

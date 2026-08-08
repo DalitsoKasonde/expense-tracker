@@ -7,6 +7,10 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 type AdminUser = { id: string; maskedEmail: string; role: string; isActive: boolean; createdAt: string; lastLoginAt?: string | null };
 type BackupJob = { id: string; status: string; fileName?: string | null; sizeBytes?: number | null; checksumSha256?: string | null; errorMessage?: string | null; requestedAt: string; completedAt?: string | null };
 type AuditLog = { id: string; action: string; targetType: string; targetId?: string | null; createdAt: string };
+type FeedbackStatus = "new" | "reviewed" | "resolved";
+type FeedbackItem = { id: string; maskedEmail: string; message: string; pagePath?: string; status: FeedbackStatus; createdAt: string };
+
+const feedbackStatuses: FeedbackStatus[] = ["new", "reviewed", "resolved"];
 
 function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : "Never"; }
 function formatBytes(value?: number | null) {
@@ -22,18 +26,21 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [backups, setBackups] = useState<BackupJob[]>([]);
   const [audit, setAudit] = useState<AuditLog[]>([]);
+  const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const activeUsers = useMemo(() => users.filter((user) => user.isActive).length, [users]);
+  const newFeedbackCount = useMemo(() => feedback.filter((item) => item.status === "new").length, [feedback]);
 
   const loadData = useCallback(async () => {
-    const [loadedUsers, loadedBackups, loadedAudit] = await Promise.all([
+    const [loadedUsers, loadedBackups, loadedAudit, loadedFeedback] = await Promise.all([
       apiCall<AdminUser[]>("/v1/admin/users"),
       apiCall<BackupJob[]>("/v1/admin/backups"),
       apiCall<AuditLog[]>("/v1/admin/audit"),
+      apiCall<FeedbackItem[]>("/v1/admin/feedback"),
     ]);
-    setUsers(loadedUsers ?? []); setBackups(loadedBackups ?? []); setAudit(loadedAudit ?? []);
+    setUsers(loadedUsers ?? []); setBackups(loadedBackups ?? []); setAudit(loadedAudit ?? []); setFeedback(loadedFeedback ?? []);
   }, [apiCall]);
 
   useEffect(() => { void loadData().catch((error) => setMessage(error instanceof Error ? error.message : "Failed to load administration data")).finally(() => setLoading(false)); }, [loadData]);
@@ -44,6 +51,15 @@ export default function AdminPage() {
       await apiCall(`/v1/admin/users/${user.id}/status`, { method: "PATCH", body: { isActive } });
       await loadData(); setMessage(isActive ? "User activated." : "User suspended.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Failed to update user"); }
+    finally { setPending(false); }
+  }
+
+  async function setFeedbackStatus(item: FeedbackItem, status: FeedbackStatus) {
+    setPending(true); setMessage("");
+    try {
+      await apiCall(`/v1/admin/feedback/${item.id}/status`, { method: "PATCH", body: { status } });
+      await loadData();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Failed to update feedback"); }
     finally { setPending(false); }
   }
 
@@ -84,6 +100,7 @@ export default function AdminPage() {
             <div className="statCard"><span className="muted">Registered users</span><strong>{users.length}</strong></div>
             <div className="statCard"><span className="muted">Active users</span><strong>{activeUsers}</strong></div>
             <div className="statCard"><span className="muted">Latest backup</span><strong>{backups[0]?.status ?? "None"}</strong></div>
+            <div className="statCard"><span className="muted">New feedback</span><strong>{newFeedbackCount}</strong></div>
           </div>
         </section>
         {message ? <p className="statusText" role="status">{message}</p> : null}
@@ -102,6 +119,39 @@ export default function AdminPage() {
           <div className="settingsHeaderRow"><div><strong>Users</strong><p className="muted">Only masked identity and operational metadata are available.</p></div></div>
           {loading ? <p className="muted p-4">Loading users...</p> : null}
           {!loading ? <div className="overflow-x-auto"><table className="dataTable"><thead><tr><th>User</th><th>Joined</th><th>Last login</th><th>Status</th><th>Action</th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td data-label="User"><strong>{user.maskedEmail}</strong></td><td data-label="Joined">{formatDate(user.createdAt)}</td><td data-label="Last login">{formatDate(user.lastLoginAt)}</td><td data-label="Status"><span className="metaBadge">{user.isActive ? "Active" : "Suspended"}</span></td><td data-label="Action"><button className={user.isActive ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={pending} onClick={() => void setUserActive(user, !user.isActive)}>{user.isActive ? "Suspend" : "Activate"}</button></td></tr>)}</tbody></table></div> : null}
+        </section>
+
+        <section id="feedback" className="card settingsListPanel scroll-mt-20 overflow-hidden">
+          <div className="settingsHeaderRow"><div><strong>Beta feedback</strong><p className="muted">Notes submitted from the app&apos;s &ldquo;Send feedback&rdquo; menu, newest first.</p></div></div>
+          {loading ? <p className="muted p-4">Loading feedback...</p> : null}
+          {!loading && feedback.length === 0 ? <p className="muted p-4">No feedback submitted yet.</p> : null}
+          {!loading && feedback.length ? (
+            <div className="overflow-x-auto">
+              <table className="dataTable">
+                <thead><tr><th>From</th><th>Message</th><th>Page</th><th>Received</th><th>Status</th></tr></thead>
+                <tbody>
+                  {feedback.map((item) => (
+                    <tr key={item.id}>
+                      <td data-label="From">{item.maskedEmail}</td>
+                      <td data-label="Message" className="max-w-md whitespace-pre-wrap">{item.message}</td>
+                      <td data-label="Page" className="font-mono text-xs">{item.pagePath || "—"}</td>
+                      <td data-label="Received">{formatDate(item.createdAt)}</td>
+                      <td data-label="Status">
+                        <select
+                          className="metaBadge"
+                          value={item.status}
+                          disabled={pending}
+                          onChange={(event) => void setFeedbackStatus(item, event.target.value as FeedbackStatus)}
+                        >
+                          {feedbackStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </section>
 
         <section id="backups" className="card settingsListPanel scroll-mt-20 overflow-hidden">
