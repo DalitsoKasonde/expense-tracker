@@ -40,6 +40,7 @@ type Server struct {
 	unifiedDashboard *store.UnifiedDashboardStore
 	idempotencyKeys  *store.IdempotencyKeyStore
 	admin            *store.AdminStore
+	feedback         *store.FeedbackStore
 	marketStocks     marketStockDirectoryCache
 }
 
@@ -67,6 +68,7 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 		unifiedDashboard: store.NewUnifiedDashboardStore(db, bondStore),
 		idempotencyKeys:  store.NewIdempotencyKeyStore(db),
 		admin:            store.NewAdminStore(db),
+		feedback:         store.NewFeedbackStore(db),
 	}
 
 	router := chi.NewRouter()
@@ -104,6 +106,9 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/audit", s.listAdminAudit)
 		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/backups", s.listAdminBackups)
 		protected.With(auth.RequireRole("system_admin")).Post("/v1/admin/backups", s.createAdminBackup)
+		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/feedback", s.listAdminFeedback)
+		protected.With(auth.RequireRole("system_admin")).Patch("/v1/admin/feedback/{id}/status", s.updateAdminFeedbackStatus)
+		protected.Post("/v1/feedback", s.createFeedback)
 		protected.Get("/v1/onboarding/status", s.getOnboardingStatus)
 		protected.Post("/v1/onboarding/complete", s.completeOnboarding)
 		protected.Get("/v1/user/preferences", s.getUserPreferences)
