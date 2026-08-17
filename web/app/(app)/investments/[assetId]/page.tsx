@@ -113,6 +113,23 @@ function toMinor(value: string) {
   return Math.round((parseFloat(value || "0") || 0) * 100);
 }
 
+function toRate(value: string) {
+  return Math.min(100, Math.max(0, parseFloat(value || "0") || 0));
+}
+
+// Withholding is entered as the rate the issuer applies; the amount deducted is
+// whatever that rate comes to on this coupon.
+function taxMinorFromRate(grossMinor: number, rate: string) {
+  return Math.min(grossMinor, Math.round((grossMinor * toRate(rate)) / 100));
+}
+
+// The rate that produced an already-recorded deduction, trimmed so a clean rate
+// shows as "15" rather than "15.0000".
+function rateFromTaxMinor(grossMinor: number, taxMinor: number) {
+  if (grossMinor <= 0) return "0";
+  return String(parseFloat(((taxMinor / grossMinor) * 100).toFixed(4)));
+}
+
 // Labels and hrefs mirror the category pages' own breadcrumbs so the trail
 // reads the same wherever you entered from. Classes without a category page
 // (cash_equivalent, other) fall back to Portfolio rather than linking nowhere.
@@ -209,7 +226,7 @@ export default function AssetDetailPage() {
   const [couponError, setCouponError] = useState("");
   const [couponForm, setCouponForm] = useState({
     grossAmount: "",
-    taxAmount: "0",
+    taxRate: "0",
     paymentDate: today(),
     cashAccountId: "",
     destination: "cash",
@@ -227,7 +244,9 @@ export default function AssetDetailPage() {
   const destinationStocks = (data?.assets ?? []).filter(
     (item) => item.assetClass === "stock" && item.currency === asset?.currency,
   );
-  const couponNetMinor = toMinor(couponForm.grossAmount) - toMinor(couponForm.taxAmount);
+  const couponGrossMinor = toMinor(couponForm.grossAmount);
+  const couponTaxMinor = taxMinorFromRate(couponGrossMinor, couponForm.taxRate);
+  const couponNetMinor = couponGrossMinor - couponTaxMinor;
   const couponPurchaseFeeMinor = toMinor(couponForm.purchaseFee);
   const couponUnitPriceMinor = toMinor(couponForm.unitPrice);
   const dividendTotalMinor = dividends.reduce((total, dividend) => total + dividend.amount, 0);
@@ -459,7 +478,7 @@ export default function AssetDetailPage() {
     setConfirmingCashflowId(cashflow.id);
     setCouponForm({
       grossAmount: (cashflow.grossAmountMinor / 100).toFixed(2),
-      taxAmount: (cashflow.taxAmountMinor / 100).toFixed(2),
+      taxRate: rateFromTaxMinor(cashflow.grossAmountMinor, cashflow.taxAmountMinor),
       paymentDate: cashflow.paymentDate ?? cashflow.scheduledDate,
       cashAccountId: defaultCashAccountId,
       destination: "cash",
@@ -475,11 +494,12 @@ export default function AssetDetailPage() {
     if (!confirmingCashflowId) return;
 
     const grossAmountMinor = toMinor(couponForm.grossAmount);
-    const taxAmountMinor = toMinor(couponForm.taxAmount);
+    const taxAmountMinor = taxMinorFromRate(grossAmountMinor, couponForm.taxRate);
     const unitPriceMinor = toMinor(couponForm.unitPrice);
     const purchaseFeeMinor = toMinor(couponForm.purchaseFee);
-    if (grossAmountMinor <= 0 || taxAmountMinor < 0 || taxAmountMinor > grossAmountMinor) {
-      setCouponError("Enter a positive gross coupon and tax between zero and the gross amount.");
+    const taxRate = parseFloat(couponForm.taxRate || "0");
+    if (grossAmountMinor <= 0 || !Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) {
+      setCouponError("Enter a positive gross coupon and a withholding tax rate between 0 and 100 percent.");
       return;
     }
     if (!couponHistoricalBackfill && !couponForm.cashAccountId) {
@@ -1415,18 +1435,22 @@ export default function AssetDetailPage() {
                 />
               </div>
               <div className="field">
-                <label htmlFor="coupon-tax">Withholding tax ({asset.currency})</label>
+                <label htmlFor="coupon-tax">Withholding tax (%)</label>
                 <input
                   id="coupon-tax"
                   type="number"
                   min="0"
-                  step="0.01"
-                  value={couponForm.taxAmount}
+                  max="100"
+                  step="any"
+                  value={couponForm.taxRate}
                   onChange={(event) =>
-                    setCouponForm((current) => ({ ...current, taxAmount: event.target.value }))
+                    setCouponForm((current) => ({ ...current, taxRate: event.target.value }))
                   }
                   required
                 />
+                <span className="field-hint">
+                  {formatMoney(couponTaxMinor, asset.currency)} deducted from this coupon.
+                </span>
               </div>
             </div>
 

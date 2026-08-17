@@ -306,4 +306,24 @@ describe("AssetDetailPage", () => {
       },
     ));
   });
+
+  it("turns the withholding tax rate into the amount deducted from the coupon", async () => {
+    mocks.assetClass = "bond";
+    render(<AssetDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm coupon" }));
+    const dialog = screen.getByRole("dialog", { name: "Confirm coupon payment" });
+    fireEvent.change(within(dialog).getByLabelText("Withholding tax (%)"), { target: { value: "15" } });
+    expect(within(dialog).getByText("ZMW 9.75 deducted from this coupon.")).toBeInTheDocument();
+    expect(within(dialog).getByText("ZMW 55.25")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Record as a historical coupon/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm coupon" }));
+
+    await waitFor(() => expect(mocks.apiCall).toHaveBeenCalledWith(
+      "/v1/bonds/asset-1/cashflows/coupon-1/confirm",
+      expect.objectContaining({
+        body: expect.objectContaining({ grossAmountMinor: 6_500, taxAmountMinor: 975 }),
+      }),
+    ));
+  });
 });
