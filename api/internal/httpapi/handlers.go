@@ -579,6 +579,21 @@ func (s *Server) createTransaction(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(req.Source) == "" || req.Source == historicalBackfillSource {
 			req.Source = "manual"
 		}
+		// Every entry that moves through an account is checked here, not just
+		// transfers: an entry in the wrong currency is invisible to balances.
+		account, accountErr := s.accounts.GetActiveByID(r.Context(), req.AccountID, claims.UserID)
+		if errors.Is(accountErr, store.ErrNotFound) {
+			http.Error(w, "the account must be active and belong to the signed-in user", http.StatusBadRequest)
+			return
+		}
+		if accountErr != nil {
+			http.Error(w, "failed to validate the account", http.StatusInternalServerError)
+			return
+		}
+		if err := validateEntryAccountCurrency(account, currency); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	if (entryKind == "saving_transfer" || entryKind == "loan_receivable_advance") && req.HistoricalBackfill {
 		if req.DestinationAccountID == nil || strings.TrimSpace(*req.DestinationAccountID) == "" {
@@ -845,6 +860,23 @@ func movementFeeAccountID(entryKind, sourceAccountID string, destinationAccountI
 		return *destinationAccountID
 	}
 	return sourceAccountID
+}
+
+/*
+validateEntryAccountCurrency keeps a movement in the currency of the account it
+moves through.
+
+Balances match a transaction to its account on currency as well as id, so a
+transaction saved against an account in some other currency is stored and listed
+but counts toward no balance anywhere — it simply goes missing from the books
+with nothing reporting an error. Transfers were already covered by
+validateTransferAccounts; ordinary expenses and income were not.
+*/
+func validateEntryAccountCurrency(account store.Account, currency string) error {
+	if account.Currency != currency {
+		return errors.New("entry currency must match the account it moves through")
+	}
+	return nil
 }
 
 func validateTransferAccounts(source, destination store.Account, currency string) error {

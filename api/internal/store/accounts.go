@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -129,6 +130,29 @@ func (s *AccountStore) Create(ctx context.Context, userID, name, accountType, ac
 // Update edits an account. openingBalanceMinor is optional: when supplied the opening
 // balance is rewritten, which is only allowed while the account has no transactions —
 // once money has moved through it, the balance must change via transactions instead.
+/*
+accountCurrencyChangeAllowed reports whether an account may switch currency.
+
+Every balance query joins a transaction to its account on currency as well as
+id — see the balance expressions in this file, unified_dashboard, savings_pockets
+and savings_groups. Changing the currency after money has moved therefore
+detaches the whole history from the balance: the account silently falls back to
+its opening balance while those transactions carry on showing in Activity and
+reports, so the books stop reconciling with nothing reporting an error.
+
+Refusing is the only safe answer until there is a migration that rewrites the
+transactions too. An unused account can still be corrected freely.
+*/
+func accountCurrencyChangeAllowed(current, requested string, hasTransactions bool) error {
+	if requested == "" || strings.EqualFold(current, requested) {
+		return nil
+	}
+	if hasTransactions {
+		return ErrAccountCurrencyLocked
+	}
+	return nil
+}
+
 func (s *AccountStore) Update(ctx context.Context, id, userID, name, accountType, accountClass, currency string, openingBalanceMinor *int64) (Account, error) {
 	var account Account
 	if accountType == "" {
@@ -155,21 +179,29 @@ func (s *AccountStore) Update(ctx context.Context, id, userID, name, accountType
 		}
 	}
 
-	if openingBalanceMinor != nil {
-		var hasTransactions bool
-		if err := s.db.QueryRow(ctx, `
-			select `+accountHasTransactionsSQL+`
-			from accounts a
-			where a.id = $1 and a.user_id = $2 and a.archived_at is null
-		`, id, userID).Scan(&hasTransactions); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return account, ErrNotFound
-			}
-			return account, err
+	// Both remaining guards need the same two facts, so they are read once and
+	// applied together rather than only when a balance edit was requested.
+	var (
+		currentCurrency string
+		hasTransactions bool
+	)
+	if err := s.db.QueryRow(ctx, `
+		select a.currency, `+accountHasTransactionsSQL+`
+		from accounts a
+		where a.id = $1 and a.user_id = $2 and a.archived_at is null
+	`, id, userID).Scan(&currentCurrency, &hasTransactions); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return account, ErrNotFound
 		}
-		if hasTransactions {
-			return account, ErrAccountHasTransactions
-		}
+		return account, err
+	}
+
+	if err := accountCurrencyChangeAllowed(currentCurrency, currency, hasTransactions); err != nil {
+		return account, err
+	}
+
+	if openingBalanceMinor != nil && hasTransactions {
+		return account, ErrAccountHasTransactions
 	}
 
 	err := s.db.QueryRow(ctx, `

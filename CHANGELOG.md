@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- An entry now has to be in the currency of the account it moves through; one saved in any other currency was stored and listed but counted toward no balance anywhere, so the books quietly stopped reconciling
+- An account's currency can no longer be changed once it has transactions, which detached its whole history from its balance in the same silent way
 - The bond dashboard reports coupon income actually received as its gain, with the withholding tax that produced the net figure and a separate line for coupons still scheduled; a bond is carried at principal, so the previous "current value less cost" gain was always zero
 - Coupons that came due are posted before bond income is summarised, so the figure no longer depends on which request happened to arrive first
 - Add-entry type chips read design tokens, so the picker no longer shows light-mode pastel chips in dark mode or the Sonto colour scheme

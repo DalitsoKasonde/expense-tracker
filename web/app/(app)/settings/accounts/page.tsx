@@ -73,6 +73,11 @@ export default function AccountsSettingsPage() {
   // The balance only stays editable while nothing has moved through the account;
   // after that it is derived from transactions.
   const canEditBalance = !editingId || (editingAccount !== undefined && !editingAccount.hasTransactions);
+  // Currency is locked by the same rule. Balances are calculated by matching
+  // transactions to their account on currency, so switching it after money has
+  // moved would detach the history and leave the balance wrong; the server
+  // refuses it, and showing that here beats failing on submit.
+  const canEditCurrency = canEditBalance;
 
   async function loadAccounts() {
     const result = await apiCall<Account[]>("/v1/accounts");
@@ -346,12 +351,20 @@ export default function AccountsSettingsPage() {
               id="currency"
               value={form.currency}
               onChange={(event) => setForm((current) => ({ ...current, currency: event.target.value }))}
+              disabled={!canEditCurrency}
+              aria-describedby={canEditCurrency ? undefined : "currencyHint"}
               required
             >
               {supportedCurrencies.map((currency) => (
                 <option key={currency} value={currency}>{currency}</option>
               ))}
             </select>
+            {canEditCurrency ? null : (
+              <span className="muted" id="currencyHint">
+                This account already has transactions, so its currency is fixed. To hold money in another currency,
+                create a separate account for it.
+              </span>
+            )}
           </div>
 
           {canEditBalance ? (

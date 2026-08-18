@@ -131,3 +131,17 @@ func TestNormalizeOptionalSymbol(t *testing.T) {
 		t.Fatalf("normalizeOptionalSymbol() = %v, want ZANACO", got)
 	}
 }
+
+func TestValidateEntryAccountCurrency(t *testing.T) {
+	kwachaAccount := store.Account{ID: "acc-1", AccountClass: "asset", AccountType: "cash", Currency: "ZMW"}
+
+	if err := validateEntryAccountCurrency(kwachaAccount, "ZMW"); err != nil {
+		t.Fatalf("expected a matching currency to be accepted, got %v", err)
+	}
+
+	// Balances join a transaction to its account on currency, so this entry
+	// would be stored and listed but counted toward no balance at all.
+	if err := validateEntryAccountCurrency(kwachaAccount, "USD"); err == nil {
+		t.Fatal("expected a mismatched currency to be rejected")
+	}
+}

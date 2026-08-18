@@ -12,6 +12,7 @@ var (
 	ErrConflict               = errors.New("resource conflict")
 	ErrAccountHasBalance      = errors.New("account still has balance")
 	ErrAccountHasTransactions = errors.New("account already has transactions")
+	ErrAccountCurrencyLocked  = errors.New("account currency cannot change once it has transactions")
 	ErrAssetHasActivity       = errors.New("asset has activity beyond purchases")
 )
 
