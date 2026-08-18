@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Breadcrumbs, EmptyState, LoadingSkeleton, PageHeader, PageShell } from "@/components/ui";
+import { Breadcrumbs, EmptyState, LoadingSkeleton, Money, PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
 import type { MarketStock, MarketStockDirectory } from "@/lib/market-data";
@@ -203,8 +203,8 @@ export default function StocksDashboardPage() {
                       {stock.hasPosition ? (
                         <div className="shrink-0 text-right">
                           <p className="font-semibold tabular-nums text-on-surface">{formatMoney(stock.displayValueMinor, stock.currency)}</p>
-                          <p className={`mt-1 text-xs font-semibold tabular-nums ${difference >= 0 ? "text-positive" : "text-negative"}`}>
-                            {difference >= 0 ? "+" : ""}{formatMoney(difference, stock.currency)}
+                          <p className="mt-1 text-xs font-semibold">
+                            <Money amountMinor={difference} currency={stock.currency} signed tone="auto" />
                             {percent === null ? "" : ` (${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%)`}
                           </p>
                         </div>

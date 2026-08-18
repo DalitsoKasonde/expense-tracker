@@ -23,6 +23,13 @@ function sourceFiles() {
 
 const css = readFileSync(join(root, "app/globals.css"), "utf8");
 
+/**
+ * The stylesheet with comments removed, for assertions that count declarations.
+ * globals.css documents itself heavily and quotes CSS in prose, so a naive
+ * match over the raw file counts explanations as rules.
+ */
+const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
 describe("design system invariants", () => {
   it("has no leftover legacy button classes", () => {
     const offenders = sourceFiles()
@@ -83,11 +90,56 @@ describe("design system invariants", () => {
     expect(unexpected).toEqual([]);
   });
 
+  it("uses design tokens instead of raw colour literals", () => {
+    // The white-label rules above catch `text-white` next to a token fill, but
+    // an arbitrary hex inside a Tailwind class slipped past them and shipped a
+    // light-mode-only entry picker. Colour belongs in globals.css, never in a
+    // class string.
+    const offenders: string[] = [];
+    for (const { file, text } of sourceFiles()) {
+      for (const match of text.matchAll(
+        /\b(?:bg|text|border|ring|fill|stroke|from|via|to)-(?:\[#[0-9a-fA-F]{3,8}\]|white|black)\b/g,
+      )) {
+        offenders.push(`${file}: ${match[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("pairs every tabular-figures request with the numeric font", () => {
+    // Quicksand's digits are proportional and it ships no `tnum`, so
+    // font-variant-numeric on its own is a no-op. The two must travel together,
+    // which is why exactly one rule in the stylesheet may mention either.
+    expect(cssRules).toMatch(/--font-numeric:/);
+    const requests = cssRules.match(/font-variant-numeric:\s*tabular-nums/g) ?? [];
+    expect(requests).toHaveLength(1);
+    expect(cssRules).toMatch(
+      /\.tabular-nums,[\s\S]*?\{[^}]*font-family: var\(--font-numeric\)[^}]*font-variant-numeric: tabular-nums/,
+    );
+  });
+
   it("defines every control height and card edge from a token", () => {
     expect(css).toContain("--control-h: 44px");
     expect(css).toMatch(/\.btn \{[^}]*min-height: var\(--control-h\)/);
     expect(css).toMatch(/\.control,[\s\S]*?min-height: var\(--control-h\)/);
     expect(css).toMatch(/\.card,[\s\S]*?border: 1px solid var\(--card-border\)/);
+  });
+
+  it("keeps form controls constrained on a narrow viewport", () => {
+    // Filters and forms rely on the recipe rather than per-control utilities,
+    // so the constraint has to be guaranteed here.
+    const control = css.match(/\.control,[\s\S]*?\}/)?.[0] ?? "";
+    expect(control).toMatch(/width: 100%/);
+    expect(control).toMatch(/min-width: 0/);
+    expect(control).toMatch(/max-width: 100%/);
+  });
+
+  it("declares a scrim token instead of repeating a backdrop literal", () => {
+    expect(css).toMatch(/--overlay:/);
+    const offenders = sourceFiles()
+      .filter(({ text }) => /backdrop:bg-\[/.test(text))
+      .map(({ file }) => file);
+    expect(offenders).toEqual([]);
   });
 
   it("keeps the utility shadow scale aliased to the token scale", () => {

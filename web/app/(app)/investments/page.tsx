@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Breadcrumbs, EmptyState, LoadingSkeleton, PageHeader, PageShell } from "@/components/ui";
+import { Breadcrumbs, EmptyState, LoadingSkeleton, Money, PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { useEntriesChanged } from "@/lib/entries-bus";
 import { formatMoney } from "@/lib/format-money";
@@ -174,8 +174,8 @@ function DashboardCard({ group }: { group: PortfolioGroup }) {
           </p>
         )) : <p className="text-sm text-on-surface-soft">No value recorded</p>}
         {primary && group.kind !== "savings_group" ? (
-          <p className={`mt-2 text-xs font-semibold tabular-nums ${difference >= 0 ? "text-positive" : "text-negative"}`}>
-            {difference >= 0 ? "+" : ""}{formatMoney(difference, primary.currency)}
+          <p className="mt-2 text-xs font-semibold">
+            <Money amountMinor={difference} currency={primary.currency} signed tone="auto" />
             {percent === null ? "" : ` (${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%)`}
           </p>
         ) : null}

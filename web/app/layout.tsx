@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     title: "Expenses — Your money, made clear.",
     description: "Track accounts, everyday money activity, stocks, and government bonds in one clear workspace.",
     type: "website",
-    images: [{ url: "/inscribed-logo.png", width: 2174, height: 964, alt: "Inscribed — Expenses" }],
+    images: [{ url: "/inscribed-logo.png", width: 1200, height: 532, alt: "Inscribed — Expenses" }],
   },
   twitter: {
     card: "summary_large_image",
@@ -47,10 +47,10 @@ export const viewport: Viewport = {
   // Lets the installed PWA draw into the display cutout and home-indicator
   // areas; layout compensates with env(safe-area-inset-*).
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f8fc" },
-    { media: "(prefers-color-scheme: dark)", color: "#0e1730" },
-  ],
+  // themeColor is deliberately absent: a media-keyed tag here would follow the
+  // OS, while the app follows the user's stored theme and color scheme. The
+  // pre-paint script in themeBootstrapScript owns the tag instead, so the
+  // browser chrome matches what is actually on screen.
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Breadcrumbs, EmptyState, LoadingSkeleton, PageHeader, PageShell } from "@/components/ui";
+import { Breadcrumbs, EmptyState, LoadingSkeleton, Money, PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
 import { gainPercent } from "@/lib/portfolio-holdings";
@@ -85,8 +85,9 @@ export default function BondsDashboardPage() {
                   <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Current value</p>
                   <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-on-surface">{formatMoney(total.value, currency)}</p>
                   <p className="mt-2 text-sm text-on-surface-soft">Principal {formatMoney(total.cost, currency)}</p>
-                  <p className={`mt-1 text-sm font-semibold ${difference >= 0 ? "text-positive" : "text-negative"}`}>
-                    {difference >= 0 ? "+" : ""}{formatMoney(difference, currency)}{percent === null ? "" : ` (${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%)`}
+                  <p className="mt-1 text-sm font-semibold">
+                    <Money amountMinor={difference} currency={currency} signed tone="auto" />
+                    {percent === null ? "" : ` (${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%)`}
                   </p>
                 </article>
               );

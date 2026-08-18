@@ -13,6 +13,14 @@ import {
 } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
+import {
+  formatPurchaseDate,
+  inferLuSETicker,
+  rateFromTaxMinor,
+  taxMinorFromRate,
+  toMinor,
+  today,
+} from "@/lib/asset-detail";
 import { formatMoney } from "@/lib/format-money";
 import { isPastDate } from "@/lib/date-terms";
 import type { MarketStockDirectory } from "@/lib/market-data";
@@ -105,31 +113,6 @@ interface MarketQuote {
 
 type EquityDialog = "dividend" | "sell" | "value" | null;
 
-function today() {
-  return new Date().toISOString().split("T")[0];
-}
-
-function toMinor(value: string) {
-  return Math.round((parseFloat(value || "0") || 0) * 100);
-}
-
-function toRate(value: string) {
-  return Math.min(100, Math.max(0, parseFloat(value || "0") || 0));
-}
-
-// Withholding is entered as the rate the issuer applies; the amount deducted is
-// whatever that rate comes to on this coupon.
-function taxMinorFromRate(grossMinor: number, rate: string) {
-  return Math.min(grossMinor, Math.round((grossMinor * toRate(rate)) / 100));
-}
-
-// The rate that produced an already-recorded deduction, trimmed so a clean rate
-// shows as "15" rather than "15.0000".
-function rateFromTaxMinor(grossMinor: number, taxMinor: number) {
-  if (grossMinor <= 0) return "0";
-  return String(parseFloat(((taxMinor / grossMinor) * 100).toFixed(4)));
-}
-
 // Labels and hrefs mirror the category pages' own breadcrumbs so the trail
 // reads the same wherever you entered from. Classes without a category page
 // (cash_equivalent, other) fall back to Portfolio rather than linking nowhere.
@@ -141,40 +124,6 @@ function assetCategoryCrumb(assetClass: string): Crumb[] {
     return [{ label: "Government bonds", href: "/investments/bonds" }];
   }
   return [];
-}
-
-function formatPurchaseDate(value: string) {
-  return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function inferLuSETicker(symbol: string | null | undefined, name: string) {
-  const explicitSymbol = symbol?.trim().toUpperCase().replace(/\.ZM$/, "");
-  if (explicitSymbol) {
-    return explicitSymbol;
-  }
-
-  const normalizedName = name.trim().toLowerCase();
-  const aliases: Array<[string, string]> = [
-    ["airtel", "ATEL"],
-    ["copperbelt energy", "CECZ"],
-    ["zanaco", "ZNCO"],
-    ["zambia national commercial", "ZNCO"],
-    ["zambia sugar", "ZSUG"],
-    ["standard chartered", "SCBL"],
-    ["puma", "PUMA"],
-    ["shoprite", "SHOP"],
-    ["british american tobacco", "BATZ"],
-    ["chilanga cement", "CHIL"],
-    ["zambia reinsurance", "ZMRE"],
-    ["zccm", "ZCCM-IH"],
-    ["national breweries", "NATB"],
-    ["bata", "BATA"],
-  ];
-  return aliases.find(([alias]) => normalizedName.includes(alias))?.[1] ?? "";
 }
 
 export default function AssetDetailPage() {

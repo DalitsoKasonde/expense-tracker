@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased
+- Add-entry type chips read design tokens, so the picker no longer shows light-mode pastel chips in dark mode or the Sonto colour scheme
+- Money figures are set in a face with real tabular numerals; Quicksand's digits are proportional and it ships no `tnum`, so amounts never actually lined up in a column
+- Browser and installed-PWA chrome follows the theme and colour scheme you picked instead of the operating system's
+- The installed app's Portfolio shortcut pointed at `/portfolio`, which does not exist, and opened a 404
+- Badge text in the Sonto light scheme meets AA contrast, and the accent blue and purple are darkened where they carry small text
+- The wordmark is drawn from a colour token, so it repaints with the theme instead of sitting on a white chip in dark mode
+- Installs no longer download ~2.4 MB of images the app never renders: an unused logo, the Open Graph image, and a byte-identical duplicate of the 512px icon
+- Transaction filters, dialog scrims, and money amounts come from shared primitives rather than per-call-site recipes
 - CI builds and pushes SHA-tagged images to GHCR; the production VM only pulls them, so a 1 vCPU / 2 GB box no longer builds Next.js and Go next to the live containers
 - Deploys pin an exact image tag, verify both containers are healthy and serving that commit, and restore the previous tag automatically when they are not
 - Manual deploy and one-click rollback via the Deploy workflow's `workflow_dispatch` inputs; `deploy/vm/rollback.sh` does the same on the VM

@@ -1,4 +1,5 @@
-import { formatMoney, isPositiveEntry } from "@/lib/format-money";
+import { isPositiveEntry } from "@/lib/format-money";
+import { Money } from "./money";
 
 export type TransactionRowData = {
   id: string;
@@ -53,8 +54,14 @@ export function TransactionRow({ transaction, onEdit }: { transaction: Transacti
         </div>
       </div>
       <div className="min-w-0 text-right">
-        <p className={`whitespace-nowrap text-sm font-bold tabular-nums ${positive ? "text-positive" : "text-negative"}`}>
-          {positive ? "+" : "−"}{formatMoney(Math.abs(transaction.amount), transaction.currency)}
+        <p className="whitespace-nowrap text-sm font-bold">
+          <Money
+            amountMinor={transaction.amount}
+            currency={transaction.currency}
+            // Direction comes from the entry kind, not the stored sign.
+            sign={positive ? "+" : "−"}
+            tone={positive ? "positive" : "negative"}
+          />
         </p>
         <p className="mt-0.5 text-[11px] text-on-surface-soft">{positive ? "Money in" : "Money out"}</p>
       </div>

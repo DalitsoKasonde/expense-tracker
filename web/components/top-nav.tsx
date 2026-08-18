@@ -37,6 +37,10 @@ export function TopNav({ initials, email }: TopNavProps) {
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const profileRef = useRef<HTMLDivElement | null>(null);
+  const notificationsPanelRef = useRef<HTMLDivElement | null>(null);
+  const profilePanelRef = useRef<HTMLDivElement | null>(null);
+  const notificationsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const loadNotifications = useCallback(() => {
     setNotificationsLoading(true);
@@ -72,10 +76,17 @@ export function TopNav({ initials, email }: TopNavProps) {
     }
 
     function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setNotificationsOpen(false);
-        setProfileOpen(false);
-      }
+      if (event.key !== "Escape") return;
+      // Close only what is open, and hand focus back to the control that
+      // opened it — otherwise the keyboard lands back at the top of the page.
+      setNotificationsOpen((open) => {
+        if (open) notificationsTriggerRef.current?.focus();
+        return false;
+      });
+      setProfileOpen((open) => {
+        if (open) profileTriggerRef.current?.focus();
+        return false;
+      });
     }
 
     document.addEventListener("mousedown", handlePointerDown);
@@ -86,14 +97,33 @@ export function TopNav({ initials, email }: TopNavProps) {
     };
   }, []);
 
+  // Moving focus into the panel is what makes it reachable at all: without it a
+  // keyboard user tabs from the trigger straight past the open panel into the
+  // page beneath. The native <dialog> components elsewhere get this for free;
+  // these are popovers, so it is done by hand.
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const panel = notificationsPanelRef.current;
+    panel?.querySelector<HTMLElement>("a, button, [tabindex]:not([tabindex='-1'])")?.focus();
+  }, [notificationsOpen, notificationsLoading, notificationItems.length]);
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    const panel = profilePanelRef.current;
+    panel?.querySelector<HTMLElement>("a, button, [tabindex]:not([tabindex='-1'])")?.focus();
+  }, [profileOpen]);
+
   return (
     <header className="sticky top-0 z-20 border-b border-outline bg-background/95 backdrop-blur print:hidden">
       <div className="mx-auto flex max-w-app items-center justify-end gap-3 px-4 py-3 sm:px-8 lg:px-12">
         <div className="relative" ref={notificationsRef}>
           <button
             type="button"
+            ref={notificationsTriggerRef}
             className="grid size-10 place-items-center rounded-full border border-outline bg-surface text-on-surface-soft transition-colors hover:text-on-surface"
             aria-label="Notifications"
+            aria-haspopup="menu"
+            aria-controls="notifications-panel"
             aria-expanded={notificationsOpen}
             onClick={() => {
               setNotificationsOpen((current) => !current);
@@ -103,7 +133,7 @@ export function TopNav({ initials, email }: TopNavProps) {
             <BellIcon className="size-5" />
           </button>
           {notificationsOpen ? (
-            <div className="absolute right-0 top-12 z-30 grid w-72 gap-3 rounded-lg border border-outline bg-surface p-4 shadow-lg">
+            <div id="notifications-panel" ref={notificationsPanelRef} className="absolute right-0 top-12 z-30 grid w-72 gap-3 rounded-lg border border-outline bg-surface p-4 shadow-lg">
               <div className="grid gap-1">
                 <strong className="text-sm text-on-surface">Notifications</strong>
                 {notificationsError ? (
@@ -155,8 +185,11 @@ export function TopNav({ initials, email }: TopNavProps) {
         <div className="relative" ref={profileRef}>
           <button
             type="button"
+            ref={profileTriggerRef}
             className="grid size-10 place-items-center rounded-full bg-action text-sm font-semibold text-action-contrast"
             aria-label={email ?? "Profile"}
+            aria-haspopup="menu"
+            aria-controls="profile-panel"
             aria-expanded={profileOpen}
             title={email ?? "Profile"}
             onClick={() => {
@@ -167,7 +200,7 @@ export function TopNav({ initials, email }: TopNavProps) {
             {initials}
           </button>
           {profileOpen ? (
-            <div className="absolute right-0 top-12 z-30 grid min-w-52 gap-3 rounded-lg border border-outline bg-surface p-4 shadow-lg">
+            <div id="profile-panel" ref={profilePanelRef} className="absolute right-0 top-12 z-30 grid min-w-52 gap-3 rounded-lg border border-outline bg-surface p-4 shadow-lg">
               <div className="grid gap-1">
                 <strong className="text-sm text-on-surface">{email ?? "Signed in"}</strong>
                 <span className="text-sm text-on-surface-soft">Account menu</span>

@@ -65,8 +65,11 @@ describe("Expenses UI primitives", () => {
     />);
 
     expect(screen.getByLabelText("Transaction filters")).toHaveClass("min-w-0", "w-full", "grid-cols-1");
+    // The width constraints live in the shared `.control` recipe rather than
+    // per-control utilities; design-system.test.ts asserts the recipe itself
+    // still carries them.
     for (const field of screen.getAllByRole("combobox")) {
-      expect(field).toHaveClass("w-full", "min-w-0", "max-w-full");
+      expect(field).toHaveClass("control");
     }
   });
 

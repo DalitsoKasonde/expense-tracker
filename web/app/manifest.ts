@@ -25,7 +25,10 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/png",
       },
       {
-        src: "/maskable-512.png",
+        // Byte-identical to the icon above, so it is the same file rather than a
+        // second 512px download. The mark sits within the central ~63% of the
+        // canvas, inside the maskable safe zone, so Android can crop it freely.
+        src: "/icon-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
@@ -43,7 +46,7 @@ export default function manifest(): MetadataRoute.Manifest {
         name: "Portfolio",
         short_name: "Portfolio",
         description: "View stocks and government bonds",
-        url: "/portfolio",
+        url: "/investments",
         icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }],
       },
     ],

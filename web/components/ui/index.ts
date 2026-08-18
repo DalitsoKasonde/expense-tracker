@@ -10,6 +10,7 @@ export * from "./empty-state";
 export * from "./field";
 export * from "./loading-skeleton";
 export * from "./metric-card";
+export * from "./money";
 export * from "./page-header";
 export * from "./page-shell";
 export * from "./savings-goal-card";

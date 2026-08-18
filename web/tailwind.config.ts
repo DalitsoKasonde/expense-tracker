@@ -16,9 +16,11 @@ const config: Config = {
         surface: {
           DEFAULT: "var(--surface)",
           soft: "var(--surface-soft)",
-          "soft-2": "var(--surface-soft-2)",
           raised: "var(--surface-raised)",
         },
+        // The modal scrim, so dialog backdrops read one token instead of
+        // repeating a literal.
+        overlay: "var(--overlay)",
         primary: {
           DEFAULT: "var(--primary)",
           strong: "var(--primary-strong)",
@@ -64,6 +66,9 @@ const config: Config = {
       fontFamily: {
         display: ["var(--font-display)", "sans-serif"],
         body: ["var(--font-body)", "sans-serif"],
+        // Figures that line up in a column. Quicksand has no tabular numerals,
+        // so `tabular-nums` on its own does nothing — see globals.css.
+        numeric: ["var(--font-numeric)"],
       },
       borderRadius: {
         sm: "var(--radius-sm)",

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  CHROME_COLORS,
   COLOR_SCHEME_STORAGE_KEY,
   THEME_STORAGE_KEY,
   applyColorScheme,
@@ -159,5 +160,72 @@ describe("theme bootstrap", () => {
 
     expect(() => applyColorScheme("sonto")).not.toThrow();
     expect(document.documentElement.dataset.scheme).toBe("sonto");
+  });
+});
+
+/**
+ * The browser and installed-PWA chrome has to follow the theme the user chose,
+ * not the OS. A media-keyed meta tag cannot do that, so the tag is written here.
+ */
+describe("browser chrome colour", () => {
+  let store: Map<string, string>;
+
+  function chromeColor() {
+    return document.querySelector('meta[name="theme-color"]')?.getAttribute("content");
+  }
+
+  beforeEach(() => {
+    store = new Map();
+    installStorage(store);
+    document.documentElement.removeAttribute("data-theme");
+    document.documentElement.removeAttribute("data-scheme");
+    document.querySelectorAll('meta[name="theme-color"]').forEach((tag) => tag.remove());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("paints the chrome before first paint, from the stored theme", () => {
+    store.set(THEME_STORAGE_KEY, "dark");
+    setPrefersDark(false);
+
+    runBootstrap();
+
+    expect(chromeColor()).toBe(CHROME_COLORS.default.dark);
+  });
+
+  it("follows the stored color scheme as well as the theme", () => {
+    store.set(THEME_STORAGE_KEY, "light");
+    store.set(COLOR_SCHEME_STORAGE_KEY, "sonto");
+    setPrefersDark(false);
+
+    runBootstrap();
+
+    expect(chromeColor()).toBe(CHROME_COLORS.sonto.light);
+  });
+
+  it("repaints when the theme changes", () => {
+    applyTheme("light");
+    expect(chromeColor()).toBe(CHROME_COLORS.default.light);
+
+    applyTheme("dark");
+    expect(chromeColor()).toBe(CHROME_COLORS.default.dark);
+  });
+
+  it("repaints when the color scheme changes, keeping the current theme", () => {
+    applyTheme("dark");
+    applyColorScheme("sonto");
+
+    expect(chromeColor()).toBe(CHROME_COLORS.sonto.dark);
+  });
+
+  it("keeps exactly one theme-color tag however often it repaints", () => {
+    runBootstrap();
+    applyTheme("dark");
+    applyColorScheme("sonto");
+    applyColorScheme("default");
+
+    expect(document.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1);
   });
 });

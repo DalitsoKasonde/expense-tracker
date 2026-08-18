@@ -15,17 +15,16 @@ import { formatMoney } from "@/lib/format-money";
 import { spendableAccounts as filterSpendableAccounts } from "@/lib/spendable-accounts";
 import type { MarketStockDirectory } from "@/lib/market-data";
 import { useUserCurrency } from "@/lib/use-user-currency";
+import { EntryTypePicker } from "@/components/add-entry/entry-type-picker";
+import {
+  categoryGroupForEntryKind,
+  entryTypeFor,
+  type EntryKind,
+} from "@/components/add-entry/entry-types";
 
-export type EntryKind =
-  | ""
-  | "expense_living"
-  | "income_earned"
-  | "income_borrowed"
-  | "debt_principal_payment"
-  | "loan_receivable_advance"
-  | "loan_receivable_repayment"
-  | "saving_transfer"
-  | "investment_buy";
+// Re-exported because receivables-workspace and the add-entry button import the
+// kind from here; the type itself now lives with the rest of the entry vocabulary.
+export type { EntryKind };
 
 interface Account {
   id: string;
@@ -68,108 +67,6 @@ interface LoanSummary {
   creditorName: string;
   totalRemainingBalance: number;
   remainingPrincipal: number;
-}
-
-type EntryTypeOption = {
-  value: Exclude<EntryKind, "">;
-  label: string;
-  description: string;
-  symbol: string;
-  tone: string;
-};
-
-const entryTypeGroups: Array<{ label: string; options: EntryTypeOption[] }> = [
-  {
-    label: "Everyday money",
-    options: [
-      {
-        value: "expense_living",
-        label: "I spent money",
-        description: "Purchase, bill, fee, or everyday expense",
-        symbol: "−",
-        tone: "bg-[#FDECEC] text-[#A84242]",
-      },
-      {
-        value: "income_earned",
-        label: "I received money",
-        description: "Salary, payment, sale, or other income",
-        symbol: "+",
-        tone: "bg-[#E9F7F0] text-[#257453]",
-      },
-    ],
-  },
-  {
-    label: "Move & grow",
-    options: [
-      {
-        value: "saving_transfer",
-        label: "I transferred money",
-        description: "Move money between any two active accounts",
-        symbol: "↔",
-        tone: "bg-[#EAF2FF] text-[#264E86]",
-      },
-      {
-        value: "investment_buy",
-        label: "I bought an investment",
-        description: "Add a stock or government bond purchase",
-        symbol: "↗",
-        tone: "bg-[#E8F6F7] text-[#216A73]",
-      },
-    ],
-  },
-  {
-    label: "Lending",
-    options: [
-      {
-        value: "loan_receivable_advance",
-        label: "I lent someone money",
-        description: "Track money another person owes you",
-        symbol: "→",
-        tone: "bg-[#E8F6F7] text-[#216A73]",
-      },
-      {
-        value: "loan_receivable_repayment",
-        label: "Someone repaid me",
-        description: "Reduce money owed to you and add cash back",
-        symbol: "←",
-        tone: "bg-[#E9F7F0] text-[#257453]",
-      },
-    ],
-  },
-  {
-    label: "Borrowing",
-    options: [
-      {
-        value: "income_borrowed",
-        label: "I took a loan",
-        description: "Record borrowed money entering an account",
-        symbol: "↓",
-        tone: "bg-[#FFF3E3] text-[#9A5B16]",
-      },
-      {
-        value: "debt_principal_payment",
-        label: "I paid a loan",
-        description: "Reduce the balance on an existing loan",
-        symbol: "✓",
-        tone: "bg-[#F2ECFF] text-[#6542A8]",
-      },
-    ],
-  },
-];
-
-const entryTypes = entryTypeGroups.flatMap((group) => group.options);
-
-function categoryGroupForEntryKind(entryKind: EntryKind) {
-  switch (entryKind) {
-    case "income_earned":
-      return "income";
-    case "saving_transfer":
-      return "saving";
-    case "investment_buy":
-      return "investment";
-    default:
-      return "expense";
-  }
 }
 
 function toMinor(value: string) {
@@ -813,7 +710,7 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
   };
 
   const hasAccounts = accounts.length > 0;
-  const selectedEntryType = entryTypes.find((item) => item.value === formData.entryKind);
+  const selectedEntryType = entryTypeFor(formData.entryKind);
 
   return (
     <dialog
@@ -824,7 +721,7 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
         onClose();
       }}
       onClose={onClose}
-      className="m-auto w-[min(94vw,760px)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-outline bg-surface p-0 text-on-surface shadow-md backdrop:bg-[#071225]/55"
+      className="m-auto w-[min(94vw,760px)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-outline bg-surface p-0 text-on-surface shadow-md backdrop:bg-overlay"
     >
       <div className="max-h-[90vh] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-4 sm:p-6">
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-outline pb-4">
@@ -869,73 +766,19 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
 
         {session && !initializing && hasAccounts ? (
           <form className="grid min-w-0 max-w-full gap-5" onSubmit={handleSubmit}>
-            {!selectedEntryType ? (
-              <section className="rounded-xl border border-outline bg-[linear-gradient(145deg,var(--surface-soft),var(--surface))] p-4 sm:p-5">
-                <div className="mb-5 grid gap-1">
-                  <h2 className="text-xl font-semibold text-on-surface">What happened?</h2>
-                  <p className="text-sm text-on-surface-soft">Pick the closest action. Expenses will tailor the fields that follow.</p>
-                </div>
-
-                <div className="grid gap-5">
-                  {entryTypeGroups.map((group) => (
-                    <div key={group.label} className="grid gap-2">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.11em] text-on-surface-soft">
-                        {group.label}
-                      </p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {group.options.map((item) => (
-                          <button
-                            key={item.value}
-                            type="button"
-                            aria-label={item.label}
-                            className="group flex min-h-[76px] items-center gap-3 rounded-lg border border-outline bg-surface p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md"
-                            onClick={() => {
-                              setCreatingCategory(false);
-                              setNewCategoryName("");
-                              setFormData((current) => ({
-                                ...current,
-                                entryKind: item.value,
-                                categoryId: "",
-                              }));
-                            }}
-                          >
-                            <span aria-hidden="true" className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg text-xl font-bold ${item.tone}`}>
-                              {item.symbol}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <strong className="block text-sm text-on-surface">{item.label}</strong>
-                              <span className="mt-0.5 block text-xs leading-4 text-on-surface-soft">{item.description}</span>
-                            </span>
-                            <span aria-hidden="true" className="text-lg text-outline-strong transition group-hover:translate-x-0.5 group-hover:text-primary">›</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : (
-              <section className="flex items-center gap-3 rounded-xl border border-primary/25 bg-primary-softer p-3 sm:p-4">
-                <span aria-hidden="true" className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg text-xl font-bold ${selectedEntryType.tone}`}>
-                  {selectedEntryType.symbol}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <strong className="block text-sm text-on-surface">{selectedEntryType.label}</strong>
-                  <span className="mt-0.5 block text-xs text-on-surface-soft">{selectedEntryType.description}</span>
-                </span>
-                <button
-                  type="button"
-                  className="rounded-md border border-outline bg-surface px-3 py-2 text-xs font-bold text-primary transition hover:border-primary"
-                  onClick={() => {
-                    setCreatingCategory(false);
-                    setNewCategoryName("");
-                    setFormData((current) => ({ ...current, entryKind: "", categoryId: "" }));
-                  }}
-                >
-                  Change
-                </button>
-              </section>
-            )}
+            <EntryTypePicker
+              selected={selectedEntryType}
+              onSelect={(item) => {
+                setCreatingCategory(false);
+                setNewCategoryName("");
+                setFormData((current) => ({ ...current, entryKind: item.value, categoryId: "" }));
+              }}
+              onClear={() => {
+                setCreatingCategory(false);
+                setNewCategoryName("");
+                setFormData((current) => ({ ...current, entryKind: "", categoryId: "" }));
+              }}
+            />
 
             {formData.entryKind ? (
             <div className="formSectionCard">

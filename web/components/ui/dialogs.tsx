@@ -23,7 +23,7 @@ function DialogBase({ open, title, description, onClose, children }: DialogBaseP
       aria-describedby={description ? descriptionId : undefined}
       onCancel={(event) => { event.preventDefault(); onClose(); }}
       onClose={onClose}
-      className={cardClass({ padding: "none", className: "card-raised w-[min(92vw,520px)] text-on-surface backdrop:bg-[#071225]/55" })}
+      className={cardClass({ padding: "none", className: "card-raised w-[min(92vw,520px)] text-on-surface backdrop:bg-overlay" })}
     >
       <div className="p-6"><h2 id={titleId} className="text-xl font-semibold">{title}</h2>{description ? <p id={descriptionId} className="mt-2 text-sm text-on-surface-soft">{description}</p> : null}<div className="mt-6">{children}</div></div>
     </dialog>

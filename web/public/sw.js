@@ -1,12 +1,15 @@
 const CACHE_NAME = "expenses-v0.4";
+// Only assets the app actually renders. This list used to precache
+// /logo.png (1.4 MB, referenced nowhere) and /inscribed-logo.png (the Open
+// Graph image, fetched by crawlers server-side and never by the app), which
+// cost every install 1.6 MB it could not use. Existing installs reclaim that
+// on the next CACHE_NAME bump, when `activate` drops the old cache.
 const STATIC_ASSETS = [
-  "/inscribed-logo.png",
-  "/logo.png",
+  "/inscribed-wordmark.png",
   "/icon.svg",
   "/mask-icon.svg",
   "/icon-192.png",
   "/icon-512.png",
-  "/maskable-512.png",
   "/apple-touch-icon.png"
 ];
 
