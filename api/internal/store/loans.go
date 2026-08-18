@@ -393,6 +393,19 @@ func (s *LoanStore) recordBorrowedWithTx(ctx context.Context, tx pgx.Tx, userID 
 		created = append(created, feeTx)
 	}
 
+	// A fully repaid loan is closed, but the same lender/loan can be used again.
+	// Reopen it in the same database transaction as the new principal so status
+	// and balance can never disagree after a successful borrow.
+	if loan.Status == "closed" {
+		if _, err := tx.Exec(ctx, `
+			update loans
+			set status = 'active', updated_at = now()
+			where id = $1 and user_id = $2 and status = 'closed'
+		`, loan.ID, userID); err != nil {
+			return LoanRepaymentResult{}, normalizeWriteError(err)
+		}
+	}
+
 	return LoanRepaymentResult{
 		OriginEventID: originEventID,
 		Transactions:  created,
@@ -732,6 +745,10 @@ func (s *LoanStore) summaryForLoan(ctx context.Context, loan Loan) (LoanSummary,
 	summary.OutstandingInterest = maxInt64(0, summary.InterestCharged-summary.InterestPaid)
 	summary.OutstandingFees = maxInt64(0, summary.FeesCharged-summary.FeesPaid)
 	summary.TotalRemainingBalance = summary.RemainingPrincipal + summary.OutstandingInterest + summary.OutstandingFees
+	// Repair summaries created before borrowing explicitly reopened a closed
+	// loan. This makes an existing positive balance immediately usable again,
+	// while preserving other meaningful states such as defaulted.
+	summary.Status = effectiveLoanStatus(summary.Status, summary.TotalRemainingBalance)
 	summary.InterestAndFeesPaid = summary.InterestPaid + summary.FeesPaid
 	summary.TotalPaid = summary.PrincipalRepaid + summary.InterestAndFeesPaid
 	if loan.IsForced {
@@ -745,6 +762,13 @@ func (s *LoanStore) summaryForLoan(ctx context.Context, loan Loan) (LoanSummary,
 	}
 
 	return summary, nil
+}
+
+func effectiveLoanStatus(status string, totalRemainingBalance int64) string {
+	if status == "closed" && totalRemainingBalance > 0 {
+		return "active"
+	}
+	return status
 }
 
 func insertLoanTransaction(ctx context.Context, tx pgx.Tx, item Transaction) (Transaction, error) {
