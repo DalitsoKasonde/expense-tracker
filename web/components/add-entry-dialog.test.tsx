@@ -36,8 +36,13 @@ describe("AddEntryDialog", () => {
 
   it("asks what happened before showing transaction details", async () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
-    expect(screen.getByRole("dialog")).toHaveClass("max-w-[calc(100vw-1rem)]", "overflow-hidden");
+    expect(screen.getByRole("dialog")).toHaveClass(
+      "max-h-[calc(100dvh-1rem)]",
+      "max-w-[calc(100vw-1rem)]",
+      "overflow-hidden",
+    );
     expect(await screen.findByRole("heading", { name: "What happened?" })).toBeInTheDocument();
+    expect(screen.getByTestId("add-entry-scroll-region")).toHaveClass("overflow-y-auto");
     expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "I spent money" }));
@@ -51,7 +56,7 @@ describe("AddEntryDialog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
 
     fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100" } });
-    fireEvent.change(screen.getByLabelText(/Transaction fee \(optional\)/), {
+    fireEvent.change(screen.getByLabelText(/Transaction fee/), {
       target: { value: "2.50" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
@@ -80,7 +85,7 @@ describe("AddEntryDialog", () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "I transferred money" }));
     fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100" } });
-    fireEvent.change(screen.getByLabelText(/Transaction fee \(optional\)/), {
+    fireEvent.change(screen.getByLabelText(/Transaction fee/), {
       target: { value: "2" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
@@ -252,7 +257,7 @@ describe("AddEntryDialog", () => {
 
     expect(screen.getByLabelText("Company or fund name")).toHaveValue("Test Holdings");
     expect(screen.getByLabelText("Ticker symbol (optional)")).toHaveValue("TEST");
-    await waitFor(() => expect(screen.getByLabelText("Currency")).toHaveValue("USD"));
+    await waitFor(() => expect(screen.getByLabelText("Currency")).toHaveTextContent("USD"));
     expect(screen.getByLabelText("Paid from account")).toHaveValue("usd-account");
   });
 
@@ -276,8 +281,10 @@ describe("AddEntryDialog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "I bought an investment" }));
 
     expect(screen.getByLabelText("Stock")).toHaveValue("stock-1");
-    expect(screen.getByLabelText("Currency")).toHaveValue("USD");
-    expect(screen.getByLabelText("Currency")).toBeDisabled();
+    expect(screen.getByLabelText("Currency")).toHaveTextContent("USD");
+    // Currency is derived from the account or asset rather than picked: an
+    // entry whose currency differs from its account counts toward no balance.
+    expect(screen.queryByRole("combobox", { name: "Currency" })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByLabelText("Paid from account")).toHaveValue("usd-account"));
     expect(screen.getByText(/new lot under the selected holding/i)).toBeInTheDocument();
   });
@@ -617,5 +624,107 @@ describe("AddEntryDialog", () => {
         }),
       }),
     );
+  });
+});
+
+describe("AddEntryDialog remembering how you usually record", () => {
+  const store = new Map<string, string>();
+
+  beforeEach(() => {
+    store.clear();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+      },
+    });
+    mocks.apiCall.mockReset();
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") {
+        return Promise.resolve([
+          { id: "cash", name: "Cash", accountType: "cash", accountClass: "asset", currency: "ZMW" },
+          { id: "airtel", name: "Airtel Money", accountType: "mobile_money", accountClass: "asset", currency: "ZMW" },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  it("preselects the account last used for that kind instead of the first one", async () => {
+    store.set("expenses.lastAccountByEntryKind", JSON.stringify({ expense_living: "airtel" }));
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+
+    // "Cash" is first in the list, so without memory it would win by position.
+    expect(screen.getByRole("combobox", { name: "Paid from" })).toHaveValue("airtel");
+  });
+
+  it("keeps the first account when the remembered one no longer exists", async () => {
+    store.set("expenses.lastAccountByEntryKind", JSON.stringify({ expense_living: "deleted-account" }));
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+
+    expect(screen.getByRole("combobox", { name: "Paid from" })).toHaveValue("cash");
+  });
+
+  it("remembers the account and fee only once the entry is recorded", async () => {
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/Transaction fee/), { target: { value: "2.50" } });
+
+    // Nothing is remembered from an abandoned attempt.
+    expect(store.get("expenses.recentFeesByAccount")).toBeUndefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() => expect(store.get("expenses.recentFeesByAccount")).toBeDefined());
+    expect(JSON.parse(store.get("expenses.recentFeesByAccount") as string)).toEqual({ cash: [250] });
+    expect(JSON.parse(store.get("expenses.lastAccountByEntryKind") as string)).toEqual({
+      expense_living: "cash",
+    });
+  });
+
+  it("offers a recent fee as a suggestion rather than filling it in", async () => {
+    store.set("expenses.recentFeesByAccount", JSON.stringify({ cash: [250] }));
+
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+
+    // Fees are only sometimes the same, so a stale prefill would quietly write
+    // a wrong number; the value stays empty until it is chosen.
+    expect(screen.getByLabelText(/Transaction fee/)).toHaveValue(0);
+
+    const suggestion = screen.getByRole("button", { name: /2\.50/ });
+    fireEvent.click(suggestion);
+
+    expect(screen.getByLabelText(/Transaction fee/)).toHaveValue(2.5);
+  });
+
+  it("shows what the amount and fee together do to the balance", async () => {
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I spent money" }));
+
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/Transaction fee/), { target: { value: "2.50" } });
+
+    // The figure that has to match an SMS balance is the two together.
+    expect(screen.getByText(/102\.50/)).toBeInTheDocument();
+    expect(screen.getByText(/leaves/)).toHaveTextContent("Cash");
+  });
+
+  it("describes income as a net arrival rather than a deduction", async () => {
+    render(<AddEntryDialog open onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "I received money" }));
+
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/Transaction fee/), { target: { value: "2.50" } });
+
+    expect(screen.getByText(/97\.50/)).toBeInTheDocument();
+    expect(screen.getByText(/net into/)).toBeInTheDocument();
   });
 });

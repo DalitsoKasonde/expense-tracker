@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- The transaction fee is asked for after the account rather than before it, since the fee depends on which provider moved the money
+- Recent fees for an account are offered as suggestions you can tap; they are never filled in for you, because fees are only sometimes the same and a stale one would be written into the record unnoticed
+- Adding an entry shows what the amount and the fee together do to the balance, which is the figure that has to match an SMS alert
+- The account you last used for each kind of entry is selected next time, instead of whichever account happens to be first
 - An entry now has to be in the currency of the account it moves through; one saved in any other currency was stored and listed but counted toward no balance anywhere, so the books quietly stopped reconciling
 - An account's currency can no longer be changed once it has transactions, which detached its whole history from its balance in the same silent way
 - The bond dashboard reports coupon income actually received as its gain, with the withholding tax that produced the net figure and a separate line for coupons still scheduled; a bond is carried at principal, so the previous "current value less cost" gain was always zero

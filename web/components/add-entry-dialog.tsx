@@ -7,8 +7,13 @@ import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useApiCall } from "@/lib/client-api";
 import { notifyEntriesChanged } from "@/lib/entries-bus";
+import {
+  recallAccountForEntryKind,
+  recallFeesForAccount,
+  rememberAccountForEntryKind,
+  rememberFeeForAccount,
+} from "@/lib/entry-preferences";
 import { buildCategoryRows, type Category } from "@/lib/category-tree";
-import { supportedCurrencies } from "@/lib/currencies";
 import { addYearsToDate, isPastDate } from "@/lib/date-terms";
 import { supportsHistoricalBackfill } from "@/lib/historical-entries";
 import { formatMoney } from "@/lib/format-money";
@@ -209,12 +214,22 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
         );
         setBonds(loadedBonds ?? []);
         const firstStock = (loadedAssets ?? []).find((asset) => asset.assetClass !== "bond");
+        // Opened straight onto a kind, the picker never runs, so the remembered
+        // account is applied here instead of defaulting to whichever account
+        // happens to be first.
+        const rememberedForInitialKind = initialEntryKind
+          ? (initialEntryKind === "investment_buy"
+              ? (loadedAccounts ?? []).filter((account) => account.accountClass === "asset")
+              : spendableLoadedAccounts
+            ).find((account) => account.id === recallAccountForEntryKind(initialEntryKind))
+          : undefined;
+        const openingAccount = rememberedForInitialKind ?? defaultSourceAccount;
         setFormData({
           transactionDate: today(),
           entryKind: initialEntryKind ?? "",
           amount: "",
-          currency: defaultSourceAccount?.currency ?? userCurrency,
-          accountId: defaultSourceAccount?.id ?? "",
+          currency: openingAccount?.currency ?? userCurrency,
+          accountId: openingAccount?.id ?? "",
           destinationAccountId: defaultDestinationAccount?.id ?? "",
           receivableAccountId:
             initialReceivableAccountId
@@ -367,6 +382,42 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
   const sourceAccountRequired = !historicalBackfill;
   const availableSourceAccounts =
     formData.entryKind === "investment_buy" ? investmentAccounts : spendableAccounts;
+
+  const amountMinor = toMinor(formData.amount);
+  // Mirrors movementFeeAccountID on the server: a repayment's fee is charged to
+  // the cash account the money arrives in, not the receivable it came from.
+  const feeAccountId =
+    formData.entryKind === "loan_receivable_repayment" && formData.destinationAccountId
+      ? formData.destinationAccountId
+      : formData.accountId;
+  const feeAccount = accounts.find((account) => account.id === feeAccountId);
+  const movementIsIncoming =
+    formData.entryKind === "income_earned" ||
+    formData.entryKind === "income_borrowed" ||
+    formData.entryKind === "loan_receivable_repayment";
+  // The fee is a separate record against the same account, so what the balance
+  // actually moves by is the two together.
+  const netEffectMinor = movementIsIncoming
+    ? amountMinor - transactionFeeMinor
+    : amountMinor + transactionFeeMinor;
+  // Re-read per account rather than cached across the session: the dialog
+  // re-reads on its next open, which is when a newly remembered fee matters.
+  const feeSuggestions = useMemo(() => recallFeesForAccount(feeAccountId), [feeAccountId]);
+
+  /**
+   * The account this kind of entry usually moves through.
+   *
+   * The form otherwise defaults to whichever account happens to be first, which
+   * is right only by luck. Returns undefined when nothing is remembered or the
+   * remembered account is no longer selectable — archived, or not valid for this
+   * kind — so the caller keeps the existing default.
+   */
+  function rememberedAccountFor(entryKind: EntryKind) {
+    const remembered = recallAccountForEntryKind(entryKind);
+    if (!remembered) return undefined;
+    const pool = entryKind === "investment_buy" ? investmentAccounts : spendableAccounts;
+    return pool.find((account) => account.id === remembered);
+  }
 
   useEffect(() => {
     if (!historicalEligible && formData.historicalBackfill) {
@@ -699,6 +750,10 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
       }
 
       router.refresh();
+      // Remembered only once the entry is actually recorded, so a failed or
+      // abandoned attempt never changes what is offered next time.
+      rememberAccountForEntryKind(formData.entryKind, formData.accountId);
+      rememberFeeForAccount(feeAccountId, transactionFeeMinor);
       notifyEntriesChanged();
       onSaved?.();
       onClose();
@@ -721,10 +776,10 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
         onClose();
       }}
       onClose={onClose}
-      className="m-auto w-[min(94vw,760px)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-outline bg-surface p-0 text-on-surface shadow-md backdrop:bg-overlay"
+      className="m-auto max-h-[calc(100dvh-1rem)] w-[min(94vw,760px)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-outline bg-surface p-0 text-on-surface shadow-md backdrop:bg-overlay"
     >
-      <div className="max-h-[90vh] min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-4 sm:p-6">
-        <div className="mb-5 flex items-start justify-between gap-4 border-b border-outline pb-4">
+      <div className="flex max-h-[calc(100dvh-1rem)] min-w-0 max-w-full flex-col overflow-hidden">
+        <div className="mx-4 flex shrink-0 items-start justify-between gap-4 border-b border-outline py-4 sm:mx-6 sm:py-6">
           <div className="grid gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 id="add-entry-title" className="text-2xl font-semibold text-on-surface">Add entry</h2>
@@ -746,10 +801,10 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
           </button>
         </div>
 
-        {!session || initializing ? <div className="py-8 text-sm text-on-surface-soft">Loading...</div> : null}
+        {!session || initializing ? <div className="p-4 py-8 text-sm text-on-surface-soft sm:p-6">Loading...</div> : null}
 
         {session && !initializing && !hasAccounts ? (
-          <div className="grid gap-4">
+          <div className="grid gap-4 p-4 sm:p-6">
             <div className="rounded-lg border border-outline bg-surface-soft p-4">
               <strong className="block text-on-surface">No accounts configured yet</strong>
               <p className="mt-1 text-sm text-on-surface-soft">
@@ -765,13 +820,28 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
         ) : null}
 
         {session && !initializing && hasAccounts ? (
-          <form className="grid min-w-0 max-w-full gap-5" onSubmit={handleSubmit}>
+          <form className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col" onSubmit={handleSubmit}>
+            <div
+              className="grid min-h-0 min-w-0 max-w-full flex-1 gap-5 overflow-x-hidden overflow-y-auto p-4 sm:p-6"
+              data-testid="add-entry-scroll-region"
+            >
             <EntryTypePicker
               selected={selectedEntryType}
               onSelect={(item) => {
                 setCreatingCategory(false);
                 setNewCategoryName("");
-                setFormData((current) => ({ ...current, entryKind: item.value, categoryId: "" }));
+                setFormData((current) => {
+                  // Applied on choosing the kind rather than passively, so it
+                  // replaces the arbitrary first-account default without ever
+                  // overwriting an account the user has since picked.
+                  const account = rememberedAccountFor(item.value);
+                  return {
+                    ...current,
+                    entryKind: item.value,
+                    categoryId: "",
+                    ...(account ? { accountId: account.id, currency: account.currency } : {}),
+                  };
+                });
               }}
               onClear={() => {
                 setCreatingCategory(false);
@@ -821,24 +891,6 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
                 />
               </div>
               )}
-
-              {formData.entryKind !== "investment_buy" ? (
-                <div className="field mt-5">
-                  <label htmlFor="transactionFee">Transaction fee (optional) ({formData.currency})</label>
-                  <input
-                    id="transactionFee"
-                    name="transactionFee"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.transactionFee}
-                    onChange={handleChange}
-                  />
-                  <span className="muted">
-                    Recorded separately under Transaction fees; the movement amount stays unchanged.
-                  </span>
-                </div>
-              ) : null}
 
               <div className={`${investmentMode === "bond" && formData.entryKind === "investment_buy" ? "" : "splitFields"} mt-5`}>
                 {historicalBackfill ? (
@@ -896,6 +948,67 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
                   </div>
                 )}
               </div>
+
+              {/* Asked after the account, because the fee depends on which
+                  provider moved the money: a wallet charges, cash does not. */}
+              {formData.entryKind !== "investment_buy" ? (
+                <div className="field mt-5">
+                  <label htmlFor="transactionFee">Transaction fee ({formData.currency})</label>
+                  <input
+                    id="transactionFee"
+                    name="transactionFee"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.transactionFee}
+                    onChange={handleChange}
+                  />
+
+                  {/* Offered rather than prefilled: fees on an account are
+                      often but not always the same, and a stale value written
+                      without being noticed is worse than an empty field. */}
+                  {feeSuggestions.length ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-on-surface-soft">Recently used</span>
+                      {feeSuggestions.map((feeMinor) => (
+                        <button
+                          key={feeMinor}
+                          type="button"
+                          className="choiceChip"
+                          onClick={() =>
+                            setFormData((current) => ({
+                              ...current,
+                              transactionFee: (feeMinor / 100).toFixed(2),
+                            }))
+                          }
+                        >
+                          {formatMoney(feeMinor, formData.currency)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <span className="muted">
+                    Recorded separately under Transaction fees; the movement amount stays unchanged.
+                  </span>
+                </div>
+              ) : null}
+
+              {/* The figure that has to match a balance or an SMS alert is the
+                  amount and the fee together, which nothing showed before. */}
+              {amountMinor > 0 && transactionFeeMinor > 0 && formData.entryKind !== "investment_buy" ? (
+                <p className="mt-4 rounded-md bg-surface-soft px-4 py-3 text-sm text-on-surface" aria-live="polite">
+                  <strong className="font-semibold">{formatMoney(netEffectMinor, formData.currency)}</strong>
+                  {movementIsIncoming ? " net into " : " leaves "}
+                  {feeAccount ? feeAccount.name : "this account"}
+                  <span className="text-on-surface-soft">
+                    {" — "}
+                    {formatMoney(amountMinor, formData.currency)}
+                    {movementIsIncoming ? " less " : " plus "}
+                    {formatMoney(transactionFeeMinor, formData.currency)} fee
+                  </span>
+                </p>
+              ) : null}
 
               {historicalEligible ? (
                 <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-md border border-outline bg-surface-soft p-4">
@@ -1400,22 +1513,26 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
                   </div>
                 ) : null}
 
+                {/* Currency follows the account the money moves through and is
+                    not chosen separately: balances match a transaction to its
+                    account on currency, so an entry in any other currency is
+                    stored and listed but counts toward no balance. Shown as a
+                    read-only fact so the entry still says which currency it is
+                    in. */}
                 <div className="field">
-                  <label htmlFor="currency">Currency</label>
-                  <select
-                    id="currency"
-                    name="currency"
-                    value={formData.currency}
-                    onChange={handleChange}
-                    disabled={formData.entryKind === "investment_buy" && (investmentMode === "existing" || investmentMode === "bond_existing")}
+                  <span className="field-label" id="currencyLabel">Currency</span>
+                  <p
+                    className="control flex items-center"
+                    role="note"
+                    aria-labelledby="currencyLabel"
                   >
-                    {supportedCurrencies.map((currency) => (
-                      <option key={currency} value={currency}>{currency}</option>
-                    ))}
-                  </select>
-                  {formData.entryKind === "investment_buy" && (investmentMode === "existing" || investmentMode === "bond_existing") ? (
-                    <span className="muted">Uses the selected {investmentMode === "existing" ? "stock" : "bond"}&apos;s currency.</span>
-                  ) : null}
+                    {formData.currency}
+                  </p>
+                  <span className="muted">
+                    {formData.entryKind === "investment_buy" && (investmentMode === "existing" || investmentMode === "bond_existing")
+                      ? `Uses the selected ${investmentMode === "existing" ? "stock" : "bond"}'s currency.`
+                      : "Taken from the account above. To record money in another currency, choose an account that holds it."}
+                  </span>
                 </div>
               </div>
 
@@ -1432,8 +1549,9 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
             </div> : null}
 
             {error ? <p className="statusText">{error}</p> : null}
+            </div>
 
-            {formData.entryKind ? <div className="flex flex-wrap justify-end gap-2 border-t border-outline pt-4">
+            {formData.entryKind ? <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-outline bg-surface px-4 py-3 sm:px-6">
               <button type="button" className="btn btn-ghost" onClick={onClose}>
                 Cancel
               </button>
