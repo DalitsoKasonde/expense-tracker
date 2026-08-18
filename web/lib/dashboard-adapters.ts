@@ -37,3 +37,11 @@ export function adaptSavingsGoals(
     }];
   });
 }
+
+export function outstandingLiabilityAccounts(
+  accounts: UnifiedDashboardAccountBalance[] = [],
+): UnifiedDashboardAccountBalance[] {
+  return accounts.filter(
+    (account) => account.accountClass === "liability" && account.balanceMinor > 0,
+  );
+}

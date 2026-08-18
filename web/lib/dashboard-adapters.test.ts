@@ -1,4 +1,5 @@
-import { adaptSavingsGoals } from "./dashboard-adapters";
+import { adaptSavingsGoals, outstandingLiabilityAccounts } from "./dashboard-adapters";
+import type { UnifiedDashboardAccountBalance } from "./use-unified-dashboard";
 import { describe, expect, it } from "vitest";
 
 describe("adaptSavingsGoals", () => {
@@ -13,5 +14,17 @@ describe("adaptSavingsGoals", () => {
 
   it("does not present share-out groups as personal goals", () => {
     expect(adaptSavingsGoals([{ id: "g1", name: "Village group", targetMinor: 10000, isShareoutGroup: true }])).toEqual([]);
+  });
+});
+
+describe("outstandingLiabilityAccounts", () => {
+  it("shows only liability accounts that still have money owing", () => {
+    const accounts: UnifiedDashboardAccountBalance[] = [
+      { accountId: "paid", name: "Judith liability", accountType: "other", accountClass: "liability", currency: "ZMW", balanceMinor: 0 },
+      { accountId: "owing", name: "Musonda liability", accountType: "other", accountClass: "liability", currency: "ZMW", balanceMinor: 300_000 },
+      { accountId: "cash", name: "Cash", accountType: "cash", accountClass: "asset", currency: "ZMW", balanceMinor: 300_000 },
+    ];
+
+    expect(outstandingLiabilityAccounts(accounts).map((account) => account.accountId)).toEqual(["owing"]);
   });
 });

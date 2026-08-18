@@ -53,6 +53,19 @@ func (s *TransactionStore) ListByUser(ctx context.Context, userID string, limit,
 		from transactions t
 		left join categories c on c.id = t.category_id and c.user_id = t.user_id
 		where t.user_id = $1 and t.deleted_at is null
+		  -- Borrowing is stored as a cash receipt plus a matching liability
+		  -- increase. The latter is an internal accounting counterpart, not a
+		  -- second user activity. Keep it in the ledger for balances, but omit it
+		  -- from the user-facing activity feed before limit/offset are applied.
+		  and not exists (
+			select 1
+			from loans l
+			where l.id = t.loan_id
+			  and l.user_id = t.user_id
+			  and t.origin_event_type = 'borrowed_money'
+			  and t.entry_kind = 'income_borrowed'
+			  and t.account_id = l.liability_account_id
+		  )
 		order by t.transaction_date desc, t.created_at desc
 		limit $2 offset $3
 	`, userID, limit, offset)

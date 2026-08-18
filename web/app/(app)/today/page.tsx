@@ -7,7 +7,7 @@ import { useApiCall } from "@/lib/client-api";
 import { getPendingTransactions } from "@/lib/offline-db";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import { useEntriesChanged } from "@/lib/entries-bus";
-import { adaptSavingsGoals, type SavingsGoal } from "@/lib/dashboard-adapters";
+import { adaptSavingsGoals, outstandingLiabilityAccounts, type SavingsGoal } from "@/lib/dashboard-adapters";
 import { formatMoney } from "@/lib/format-money";
 import { buildNextSteps } from "@/lib/next-steps";
 import {
@@ -133,10 +133,10 @@ export default function TodayPage() {
   const savingsGroupAccountIds = new Set(groups.map((group) => group.accountId));
   const visibleAccountBalances = accountBalances.filter((account) => !savingsGroupAccountIds.has(account.accountId));
   const assetAccounts = visibleAccountBalances.filter((account) => account.accountClass !== "liability");
-  const liabilityAccounts = accountBalances.filter((account) => account.accountClass === "liability");
+  const liabilityAccounts = outstandingLiabilityAccounts(accountBalances);
   const setupTasks = buildNextSteps({
     interests: onboardingInterests,
-    hasLiabilityAccount: liabilityAccounts.length > 0,
+    hasLiabilityAccount: accountBalances.some((account) => account.accountClass === "liability"),
     hasStock: assets.some((asset) => asset.assetClass === "stock"),
     hasBond: assets.some((asset) => asset.assetClass === "bond"),
     accountCount: accountBalances.length,
