@@ -56,6 +56,174 @@ type BondProjection struct {
 	TotalCouponMinor          int64          `json:"totalCouponMinor"`
 	TotalCashBalanceMinor     int64          `json:"totalCashBalanceMinor"`
 	TotalReinvestedMinor      int64          `json:"totalReinvestedMinor"`
+	// The totals above count every scheduled cashflow, so they describe the
+	// bond's whole life rather than what has happened. These count only posted
+	// cashflows — money that has actually been paid.
+	CouponGrossReceivedMinor int64 `json:"couponGrossReceivedMinor"`
+	CouponTaxWithheldMinor   int64 `json:"couponTaxWithheldMinor"`
+	CouponNetReceivedMinor   int64 `json:"couponNetReceivedMinor"`
+	CouponsReceivedCount     int   `json:"couponsReceivedCount"`
+}
+
+/*
+BondCurrencySummary is realised bond performance for one currency.
+
+A bond is carried at principal, so current value minus cost is structurally
+zero for its whole life and says nothing about how the holding has done. What it
+actually earns is coupons, which post to a cash account as income. This
+separates the two: the Received fields are money paid, the Outstanding field is
+money still scheduled.
+*/
+type BondCurrencySummary struct {
+	Currency       string `json:"currency"`
+	HoldingCount   int    `json:"holdingCount"`
+	PrincipalMinor int64  `json:"principalMinor"`
+
+	// Realised — posted coupons only.
+	CouponGrossReceivedMinor int64 `json:"couponGrossReceivedMinor"`
+	CouponTaxWithheldMinor   int64 `json:"couponTaxWithheldMinor"`
+	CouponNetReceivedMinor   int64 `json:"couponNetReceivedMinor"`
+	CouponsReceivedCount     int   `json:"couponsReceivedCount"`
+	// A breakdown of CouponNetReceivedMinor by where the money went, not an
+	// addition to it. Summing these with the net total would double count.
+	ReinvestedMinor        int64 `json:"reinvestedMinor"`
+	PaidToCashMinor        int64 `json:"paidToCashMinor"`
+	PrincipalRedeemedMinor int64 `json:"principalRedeemedMinor"`
+
+	// Still scheduled — explicitly not part of any gain figure.
+	CouponNetOutstandingMinor int64  `json:"couponNetOutstandingMinor"`
+	NextCouponDate            string `json:"nextCouponDate,omitempty"`
+	NextCouponNetMinor        int64  `json:"nextCouponNetMinor"`
+}
+
+/*
+summarizeBonds folds positions and their cashflows into per-currency totals.
+
+Kept separate from the query so the arithmetic — particularly "posted means
+received" and the reinvested/cash split being a breakdown rather than an
+addition — can be tested without a database. Currencies are never mixed: a
+kwacha coupon and a dollar coupon are different facts.
+*/
+func summarizeBonds(positions []BondPosition, cashflowsByAsset map[string][]BondCashflow) []BondCurrencySummary {
+	currencyOf := make(map[string]string, len(positions))
+	order := make([]string, 0)
+	byCurrency := make(map[string]*BondCurrencySummary)
+
+	summaryFor := func(currency string) *BondCurrencySummary {
+		if existing, ok := byCurrency[currency]; ok {
+			return existing
+		}
+		created := &BondCurrencySummary{Currency: currency}
+		byCurrency[currency] = created
+		order = append(order, currency)
+		return created
+	}
+
+	for _, position := range positions {
+		currencyOf[position.AssetID] = position.Currency
+		summary := summaryFor(position.Currency)
+		summary.HoldingCount++
+		summary.PrincipalMinor += position.PrincipalMinor
+	}
+
+	for assetID, cashflows := range cashflowsByAsset {
+		currency, ok := currencyOf[assetID]
+		if !ok {
+			// A cashflow whose bond is not in the caller's position list is not
+			// this user's to report on.
+			continue
+		}
+		summary := summaryFor(currency)
+
+		for _, cashflow := range cashflows {
+			switch {
+			case cashflow.EventType == "coupon" && cashflow.Status == "posted":
+				summary.CouponGrossReceivedMinor += cashflow.GrossAmountMinor
+				summary.CouponTaxWithheldMinor += cashflow.TaxAmountMinor
+				summary.CouponNetReceivedMinor += cashflow.NetAmountMinor
+				summary.CouponsReceivedCount++
+				if cashflow.Disposition == "reinvest" {
+					summary.ReinvestedMinor += cashflow.NetAmountMinor
+				} else {
+					summary.PaidToCashMinor += cashflow.NetAmountMinor
+				}
+			case cashflow.EventType == "coupon" && cashflow.Status == "projected":
+				summary.CouponNetOutstandingMinor += cashflow.NetAmountMinor
+				if summary.NextCouponDate == "" || cashflow.ScheduledDate < summary.NextCouponDate {
+					summary.NextCouponDate = cashflow.ScheduledDate
+					summary.NextCouponNetMinor = cashflow.NetAmountMinor
+				}
+			case cashflow.EventType == "principal_redemption" && cashflow.Status == "posted":
+				summary.PrincipalRedeemedMinor += cashflow.NetAmountMinor
+			}
+		}
+	}
+
+	summaries := make([]BondCurrencySummary, 0, len(order))
+	for _, currency := range order {
+		summaries = append(summaries, *byCurrency[currency])
+	}
+	return summaries
+}
+
+/*
+SummarizeByUser reports realised bond performance per currency across every bond
+the user holds, so a dashboard needs one request rather than one per holding.
+
+It posts due cashflows first, for the same reason the unified dashboard does.
+Without it this endpoint would race the dashboard: both are fetched together, and
+whichever arrives first decides whether a coupon that came due today has been
+turned into income yet — so income could read low until the next reload. Posting
+is idempotent (it only moves projected rows), so doing it here is safe.
+*/
+func (s *BondStore) SummarizeByUser(ctx context.Context, userID string, asOf time.Time) ([]BondCurrencySummary, error) {
+	if err := s.PostDueCashflows(ctx, userID, asOf); err != nil {
+		return nil, err
+	}
+
+	positions, err := s.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(positions) == 0 {
+		return []BondCurrencySummary{}, nil
+	}
+
+	rows, err := s.db.Query(ctx, `
+		select bc.asset_id, bc.event_type, bc.disposition, bc.scheduled_date::text,
+		       bc.gross_amount_minor, bc.tax_amount_minor, bc.net_amount_minor, bc.status
+		from bond_cashflows bc
+		join assets a on a.id = bc.asset_id
+		where a.user_id = $1
+		order by bc.scheduled_date asc
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cashflowsByAsset := make(map[string][]BondCashflow)
+	for rows.Next() {
+		var cashflow BondCashflow
+		if err := rows.Scan(
+			&cashflow.AssetID,
+			&cashflow.EventType,
+			&cashflow.Disposition,
+			&cashflow.ScheduledDate,
+			&cashflow.GrossAmountMinor,
+			&cashflow.TaxAmountMinor,
+			&cashflow.NetAmountMinor,
+			&cashflow.Status,
+		); err != nil {
+			return nil, err
+		}
+		cashflowsByAsset[cashflow.AssetID] = append(cashflowsByAsset[cashflow.AssetID], cashflow)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return summarizeBonds(positions, cashflowsByAsset), nil
 }
 
 type CreateBondInput struct {
@@ -482,6 +650,14 @@ func (s *BondStore) GetProjection(ctx context.Context, userID, assetID string) (
 			projection.TotalGrossCouponMinor += cashflow.GrossAmountMinor
 			projection.TotalCouponTaxMinor += cashflow.TaxAmountMinor
 			projection.TotalCouponMinor += cashflow.NetAmountMinor
+			// Posted means the money was actually paid, which is the only part
+			// that can be called a gain.
+			if cashflow.Status == "posted" {
+				projection.CouponGrossReceivedMinor += cashflow.GrossAmountMinor
+				projection.CouponTaxWithheldMinor += cashflow.TaxAmountMinor
+				projection.CouponNetReceivedMinor += cashflow.NetAmountMinor
+				projection.CouponsReceivedCount++
+			}
 		}
 		if cashflow.Disposition == "cash_balance" {
 			projection.TotalCashBalanceMinor += cashflow.NetAmountMinor

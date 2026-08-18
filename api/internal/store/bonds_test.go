@@ -158,3 +158,147 @@ func TestValidateCouponConfirmationKeepsLiveCouponsInCash(t *testing.T) {
 		t.Fatalf("historical coupon reinvestment computed net %d and quantity %f", net, quantity)
 	}
 }
+
+func TestSummarizeBondsCountsOnlyPostedCoupons(t *testing.T) {
+	positions := []BondPosition{
+		{AssetID: "bond-a", Currency: "ZMW", PrincipalMinor: 200_000},
+	}
+	cashflows := map[string][]BondCashflow{
+		"bond-a": {
+			// Paid.
+			{AssetID: "bond-a", EventType: "coupon", Status: "posted", Disposition: "cash_balance",
+				ScheduledDate: "2026-02-01", GrossAmountMinor: 10_000, TaxAmountMinor: 1_500, NetAmountMinor: 8_500},
+			// Still scheduled: must not reach any received total.
+			{AssetID: "bond-a", EventType: "coupon", Status: "projected", Disposition: "cash_balance",
+				ScheduledDate: "2026-08-01", GrossAmountMinor: 10_000, TaxAmountMinor: 1_500, NetAmountMinor: 8_500},
+			// Cancelled: neither received nor outstanding.
+			{AssetID: "bond-a", EventType: "coupon", Status: "cancelled", Disposition: "cash_balance",
+				ScheduledDate: "2027-02-01", GrossAmountMinor: 10_000, TaxAmountMinor: 1_500, NetAmountMinor: 8_500},
+		},
+	}
+
+	summaries := summarizeBonds(positions, cashflows)
+	if len(summaries) != 1 {
+		t.Fatalf("expected one currency, got %d", len(summaries))
+	}
+	got := summaries[0]
+
+	if got.CouponNetReceivedMinor != 8_500 {
+		t.Fatalf("expected 8500 net received, got %d", got.CouponNetReceivedMinor)
+	}
+	if got.CouponGrossReceivedMinor != 10_000 || got.CouponTaxWithheldMinor != 1_500 {
+		t.Fatalf("unexpected gross/tax: %d/%d", got.CouponGrossReceivedMinor, got.CouponTaxWithheldMinor)
+	}
+	if got.CouponsReceivedCount != 1 {
+		t.Fatalf("expected 1 payment, got %d", got.CouponsReceivedCount)
+	}
+	if got.CouponNetOutstandingMinor != 8_500 {
+		t.Fatalf("expected 8500 outstanding, got %d", got.CouponNetOutstandingMinor)
+	}
+	if got.PrincipalMinor != 200_000 || got.HoldingCount != 1 {
+		t.Fatalf("unexpected principal/count: %d/%d", got.PrincipalMinor, got.HoldingCount)
+	}
+}
+
+func TestSummarizeBondsSplitsReinvestedWithoutDoubleCounting(t *testing.T) {
+	positions := []BondPosition{{AssetID: "bond-a", Currency: "ZMW", PrincipalMinor: 100_000}}
+	cashflows := map[string][]BondCashflow{
+		"bond-a": {
+			{AssetID: "bond-a", EventType: "coupon", Status: "posted", Disposition: "reinvest",
+				ScheduledDate: "2026-02-01", NetAmountMinor: 5_000},
+			{AssetID: "bond-a", EventType: "coupon", Status: "posted", Disposition: "cash_balance",
+				ScheduledDate: "2026-08-01", NetAmountMinor: 3_000},
+			// Historical coupons carry their own disposition but are still cash.
+			{AssetID: "bond-a", EventType: "coupon", Status: "posted", Disposition: "historical_cash",
+				ScheduledDate: "2025-08-01", NetAmountMinor: 2_000},
+		},
+	}
+
+	got := summarizeBonds(positions, cashflows)[0]
+
+	if got.CouponNetReceivedMinor != 10_000 {
+		t.Fatalf("expected 10000 total received, got %d", got.CouponNetReceivedMinor)
+	}
+	// The split has to reconstruct the total exactly, never exceed it.
+	if got.ReinvestedMinor+got.PaidToCashMinor != got.CouponNetReceivedMinor {
+		t.Fatalf("split %d + %d does not equal total %d",
+			got.ReinvestedMinor, got.PaidToCashMinor, got.CouponNetReceivedMinor)
+	}
+	if got.ReinvestedMinor != 5_000 {
+		t.Fatalf("expected 5000 reinvested, got %d", got.ReinvestedMinor)
+	}
+	if got.PaidToCashMinor != 5_000 {
+		t.Fatalf("expected 5000 to cash, got %d", got.PaidToCashMinor)
+	}
+}
+
+func TestSummarizeBondsKeepsCurrenciesApart(t *testing.T) {
+	positions := []BondPosition{
+		{AssetID: "zmw-bond", Currency: "ZMW", PrincipalMinor: 100_000},
+		{AssetID: "usd-bond", Currency: "USD", PrincipalMinor: 50_000},
+	}
+	cashflows := map[string][]BondCashflow{
+		"zmw-bond": {{AssetID: "zmw-bond", EventType: "coupon", Status: "posted",
+			Disposition: "cash_balance", ScheduledDate: "2026-02-01", NetAmountMinor: 4_000}},
+		"usd-bond": {{AssetID: "usd-bond", EventType: "coupon", Status: "posted",
+			Disposition: "cash_balance", ScheduledDate: "2026-02-01", NetAmountMinor: 900}},
+	}
+
+	summaries := summarizeBonds(positions, cashflows)
+	if len(summaries) != 2 {
+		t.Fatalf("expected two currencies, got %d", len(summaries))
+	}
+	byCurrency := map[string]BondCurrencySummary{}
+	for _, summary := range summaries {
+		byCurrency[summary.Currency] = summary
+	}
+	if byCurrency["ZMW"].CouponNetReceivedMinor != 4_000 {
+		t.Fatalf("ZMW received %d", byCurrency["ZMW"].CouponNetReceivedMinor)
+	}
+	if byCurrency["USD"].CouponNetReceivedMinor != 900 {
+		t.Fatalf("USD received %d", byCurrency["USD"].CouponNetReceivedMinor)
+	}
+}
+
+func TestSummarizeBondsReportsEarliestOutstandingCouponAsNext(t *testing.T) {
+	positions := []BondPosition{{AssetID: "bond-a", Currency: "ZMW", PrincipalMinor: 100_000}}
+	cashflows := map[string][]BondCashflow{
+		"bond-a": {
+			{AssetID: "bond-a", EventType: "coupon", Status: "projected", Disposition: "cash_balance",
+				ScheduledDate: "2027-02-01", NetAmountMinor: 5_000},
+			{AssetID: "bond-a", EventType: "coupon", Status: "projected", Disposition: "cash_balance",
+				ScheduledDate: "2026-08-01", NetAmountMinor: 4_000},
+		},
+	}
+
+	got := summarizeBonds(positions, cashflows)[0]
+
+	if got.NextCouponDate != "2026-08-01" {
+		t.Fatalf("expected earliest scheduled date, got %q", got.NextCouponDate)
+	}
+	if got.NextCouponNetMinor != 4_000 {
+		t.Fatalf("expected the amount belonging to that date, got %d", got.NextCouponNetMinor)
+	}
+}
+
+func TestSummarizeBondsIgnoresCashflowsForUnknownAssets(t *testing.T) {
+	// Defence in depth: the query is user-scoped, but a stray asset must never
+	// contribute to someone else's totals.
+	positions := []BondPosition{{AssetID: "mine", Currency: "ZMW", PrincipalMinor: 100_000}}
+	cashflows := map[string][]BondCashflow{
+		"someone-elses": {{AssetID: "someone-elses", EventType: "coupon", Status: "posted",
+			Disposition: "cash_balance", ScheduledDate: "2026-02-01", NetAmountMinor: 99_000}},
+	}
+
+	got := summarizeBonds(positions, cashflows)[0]
+
+	if got.CouponNetReceivedMinor != 0 {
+		t.Fatalf("expected no received coupons, got %d", got.CouponNetReceivedMinor)
+	}
+}
+
+func TestSummarizeBondsWithNoPositionsReturnsNoCurrencies(t *testing.T) {
+	if got := summarizeBonds(nil, nil); len(got) != 0 {
+		t.Fatalf("expected no summaries, got %d", len(got))
+	}
+}

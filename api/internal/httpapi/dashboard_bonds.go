@@ -107,6 +107,25 @@ func (s *Server) listBonds(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, positions)
 }
 
+// summarizeBonds reports what the bond book has actually earned, per currency.
+// The per-bond projection endpoint describes a whole bond life; this describes
+// money already paid, which is what a portfolio gain figure has to be built on.
+func (s *Server) summarizeBonds(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	summaries, err := s.bonds.SummarizeByUser(r.Context(), claims.UserID, time.Now())
+	if err != nil {
+		http.Error(w, "failed to summarize bonds", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, summaries)
+}
+
 func (s *Server) createBond(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {

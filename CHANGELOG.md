@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- The bond dashboard reports coupon income actually received as its gain, with the withholding tax that produced the net figure and a separate line for coupons still scheduled; a bond is carried at principal, so the previous "current value less cost" gain was always zero
+- Coupons that came due are posted before bond income is summarised, so the figure no longer depends on which request happened to arrive first
 - Add-entry type chips read design tokens, so the picker no longer shows light-mode pastel chips in dark mode or the Sonto colour scheme
 - Money figures are set in a face with real tabular numerals; Quicksand's digits are proportional and it ships no `tnum`, so amounts never actually lined up in a column
 - Browser and installed-PWA chrome follows the theme and colour scheme you picked instead of the operating system's

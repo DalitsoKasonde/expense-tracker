@@ -5,13 +5,34 @@ import { useEffect, useMemo, useState } from "react";
 import { Breadcrumbs, EmptyState, LoadingSkeleton, Money, PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
-import { gainPercent } from "@/lib/portfolio-holdings";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 
 type BondPosition = {
   assetId: string;
   issueDate: string;
   maturityDate: string;
+};
+
+/**
+ * Realised bond performance per currency, from /v1/bonds/summary.
+ *
+ * The received fields count posted coupons only. Outstanding is money still
+ * scheduled and is deliberately kept out of every gain figure.
+ */
+type BondCurrencySummary = {
+  currency: string;
+  holdingCount: number;
+  principalMinor: number;
+  couponGrossReceivedMinor: number;
+  couponTaxWithheldMinor: number;
+  couponNetReceivedMinor: number;
+  couponsReceivedCount: number;
+  reinvestedMinor: number;
+  paidToCashMinor: number;
+  principalRedeemedMinor: number;
+  couponNetOutstandingMinor: number;
+  nextCouponDate?: string;
+  nextCouponNetMinor: number;
 };
 
 function formatMonth(value: string) {
@@ -21,10 +42,27 @@ function formatMonth(value: string) {
     : date.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
+function formatDay(value: string) {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Coupon income to date as a share of principal. */
+function incomeYield(receivedMinor: number, principalMinor: number) {
+  if (principalMinor <= 0) return null;
+  return (receivedMinor / principalMinor) * 100;
+}
+
 export default function BondsDashboardPage() {
   const apiCall = useApiCall();
   const { data, loading } = useUnifiedDashboard();
   const [positions, setPositions] = useState<BondPosition[]>([]);
+  const [summaries, setSummaries] = useState<BondCurrencySummary[] | null>(null);
+  // Distinguished from "no coupons yet": showing a confident zero when the
+  // request failed would misreport income.
+  const [summaryFailed, setSummaryFailed] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -39,6 +77,29 @@ export default function BondsDashboardPage() {
       ignore = true;
     };
   }, [apiCall]);
+
+  useEffect(() => {
+    let ignore = false;
+    void apiCall<BondCurrencySummary[]>("/v1/bonds/summary")
+      .then((result) => {
+        if (ignore) return;
+        setSummaries(result ?? []);
+        setSummaryFailed(false);
+      })
+      .catch(() => {
+        if (ignore) return;
+        setSummaries(null);
+        setSummaryFailed(true);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [apiCall]);
+
+  const summaryByCurrency = useMemo(
+    () => new Map((summaries ?? []).map((summary) => [summary.currency, summary])),
+    [summaries],
+  );
 
   const datesByAsset = useMemo(
     () => new Map(positions.map((position) => [position.assetId, position])),
@@ -78,17 +139,76 @@ export default function BondsDashboardPage() {
         <>
           <section className="grid gap-4 sm:grid-cols-2" aria-label="Bond portfolio summary">
             {totals.map(([currency, total]) => {
-              const difference = total.value - total.cost;
-              const percent = gainPercent(total.value, total.cost);
+              const summary = summaryByCurrency.get(currency);
+              const received = summary?.couponNetReceivedMinor ?? 0;
+              // Against principal held, not current value: a bond is carried at
+              // principal, so value-based percentages say nothing.
+              const yieldToDate = incomeYield(received, total.cost);
               return (
                 <article className="card" key={currency}>
                   <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Current value</p>
                   <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-on-surface">{formatMoney(total.value, currency)}</p>
-                  <p className="mt-2 text-sm text-on-surface-soft">Principal {formatMoney(total.cost, currency)}</p>
-                  <p className="mt-1 text-sm font-semibold">
-                    <Money amountMinor={difference} currency={currency} signed tone="auto" />
-                    {percent === null ? "" : ` (${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%)`}
+                  <p className="mt-2 text-sm text-on-surface-soft">
+                    Principal {formatMoney(total.cost, currency)}
+                    {summary?.principalRedeemedMinor
+                      ? ` · ${formatMoney(summary.principalRedeemedMinor, currency)} redeemed`
+                      : ""}
                   </p>
+
+                  {/* A bond's return is its coupons, not a change in carrying
+                      value, so this is the gain figure rather than value less
+                      cost — which is structurally zero for a bond's whole life. */}
+                  <div className="mt-4 border-t border-outline pt-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">
+                      Coupon income received
+                    </p>
+
+                    {summaryFailed ? (
+                      <p className="mt-2 text-sm text-on-surface-soft">
+                        We couldn&apos;t load coupon income. Reload to try again.
+                      </p>
+                    ) : summaries === null ? (
+                      <LoadingSkeleton className="mt-2 h-8" />
+                    ) : (
+                      <>
+                        <p className="mt-2 font-display text-2xl font-semibold">
+                          <Money amountMinor={received} currency={currency} signed tone={received > 0 ? "positive" : "neutral"} />
+                        </p>
+                        <p className="mt-1 text-sm text-on-surface-soft">
+                          {summary?.couponsReceivedCount
+                            ? `${summary.couponsReceivedCount} ${summary.couponsReceivedCount === 1 ? "payment" : "payments"}${
+                                yieldToDate === null ? "" : ` · ${yieldToDate.toFixed(1)}% of principal`
+                              }`
+                            : "No coupons paid yet"}
+                        </p>
+
+                        {summary?.couponTaxWithheldMinor ? (
+                          <p className="mt-1 text-xs text-on-surface-soft">
+                            {formatMoney(summary.couponGrossReceivedMinor, currency)} gross, less{" "}
+                            {formatMoney(summary.couponTaxWithheldMinor, currency)} withholding tax
+                          </p>
+                        ) : null}
+
+                        {summary?.reinvestedMinor ? (
+                          <p className="mt-1 text-xs text-on-surface-soft">
+                            {formatMoney(summary.reinvestedMinor, currency)} reinvested ·{" "}
+                            {formatMoney(summary.paidToCashMinor, currency)} paid to cash
+                          </p>
+                        ) : null}
+
+                        {/* Kept visually separate and never folded into the gain:
+                            this money has not been paid. */}
+                        {summary?.couponNetOutstandingMinor ? (
+                          <p className="mt-3 text-xs text-on-surface-soft">
+                            Still scheduled {formatMoney(summary.couponNetOutstandingMinor, currency)}
+                            {summary.nextCouponDate
+                              ? ` · next ${formatMoney(summary.nextCouponNetMinor, currency)} on ${formatDay(summary.nextCouponDate)}`
+                              : ""}
+                          </p>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
                 </article>
               );
             })}
