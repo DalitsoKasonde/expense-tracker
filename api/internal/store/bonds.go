@@ -422,7 +422,7 @@ func (s *BondStore) AddPurchase(ctx context.Context, userID, assetID string, inp
 		       bp.reinvestment_cutoff_date::text, bp.created_at::text, bp.updated_at::text
 		from bond_positions bp
 		join assets a on a.id = bp.asset_id
-		where bp.asset_id = $1 and a.user_id = $2 and a.archived_at is null
+		where bp.asset_id = $1 and a.user_id = $2
 		for update
 	`, assetID, userID).Scan(
 		&position.AssetID, &position.UserID, &position.Name, &position.Symbol, &position.Currency,

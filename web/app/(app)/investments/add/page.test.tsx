@@ -131,6 +131,18 @@ describe("AddInvestmentPage", () => {
     expect(mocks.push).toHaveBeenCalledWith("/investments");
   });
 
+  it("preselects the bond when opened from a bond page's Add to this bond link", async () => {
+    window.history.pushState({}, "", "/investments/add?type=bond&mode=existing&bond=bond-1");
+    try {
+      render(<AddInvestmentPage />);
+
+      expect(await screen.findByRole("button", { name: "Existing bond" })).toHaveClass("active");
+      await waitFor(() => expect(screen.getByLabelText("Government bond")).toHaveValue("bond-1"));
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
   it("creates an interest-bearing savings pocket without spending from another account", async () => {
     render(<AddInvestmentPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Savings pocket" }));

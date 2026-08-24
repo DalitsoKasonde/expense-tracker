@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Adding to an existing bond saves again; the query recording the purchase referenced a column that does not exist, so every attempt failed with a database error
+- A bond's page now offers "Add to this bond", which opens the add form with that bond already selected instead of leaving the flow findable only from Add investment
+- When adding an investment fails, the reason is shown as an error instead of grey helper text that was easy to read past
 - The transaction fee is asked for after the account rather than before it, since the fee depends on which provider moved the money
 - Recent fees for an account are offered as suggestions you can tap; they are never filled in for you, because fees are only sometimes the same and a stale one would be written into the record unnoticed
 - Adding an entry shows what the amount and the fee together do to the balance, which is the figure that has to match an SMS alert

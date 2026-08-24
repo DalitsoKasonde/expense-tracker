@@ -773,7 +773,18 @@ export default function AssetDetailPage() {
                 </Link>
               </div>
             ) : (
-              <p className="muted">Review the payment schedule below and confirm each payment when it arrives.</p>
+              <>
+                <div className="investmentActionList">
+                  <Link
+                    href={`/investments/add?type=bond&mode=existing&bond=${assetId}`}
+                    className="investmentActionButton primary"
+                  >
+                    <span>Add to this bond</span>
+                    <small>Record another purchase that increases the principal</small>
+                  </Link>
+                </div>
+                <p className="muted">Review the payment schedule below and confirm each payment when it arrives.</p>
+              </>
             )}
             <button type="button" className="btn btn-ghost" onClick={openEditInvestment}>
               Edit investment

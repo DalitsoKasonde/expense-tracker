@@ -221,6 +221,16 @@ describe("AssetDetailPage", () => {
     );
   });
 
+  it("links from a bond to the add form with that bond preselected", async () => {
+    mocks.assetClass = "bond";
+    render(<AssetDetailPage />);
+
+    expect(screen.getByRole("link", { name: /Add to this bond/ })).toHaveAttribute(
+      "href",
+      "/investments/add?type=bond&mode=existing&bond=asset-1",
+    );
+  });
+
   it("offers no reinvestment choice for a dividend that is happening now", async () => {
     render(<AssetDetailPage />);
 

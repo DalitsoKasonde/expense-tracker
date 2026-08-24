@@ -107,10 +107,18 @@ export default function AddInvestmentPage() {
   });
 
   useEffect(() => {
-    const requestedType = new URLSearchParams(window.location.search).get("type");
+    const params = new URLSearchParams(window.location.search);
+    const requestedType = params.get("type");
     if (requestedType === "bond") setKind("bond");
     if (requestedType === "pocket") setKind("pocket");
     if (requestedType === "group") setKind("group");
+    if (requestedType === "bond" && params.get("mode") === "existing") {
+      setBondMode("existing");
+      const requestedBond = params.get("bond");
+      if (requestedBond) {
+        setForm((current) => ({ ...current, bondAssetId: requestedBond }));
+      }
+    }
   }, []);
 
   const usableAccounts = useMemo(
@@ -866,7 +874,7 @@ export default function AddInvestmentPage() {
             </>
           )}
 
-          {error ? <p className="muted">{error}</p> : null}
+          {error ? <p className="field-error" role="alert">{error}</p> : null}
 
           <button type="submit" className="btn btn-primary" disabled={saving || loadingOptions || (accountRequired && usableAccounts.length === 0) || (kind === "stock" && stockMode === "existing" && stockAssets.length === 0) || (kind === "bond" && bondMode === "existing" && bonds.length === 0)}>
             {saving
