@@ -75,10 +75,10 @@ describe("StocksDashboardPage", () => {
     expect(mocks.reload).toHaveBeenCalled();
   });
 
-  it("shows dividend income beside the growth figure rather than folded into it", async () => {
+  it("shows dividends received in the same row as growth rather than folded into it", async () => {
     render(<StocksDashboardPage />);
 
-    await screen.findByText("Dividend income received");
+    await screen.findByText("Dividends received");
     await screen.findByText(/2 payments from 1 stock · 15\.0% of invested/);
     expect(screen.getByText(/5\.00 reinvested · .*10\.00 paid to cash/)).toBeInTheDocument();
     // Growth stays value less cost; the dividends must not have been added in.
