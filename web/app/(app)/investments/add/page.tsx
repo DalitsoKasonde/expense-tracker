@@ -112,6 +112,13 @@ export default function AddInvestmentPage() {
     if (requestedType === "bond") setKind("bond");
     if (requestedType === "pocket") setKind("pocket");
     if (requestedType === "group") setKind("group");
+    if (requestedType === "stock" && params.get("mode") === "existing") {
+      setStockMode("existing");
+      const requestedStock = params.get("stock");
+      if (requestedStock) {
+        setForm((current) => ({ ...current, assetId: requestedStock }));
+      }
+    }
     if (requestedType === "bond" && params.get("mode") === "existing") {
       setBondMode("existing");
       const requestedBond = params.get("bond");

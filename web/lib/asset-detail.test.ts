@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   formatPurchaseDate,
+  formatShares,
   inferLuSETicker,
+  stockReturn,
   rateFromTaxMinor,
   taxMinorFromRate,
   toMinor,
@@ -93,5 +95,47 @@ describe("purchase date formatting", () => {
     // pins midnight local.
     expect(formatPurchaseDate("2026-03-01")).toContain("2026");
     expect(formatPurchaseDate("2026-03-01T22:30:00Z")).toBe(formatPurchaseDate("2026-03-01"));
+  });
+});
+
+describe("formatShares", () => {
+  it("drops the padding zeros a whole share count used to carry", () => {
+    expect(formatShares(150)).toBe("150");
+    expect(formatShares(1500)).toBe("1,500");
+  });
+
+  it("keeps the fraction a reinvested dividend produces", () => {
+    expect(formatShares(12.3457)).toBe("12.3457");
+  });
+});
+
+describe("stockReturn", () => {
+  const base = { investedMinor: 10_000, currentValueMinor: 11_000, dividendTotalMinor: 2_500, quantity: 10 };
+
+  it("adds dividends to the price move rather than leaving them invisible", () => {
+    const result = stockReturn(base);
+    expect(result.priceReturnMinor).toBe(1_000);
+    expect(result.totalReturnMinor).toBe(3_500);
+    expect(result.totalReturnPercent).toBe(35);
+    expect(result.costRecoveredPercent).toBe(25);
+  });
+
+  it("derives the carried price per share and the break-even price", () => {
+    const result = stockReturn(base);
+    expect(result.pricePerShareMinor).toBe(1_100);
+    // (100.00 - 25.00) across 10 shares.
+    expect(result.breakEvenPriceMinor).toBe(750);
+  });
+
+  it("floors break-even at zero once dividends have repaid the cost", () => {
+    expect(stockReturn({ ...base, dividendTotalMinor: 12_000 }).breakEvenPriceMinor).toBe(0);
+  });
+
+  it("gives no percentages or per-share figures for a holding with nothing bought", () => {
+    const result = stockReturn({ investedMinor: 0, currentValueMinor: 0, dividendTotalMinor: 0, quantity: 0 });
+    expect(result.totalReturnPercent).toBeNull();
+    expect(result.costRecoveredPercent).toBeNull();
+    expect(result.pricePerShareMinor).toBeNull();
+    expect(result.breakEvenPriceMinor).toBeNull();
   });
 });

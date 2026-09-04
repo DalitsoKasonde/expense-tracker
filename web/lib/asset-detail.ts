@@ -77,3 +77,46 @@ export function inferLuSETicker(symbol: string | null | undefined, name: string)
   ];
   return aliases.find(([alias]) => normalizedName.includes(alias))?.[1] ?? "";
 }
+
+/**
+ * Share counts as a person reads them: "150" rather than "150.0000", with
+ * fractional shares (a reinvested dividend rarely buys a whole one) shown to
+ * four places.
+ */
+export function formatShares(quantity: number) {
+  return quantity.toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+
+export interface StockReturnInput {
+  investedMinor: number;
+  currentValueMinor: number;
+  dividendTotalMinor: number;
+  quantity: number;
+}
+
+/**
+ * What a stock holding has actually done for you.
+ *
+ * The price move and the dividends are kept apart and then added: a dividend
+ * is paid to a cash account, so the holding's value never reflects it, and a
+ * reinvested one raises the cost basis by the same amount it adds here, so it
+ * is counted once. Money banked by selling shares is in neither figure —
+ * invested and current value both drop on a sale.
+ */
+export function stockReturn({ investedMinor, currentValueMinor, dividendTotalMinor, quantity }: StockReturnInput) {
+  const priceReturnMinor = currentValueMinor - investedMinor;
+  const totalReturnMinor = priceReturnMinor + dividendTotalMinor;
+  const hasCost = investedMinor > 0;
+  const hasShares = quantity > 0;
+  return {
+    priceReturnMinor,
+    totalReturnMinor,
+    totalReturnPercent: hasCost ? (totalReturnMinor / investedMinor) * 100 : null,
+    costRecoveredPercent: hasCost ? (dividendTotalMinor / investedMinor) * 100 : null,
+    // What a share is carried at today, from the last valuation.
+    pricePerShareMinor: hasShares ? Math.round(currentValueMinor / quantity) : null,
+    // The price at which the dividends have already made you whole; zero once
+    // they have returned more than was paid.
+    breakEvenPriceMinor: hasShares ? Math.max(0, Math.round((investedMinor - dividendTotalMinor) / quantity)) : null,
+  };
+}

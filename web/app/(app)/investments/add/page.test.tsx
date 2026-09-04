@@ -131,6 +131,17 @@ describe("AddInvestmentPage", () => {
     expect(mocks.push).toHaveBeenCalledWith("/investments");
   });
 
+  it("preselects the stock when opened from a stock page's Add to this stock link", async () => {
+    window.history.pushState({}, "", "/investments/add?type=stock&mode=existing&stock=stock-1");
+    try {
+      render(<AddInvestmentPage />);
+
+      await waitFor(() => expect(screen.getByLabelText("Stock")).toHaveValue("stock-1"));
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
   it("preselects the bond when opened from a bond page's Add to this bond link", async () => {
     window.history.pushState({}, "", "/investments/add?type=bond&mode=existing&bond=bond-1");
     try {

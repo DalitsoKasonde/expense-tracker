@@ -190,12 +190,11 @@ describe("AssetDetailPage", () => {
     render(<AssetDetailPage />);
 
     // Invested 100.00, worth 110.00, dividends 25.00 -> price +10.00, total +35.00 (35%).
-    expect(await screen.findByText("+ZMW 35.00 (+35.0%)")).toBeInTheDocument();
-    expect(screen.getByText("Price +ZMW 10.00 · Dividends ZMW 25.00")).toBeInTheDocument();
+    expect(await screen.findByText("+35.0% · Price +ZMW 10.00 · Dividends ZMW 25.00")).toBeInTheDocument();
+    expect(screen.getByText("Total return").closest(".metricCard")).toHaveTextContent("+ZMW 35.00");
     expect(screen.getByText("25.0%")).toBeInTheDocument();
     // (100.00 - 25.00) across 10 shares.
-    expect(screen.getByText("Break-even price")).toBeInTheDocument();
-    expect(screen.getByText("ZMW 7.50")).toBeInTheDocument();
+    expect(screen.getByText("Break-even price").closest(".metricCard")).toHaveTextContent("ZMW 7.50");
   });
 
   it("shows each stock purchase lot with its one-off brokerage fee", async () => {
@@ -203,13 +202,63 @@ describe("AssetDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Purchase lots" })).toBeInTheDocument();
     const table = screen.getByRole("table");
-    expect(within(table).getAllByText("5.0000")).toHaveLength(2);
+    // Whole shares read as "5", not "5.0000".
+    expect(within(table).getAllByText("5")).toHaveLength(2);
     expect(within(table).getByText("ZMW 2.00")).toBeInTheDocument();
     expect(within(table).getByText("ZMW 0.12")).toBeInTheDocument();
     expect(within(table).getByText("ZMW 10.12")).toBeInTheDocument();
     expect(within(table).getByText("ZMW 2.02")).toBeInTheDocument();
     expect(screen.getByText("Average cost per share")).toBeInTheDocument();
     expect(screen.getByText("Includes allocated brokerage fees.")).toBeInTheDocument();
+  });
+
+  it("shows what a share is carried at, from the last valuation", async () => {
+    render(<AssetDetailPage />);
+
+    // 110.00 across 10 shares.
+    expect(await screen.findByText(/ZMW 11\.00 per share across 10 shares/)).toBeInTheDocument();
+  });
+
+  it("prices the holding from the LuSE close and saves that as the valuation", async () => {
+    mocks.apiCall.mockImplementation((path: string, options?: { method?: string }) => {
+      if (path === "/v1/accounts") return Promise.resolve([]);
+      if (path === "/v1/assets/asset-1/holding") {
+        return Promise.resolve({ quantity: 10, totalCost: 10_000, avgCostBasis: 1_000, unrealizedPnl: 0, currentValueMinor: 11_000, lots: [] });
+      }
+      if (path.startsWith("/v1/transactions")) return Promise.resolve([]);
+      if (path === "/v1/market-data/luse") return Promise.resolve({ stocks: [], updatedAt: "", sourceName: "", sourceUrl: "" });
+      if (path === "/v1/market-data/luse/ZNCO") {
+        return Promise.resolve({
+          ticker: "ZNCO", name: "Zanaco", priceMinor: 1_250, changeMinor: 25, changePercent: 2.04, currency: "ZMW",
+          quotedAt: "2026-09-04T15:00:00Z", marketDate: "2026-09-04", sourceName: "Mansa Markets",
+          sourceUrl: "https://mansaapi.com", refreshInterval: "daily",
+        });
+      }
+      if (path === "/v1/assets/asset-1/valuations" && options?.method === "POST") return Promise.resolve({});
+      return Promise.reject(new Error(`unexpected path ${path}`));
+    });
+    render(<AssetDetailPage />);
+
+    const button = await screen.findByRole("button", { name: "Get market price" });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+
+    await screen.findByText(/Valued at the .* LuSE close/);
+    expect(mocks.apiCall).toHaveBeenCalledWith("/v1/assets/asset-1/valuations", {
+      method: "POST",
+      body: { valuationDate: "2026-09-04", currentValueMinor: 12_500, currency: "ZMW", source: "mansa_market" },
+    });
+    expect(screen.getByText(/ZMW 12\.50 per share · LuSE close/)).toBeInTheDocument();
+    expect(mocks.reload).toHaveBeenCalled();
+  });
+
+  it("links from a stock to the add form with that stock preselected", async () => {
+    render(<AssetDetailPage />);
+
+    expect(screen.getByRole("link", { name: /Add to this stock/ })).toHaveAttribute(
+      "href",
+      "/investments/add?type=stock&mode=existing&stock=asset-1",
+    );
   });
 
   it("links from an existing stock to the add-investment form", async () => {

@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- A stock's page shows what each share is carried at and can fetch the latest LuSE close and save it as the valuation in one tap, instead of the price lookup living inside the update-value dialog
+- A stock's page offers "Add to this stock", which opens the add form with that stock already selected, matching what bonds already had
+- Share counts read as "150" rather than "150.0000"; fractional shares still show their decimals
+- The stock page's amounts are set in tabular figures and its loading state matches the rest of the app
 - The stock dashboard shows dividend income received beside the growth figure, with how many payments came from how many stocks, the share of invested money paid back, and the split between cash and reinvested dividends; dividends land in a cash account, so the growth figure alone could never see them
 - Adding to an existing bond saves again; the query recording the purchase referenced a column that does not exist, so every attempt failed with a database error
 - A bond's page now offers "Add to this bond", which opens the add form with that bond already selected instead of leaving the flow findable only from Add investment

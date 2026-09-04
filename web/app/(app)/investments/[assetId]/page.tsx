@@ -8,13 +8,16 @@ import {
   Breadcrumbs,
   ConfirmationDialog,
   FormDialog,
+  LoadingSkeleton,
   PageHeader,
   PageShell,
 } from "@/components/ui";
+import { StockOverview } from "@/components/investments/stock-overview";
 import { useApiCall } from "@/lib/client-api";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import {
   formatPurchaseDate,
+  formatShares,
   inferLuSETicker,
   rateFromTaxMinor,
   taxMinorFromRate,
@@ -214,21 +217,6 @@ export default function AssetDetailPage() {
       ? Math.max(0, couponNetMinor - couponPurchaseFeeMinor) / couponUnitPriceMinor
       : 0;
   const luseTicker = asset ? inferLuSETicker(asset.symbol, asset.name) : "";
-  // What the holding has actually done for you: the price move plus every
-  // dividend it has paid. A reinvested dividend raises the cost basis by the
-  // same amount it adds here, so it is counted once, not twice. Money already
-  // banked by selling shares is not in either figure — invested and current
-  // value both drop on a sale.
-  const investedMinor = asset?.investedAmountMinor ?? 0;
-  const priceReturnMinor = (asset?.currentValueMinor ?? 0) - investedMinor;
-  const totalReturnMinor = priceReturnMinor + dividendTotalMinor;
-  const totalReturnPercent = investedMinor > 0 ? (totalReturnMinor / investedMinor) * 100 : null;
-  const costRecoveredPercent = investedMinor > 0 ? (dividendTotalMinor / investedMinor) * 100 : null;
-  // The price at which the dividends have already made you whole.
-  const breakEvenPriceMinor =
-    holding && holding.quantity > 0
-      ? Math.round((investedMinor - dividendTotalMinor) / holding.quantity)
-      : null;
 
   useEffect(() => {
     if (!dividendHistoricalEligible && dividendForm.historicalBackfill) {
@@ -562,6 +550,56 @@ export default function AssetDetailPage() {
     }
   }
 
+  /*
+   * The stocks dashboard prices every holding in one tap; this is the same step
+   * for one holding, so the number on this page can be brought up to date
+   * without opening the valuation dialog and copying a figure across.
+   */
+  async function refreshMarketPrice() {
+    if (!asset) return;
+    if (!luseTicker) {
+      setMarketQuoteError("Add the LuSE ticker to this investment before getting its market price.");
+      return;
+    }
+    if (!holding || holding.quantity <= 0) {
+      setMarketQuoteError("Record a purchase before pricing this holding.");
+      return;
+    }
+
+    setLoadingMarketQuote(true);
+    setMarketQuoteError("");
+    setActionStatus("");
+    try {
+      const quote = await apiCallRef.current<MarketQuote>(
+        `/v1/market-data/luse/${encodeURIComponent(luseTicker)}`,
+      );
+      await apiCallRef.current(`/v1/assets/${assetId}/valuations`, {
+        method: "POST",
+        body: {
+          valuationDate: quote.marketDate,
+          currentValueMinor: Math.round(quote.priceMinor * holding.quantity),
+          currency: asset.currency,
+          source: "mansa_market",
+        },
+      });
+      setMarketQuote(quote);
+      setValuationForm((current) => ({
+        ...current,
+        currentValue: (Math.round(quote.priceMinor * holding.quantity) / 100).toFixed(2),
+        valuationDate: quote.marketDate || current.valuationDate,
+      }));
+      await refreshHolding();
+      reload();
+      setActionStatus(`Valued at the ${formatPurchaseDate(quote.marketDate)} LuSE close.`);
+    } catch (error) {
+      setMarketQuoteError(
+        error instanceof Error ? error.message : "The latest market price is unavailable.",
+      );
+    } finally {
+      setLoadingMarketQuote(false);
+    }
+  }
+
   async function submitValuation(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSavingAction(true);
@@ -594,7 +632,9 @@ export default function AssetDetailPage() {
     }
   }
 
-  if (loading) return <div className="page-shell">Loading...</div>;
+  if (loading) {
+    return <PageShell><LoadingSkeleton className="h-10" /><LoadingSkeleton className="h-64" /><LoadingSkeleton className="h-40" /></PageShell>;
+  }
   if (!asset) {
     return (
       <PageShell>
@@ -629,25 +669,29 @@ export default function AssetDetailPage() {
           }
         />
 
+        {actionStatus ? <p className="investmentSuccess" role="status">{actionStatus}</p> : null}
+
         <div className="investmentOverview">
+          {asset.assetClass !== "bond" ? (
+            <StockOverview
+              currency={asset.currency}
+              investedMinor={asset.investedAmountMinor}
+              currentValueMinor={asset.currentValueMinor}
+              holding={holding}
+              dividendTotalMinor={dividendTotalMinor}
+              quote={marketQuote}
+              pricing={loadingMarketQuote}
+              priceError={equityDialog === null ? marketQuoteError : ""}
+              onGetMarketPrice={() => void refreshMarketPrice()}
+            />
+          ) : (
           <section className="heroCard investmentValueCard">
-            <p className="sectionKicker">{asset.assetClass === "bond" ? "Principal value" : "Current value"}</p>
+            <p className="sectionKicker">Principal value</p>
             <h2 className="text-2xl font-bold my-2">
-              {formatMoney(
-                asset.assetClass === "bond"
-                  ? projection?.bond.principalMinor ?? asset.currentValueMinor
-                  : asset.currentValueMinor,
-                asset.currency,
-              )}
+              {formatMoney(projection?.bond.principalMinor ?? asset.currentValueMinor, asset.currency)}
             </h2>
-            <p className="muted">
-              {asset.assetClass === "bond"
-                ? "The face value currently tracked for this bond."
-                : "What this investment is worth today."}
-            </p>
+            <p className="muted">The face value currently tracked for this bond.</p>
             <div className="portfolioMiniGrid mt-4">
-              {asset.assetClass === "bond" ? (
-                <>
                   <div className="metricCard">
                     <span className="metricCardLabel">Total purchase cost</span>
                     <strong className="metricCardValue">
@@ -681,73 +725,9 @@ export default function AssetDetailPage() {
                     </strong>
                     <span className="muted">When the principal is due back.</span>
                   </div>
-                </>
-              ) : (
-                <>
-                  <div className="metricCard">
-                    <span className="metricCardLabel">Money invested</span>
-                    <strong className="metricCardValue">{formatMoney(asset.investedAmountMinor, asset.currency)}</strong>
-                  </div>
-                  {holding ? (
-                    <div className="metricCard">
-                      <span className="metricCardLabel">Shares owned</span>
-                      <strong className="metricCardValue">{holding.quantity.toFixed(4)}</strong>
-                    </div>
-                  ) : null}
-                  <div className="metricCard">
-                    <span className="metricCardLabel">Total return</span>
-                    <strong
-                      className={`metricCardValue ${totalReturnMinor >= 0 ? "text-positive" : "text-negative"}`}
-                    >
-                      {totalReturnMinor >= 0 ? "+" : ""}
-                      {formatMoney(totalReturnMinor, asset.currency)}
-                      {totalReturnPercent === null
-                        ? ""
-                        : ` (${totalReturnPercent >= 0 ? "+" : ""}${totalReturnPercent.toFixed(1)}%)`}
-                    </strong>
-                    <span className="muted">
-                      Price {priceReturnMinor >= 0 ? "+" : ""}
-                      {formatMoney(priceReturnMinor, asset.currency)} · Dividends{" "}
-                      {formatMoney(dividendTotalMinor, asset.currency)}
-                    </span>
-                  </div>
-                  <div className="metricCard">
-                    <span className="metricCardLabel">Cost recovered</span>
-                    <strong className="metricCardValue">
-                      {costRecoveredPercent === null ? "—" : `${costRecoveredPercent.toFixed(1)}%`}
-                    </strong>
-                    <span className="muted">
-                      {formatMoney(dividendTotalMinor, asset.currency)} of{" "}
-                      {formatMoney(asset.investedAmountMinor, asset.currency)} paid back in dividends.
-                    </span>
-                  </div>
-                  {holding ? (
-                    <div className="metricCard">
-                      <span className="metricCardLabel">Average cost per share</span>
-                      <strong className="metricCardValue">
-                        {formatMoney(holding.avgCostBasis, asset.currency)}
-                      </strong>
-                      <span className="muted">Includes allocated brokerage fees.</span>
-                    </div>
-                  ) : null}
-                  {breakEvenPriceMinor === null ? null : (
-                    <div className="metricCard">
-                      <span className="metricCardLabel">Break-even price</span>
-                      <strong className="metricCardValue">
-                        {formatMoney(Math.max(0, breakEvenPriceMinor), asset.currency)}
-                      </strong>
-                      <span className="muted">
-                        {breakEvenPriceMinor <= 0
-                          ? "Dividends alone have already returned what you paid."
-                          : "What a share must be worth for the dividends to have made you whole."}
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           </section>
-
+          )}
           <aside className="card investmentActionsCard">
             <div>
               <p className="sectionKicker">What would you like to do?</p>
@@ -755,7 +735,14 @@ export default function AssetDetailPage() {
             </div>
             {asset.assetClass !== "bond" ? (
               <div className="investmentActionList">
-                <button type="button" className="investmentActionButton primary" onClick={() => openEquityDialog("dividend")}>
+                <Link
+                  href={`/investments/add?type=stock&mode=existing&stock=${assetId}`}
+                  className="investmentActionButton primary"
+                >
+                  <span>Add to this stock</span>
+                  <small>Record another purchase of {asset.name}</small>
+                </Link>
+                <button type="button" className="investmentActionButton" onClick={() => openEquityDialog("dividend")}>
                   <span>Record a dividend</span>
                   <small>Add a cash payment or reinvested dividend</small>
                 </button>
@@ -836,8 +823,8 @@ export default function AssetDetailPage() {
                       return (
                         <tr key={lot.id}>
                           <td data-label="Purchase date" className="font-semibold text-on-surface">{formatPurchaseDate(lot.acquisitionDate)}</td>
-                          <td data-label="Shares bought" className="numeric">{lot.quantity.toFixed(4)}</td>
-                          <td data-label="Remaining" className="numeric">{lot.remainingQuantity.toFixed(4)}</td>
+                          <td data-label="Shares bought" className="numeric">{formatShares(lot.quantity)}</td>
+                          <td data-label="Remaining" className="numeric">{formatShares(lot.remainingQuantity)}</td>
                           <td data-label="Share price" className="numeric">{formatMoney(lot.unitPrice, asset.currency)}</td>
                           <td data-label="Brokerage fee" className="numeric">{formatMoney(lot.fees, asset.currency)}</td>
                           <td data-label="Total paid" className="numeric font-semibold">{formatMoney(lot.totalCost, asset.currency)}</td>
@@ -867,8 +854,6 @@ export default function AssetDetailPage() {
                 <strong>{formatMoney(dividendTotalMinor, asset.currency)}</strong>
               </div>
             </div>
-
-            {actionStatus ? <p className="investmentSuccess" role="status">{actionStatus}</p> : null}
 
             {dividends.length > 0 ? (
               <div className="dividendList">
@@ -1296,7 +1281,7 @@ export default function AssetDetailPage() {
                 <strong>Use the latest LuSE price</strong>
                 <p>
                   We’ll multiply the latest {luseTicker || "LuSE"} share price by your{" "}
-                  {holding?.quantity.toFixed(4) ?? "0"} shares.
+                  {formatShares(holding?.quantity ?? 0)} shares.
                 </p>
               </div>
               <button
