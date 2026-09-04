@@ -126,6 +126,22 @@ func (s *Server) summarizeBonds(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, summaries)
 }
 
+func (s *Server) summarizeDividends(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	summaries, err := s.assetLots.SummarizeDividends(r.Context(), claims.UserID)
+	if err != nil {
+		http.Error(w, "failed to summarize dividends", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, summaries)
+}
+
 func (s *Server) createBond(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
 	if !ok {

@@ -16,6 +16,27 @@ type Holding = {
   currentValue: number;
 };
 
+/**
+ * Dividend income per currency, from /v1/investments/dividends/summary.
+ *
+ * Received counts cash and reinvested dividends together; the cash/reinvested
+ * fields are a breakdown of that total, not an addition to it.
+ */
+type DividendCurrencySummary = {
+  currency: string;
+  dividendsReceivedMinor: number;
+  dividendsCount: number;
+  reinvestedMinor: number;
+  paidToCashMinor: number;
+  payingStockCount: number;
+};
+
+/** Dividends to date as a share of what was invested. */
+function dividendYield(receivedMinor: number, investedMinor: number) {
+  if (investedMinor <= 0) return null;
+  return (receivedMinor / investedMinor) * 100;
+}
+
 type StockRow = UnifiedDashboardAsset & {
   quantity: number;
   marketPriceMinor?: number;
@@ -32,6 +53,10 @@ export default function StocksDashboardPage() {
   const { data, loading, reload } = useUnifiedDashboard();
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [prices, setPrices] = useState<Record<string, MarketStock>>({});
+  const [dividends, setDividends] = useState<DividendCurrencySummary[] | null>(null);
+  // Distinguished from "no dividends yet": showing a confident zero when the
+  // request failed would misreport income.
+  const [dividendsFailed, setDividendsFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -47,6 +72,29 @@ export default function StocksDashboardPage() {
       ignore = true;
     };
   }, [apiCall]);
+
+  useEffect(() => {
+    let ignore = false;
+    void apiCall<DividendCurrencySummary[]>("/v1/investments/dividends/summary")
+      .then((result) => {
+        if (ignore) return;
+        setDividends(result ?? []);
+        setDividendsFailed(false);
+      })
+      .catch(() => {
+        if (ignore) return;
+        setDividends(null);
+        setDividendsFailed(true);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [apiCall]);
+
+  const dividendsByCurrency = useMemo(
+    () => new Map((dividends ?? []).map((summary) => [summary.currency, summary])),
+    [dividends],
+  );
 
   const stocks = useMemo<StockRow[]>(() => {
     const holdingsByAsset = new Map(holdings.map((holding) => [holding.assetId, holding]));
@@ -176,6 +224,21 @@ export default function StocksDashboardPage() {
                       tone={difference >= 0 ? "positive" : "negative"}
                     />
                   </div>
+
+                  {/* Dividends are return the growth figure cannot see: they were
+                      paid to a cash account, so they lower nothing in "value less
+                      cost". Shown beside it rather than folded in, so each figure
+                      keeps meaning something on its own. */}
+                  <div className="mt-4 border-t border-outline pt-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Dividend income received</p>
+                    {dividendsFailed ? (
+                      <p className="mt-2 text-sm text-on-surface-soft">We couldn&apos;t load dividend income. Reload to try again.</p>
+                    ) : dividends === null ? (
+                      <LoadingSkeleton className="mt-2 h-8" />
+                    ) : (
+                      <DividendSummary summary={dividendsByCurrency.get(total.currency)} currency={total.currency} investedMinor={total.cost} />
+                    )}
+                  </div>
                 </article>
               );
             })}
@@ -218,6 +281,31 @@ export default function StocksDashboardPage() {
         </>
       )}
     </PageShell>
+  );
+}
+
+function DividendSummary({ summary, currency, investedMinor }: { summary?: DividendCurrencySummary; currency: string; investedMinor: number }) {
+  const received = summary?.dividendsReceivedMinor ?? 0;
+  const count = summary?.dividendsCount ?? 0;
+  const yieldToDate = dividendYield(received, investedMinor);
+  return (
+    <>
+      <p className="mt-2 font-display text-2xl font-semibold">
+        <Money amountMinor={received} currency={currency} signed tone={received > 0 ? "positive" : "neutral"} />
+      </p>
+      <p className="mt-1 text-sm text-on-surface-soft">
+        {count
+          ? `${count} ${count === 1 ? "payment" : "payments"} from ${summary?.payingStockCount ?? 0} ${summary?.payingStockCount === 1 ? "stock" : "stocks"}${
+              yieldToDate === null ? "" : ` · ${yieldToDate.toFixed(1)}% of invested`
+            }`
+          : "No dividends paid yet"}
+      </p>
+      {summary?.reinvestedMinor ? (
+        <p className="mt-1 text-xs text-on-surface-soft">
+          {formatMoney(summary.reinvestedMinor, currency)} reinvested · {formatMoney(summary.paidToCashMinor, currency)} paid to cash
+        </p>
+      ) : null}
+    </>
   );
 }
 

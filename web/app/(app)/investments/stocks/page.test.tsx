@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import StocksDashboardPage from "./page";
 
@@ -41,6 +41,14 @@ describe("StocksDashboardPage", () => {
         sourceUrl: "https://mansaapi.com",
       });
       if (path === "/v1/assets/stock-1/valuations") return Promise.resolve({});
+      if (path === "/v1/investments/dividends/summary") return Promise.resolve([{
+        currency: "ZMW",
+        dividendsReceivedMinor: 1_500,
+        dividendsCount: 2,
+        reinvestedMinor: 500,
+        paidToCashMinor: 1_000,
+        payingStockCount: 1,
+      }]);
       return Promise.resolve([]);
     });
   });
@@ -65,5 +73,29 @@ describe("StocksDashboardPage", () => {
     expect(screen.getByText("Portfolio growth")).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText(/200\.00/).length).toBeGreaterThan(0));
     expect(mocks.reload).toHaveBeenCalled();
+  });
+
+  it("shows dividend income beside the growth figure rather than folded into it", async () => {
+    render(<StocksDashboardPage />);
+
+    await screen.findByText("Dividend income received");
+    await screen.findByText(/2 payments from 1 stock · 15\.0% of invested/);
+    expect(screen.getByText(/5\.00 reinvested · .*10\.00 paid to cash/)).toBeInTheDocument();
+    // Growth stays value less cost; the dividends must not have been added in.
+    const summary = within(screen.getByLabelText("Stock portfolio summary"));
+    expect(summary.getByText("Portfolio growth")).toBeInTheDocument();
+    expect(summary.getByText("+ZMW 0.00")).toBeInTheDocument();
+  });
+
+  it("says when dividend income could not be loaded instead of showing a confident zero", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/investments/dividends/summary") return Promise.reject(new Error("offline"));
+      if (path === "/v1/investments/holdings") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+    render(<StocksDashboardPage />);
+
+    await screen.findByText(/couldn.t load dividend income/);
+    expect(screen.queryByText("No dividends paid yet")).not.toBeInTheDocument();
   });
 });

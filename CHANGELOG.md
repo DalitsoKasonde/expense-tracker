@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- The stock dashboard shows dividend income received beside the growth figure, with how many payments came from how many stocks, the share of invested money paid back, and the split between cash and reinvested dividends; dividends land in a cash account, so the growth figure alone could never see them
 - Adding to an existing bond saves again; the query recording the purchase referenced a column that does not exist, so every attempt failed with a database error
 - A bond's page now offers "Add to this bond", which opens the add form with that bond already selected instead of leaving the flow findable only from Add investment
 - When adding an investment fails, the reason is shown as an error instead of grey helper text that was easy to read past

@@ -200,6 +200,7 @@ func (s *Server) registerRoutes(router chi.Router) {
 		// Investments
 		protected.Get("/v1/investments/holdings", s.getHoldings)
 		protected.Get("/v1/investments/summary", s.getInvestmentSummary)
+		protected.Get("/v1/investments/dividends/summary", s.summarizeDividends)
 		protected.Get("/v1/bonds", s.listBonds)
 		// Registered before the {assetId} routes so "summary" is never read as
 		// an asset id.
