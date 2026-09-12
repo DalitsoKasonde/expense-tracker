@@ -44,8 +44,10 @@ type Server struct {
 	admin            *store.AdminStore
 	feedback         *store.FeedbackStore
 	authTokens       *store.AuthTokenStore
+	loginPins        *store.LoginPINStore
 	emailDeliveries  *store.EmailDeliveryStore
 	mailer           *mailer
+	googleVerifier   *googleIdentityVerifier
 	marketStocks     marketStockDirectoryCache
 }
 
@@ -82,7 +84,9 @@ func NewServer(cfg config.Config, db *pgxpool.Pool) *Server {
 		admin:            store.NewAdminStore(db),
 		feedback:         store.NewFeedbackStore(db),
 		authTokens:       store.NewAuthTokenStore(db),
+		loginPins:        store.NewLoginPINStore(db),
 		emailDeliveries:  deliveries,
+		googleVerifier:   newGoogleIdentityVerifier(),
 	}
 
 	s.mailer = &mailer{
@@ -137,6 +141,9 @@ func (s *Server) registerRoutes(router chi.Router) {
 	router.Get("/v1/setup/status", s.setupStatus)
 	router.With(authLimiter.middleware).Post("/v1/auth/login", s.login)
 	router.With(registerLimiter.middleware).Post("/v1/auth/register", s.register)
+	router.With(registerLimiter.middleware).Post("/v1/auth/pin/request", s.requestLoginPIN)
+	router.With(authLimiter.middleware).Post("/v1/auth/pin/verify", s.verifyLoginPIN)
+	router.With(authLimiter.middleware).Post("/v1/auth/google", s.googleLogin)
 	// Rate limited like login: both accept an unauthenticated email address and
 	// would otherwise be a way to mail somebody repeatedly.
 	router.With(registerLimiter.middleware).Post("/v1/auth/forgot-password", s.forgotPassword)
@@ -350,26 +357,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	token, err := auth.IssueToken(s.config.JWTSecret, user.ID, user.Role)
-	if err != nil {
-		http.Error(w, "could not issue token", http.StatusInternalServerError)
-		return
-	}
-	if err := s.users.RecordLogin(r.Context(), user.ID); err != nil {
-		http.Error(w, "could not record login", http.StatusInternalServerError)
-		return
-	}
-
-	setAuthCookie(w, s.config, token)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"accessToken": token,
-		"user": map[string]string{
-			"id":          user.ID,
-			"email":       user.Email,
-			"displayName": user.DisplayName,
-			"role":        user.Role,
-		},
-	})
+	s.completeLogin(w, r, user)
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {

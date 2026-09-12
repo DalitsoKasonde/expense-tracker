@@ -23,7 +23,7 @@ export default async function LoginPage() {
           <p className="mt-2 text-center text-sm text-on-surface-soft">
             Sign in to see your accounts, goals, and latest money movement.
           </p>
-          <LoginForm />
+          <LoginForm googleEnabled={Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)} />
           <p className="mt-4 text-center text-sm">
             <Link href="/forgot-password" className="font-semibold text-accent hover:underline">
               Forgot your password?

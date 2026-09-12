@@ -831,6 +831,44 @@ textarea.control {
   gap: var(--space-md);
 }
 
+.authDivider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.authDivider::before,
+.authDivider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--border);
+}
+
+.authTextButton {
+  justify-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--primary-strong);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.authTextButton:hover {
+  text-decoration: underline;
+}
+
+.authTextButton:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .loginForm::before {
   content: "";
   position: absolute;

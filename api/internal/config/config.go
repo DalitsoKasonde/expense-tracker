@@ -61,6 +61,9 @@ type Config struct {
 	AppPublicURL string
 	// AdminAlertEmail receives operator mail such as new user feedback.
 	AdminAlertEmail string
+	// GoogleClientID is the OAuth web client whose ID tokens the API accepts.
+	// An empty value keeps Google sign-in disabled.
+	GoogleClientID string
 }
 
 func Load() (Config, error) {
@@ -88,6 +91,7 @@ func Load() (Config, error) {
 		MailReplyTo:                  strings.TrimSpace(os.Getenv("MAIL_REPLY_TO")),
 		AppPublicURL:                 strings.TrimRight(envOrDefault("APP_PUBLIC_URL", defaultAppPublicURL), "/"),
 		AdminAlertEmail:              strings.TrimSpace(strings.ToLower(os.Getenv("ADMIN_ALERT_EMAIL"))),
+		GoogleClientID:               strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID")),
 	}
 
 	if cfg.AppEnv == "" {

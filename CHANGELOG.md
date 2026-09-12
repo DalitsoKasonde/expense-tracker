@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- You can sign in with a six-digit code emailed to you, or with a Google account, instead of having to remember a password
 - Emails arrive from Inscribed Expenses rather than Chuma, so the name on the message matches the name on the site
 - A stock's page is laid out like the stocks dashboard: one row of four figures (market value, invested, return, dividends received) each with its context underneath, the two everyday actions in the page header, and the rest in a single strip, instead of a hero card of nested cards beside a column of buttons
 - Replying to an email from Chuma reaches a real inbox; the sending address is a no-reply on a domain with no mailbox, so a reply used to vanish without either side knowing

@@ -65,6 +65,24 @@ func (s *UserStore) FindByEmail(ctx context.Context, email string) (User, error)
 	return user, nil
 }
 
+func (s *UserStore) FindByGoogleSubject(ctx context.Context, subject string) (User, error) {
+	var user User
+	err := s.db.QueryRow(ctx, `
+		select id, email, display_name, password_hash, role, is_active, email_verified_at::text
+		from users
+		where google_subject = $1
+	`, subject).Scan(
+		&user.ID,
+		&user.Email,
+		&user.DisplayName,
+		&user.PasswordHash,
+		&user.Role,
+		&user.IsActive,
+		&user.EmailVerifiedAt,
+	)
+	return user, err
+}
+
 func (s *UserStore) RecordLogin(ctx context.Context, userID string) error {
 	_, err := s.db.Exec(ctx, `update users set last_login_at = now() where id = $1`, userID)
 	return err
@@ -114,6 +132,43 @@ func (s *UserStore) CreateInvitedUser(ctx context.Context, email, passwordHash, 
 		&user.IsActive,
 	)
 	return user, err
+}
+
+func (s *UserStore) CreateGoogleUser(ctx context.Context, email, passwordHash, displayName, subject string) (User, error) {
+	var user User
+	err := s.db.QueryRow(ctx, `
+		insert into users (email, display_name, password_hash, role, is_active, email_verified_at, google_subject)
+		values ($1, $2, $3, 'member', true, now(), $4)
+		returning id, email, display_name, role, is_active, email_verified_at::text
+	`, email, displayName, passwordHash, subject).Scan(
+		&user.ID,
+		&user.Email,
+		&user.DisplayName,
+		&user.Role,
+		&user.IsActive,
+		&user.EmailVerifiedAt,
+	)
+	return user, err
+}
+
+// LinkGoogleIdentity records Google's stable account identifier and treats the
+// provider's verified email claim as address verification. It never replaces a
+// different Google identity already attached to the account.
+func (s *UserStore) LinkGoogleIdentity(ctx context.Context, userID, subject string) error {
+	tag, err := s.db.Exec(ctx, `
+		update users
+		set google_subject = $2,
+		    email_verified_at = coalesce(email_verified_at, now()),
+		    updated_at = now()
+		where id = $1 and (google_subject is null or google_subject = $2)
+	`, userID, subject)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("account is linked to a different Google identity")
+	}
+	return nil
 }
 
 // FindByID loads the account behind an authenticated request. Handlers that

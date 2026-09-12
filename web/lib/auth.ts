@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import { getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 
 type LoginResponse = {
   accessToken: string;
@@ -29,6 +30,26 @@ async function loginWithApi(email: string, password: string) {
     return null;
   }
 
+  return (await response.json()) as LoginResponse;
+}
+
+async function loginWithPin(email: string, pin: string) {
+  return exchangeWithApi("/v1/auth/pin/verify", { email, pin });
+}
+
+async function loginWithGoogle(idToken: string) {
+  return exchangeWithApi("/v1/auth/google", { idToken });
+}
+
+async function exchangeWithApi(path: string, body: unknown): Promise<LoginResponse | null> {
+  const apiBaseUrl = process.env.API_BASE_URL?.trim() || "http://127.0.0.1:8080";
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
   return (await response.json()) as LoginResponse;
 }
 
@@ -111,9 +132,50 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    CredentialsProvider({
+      id: "email-pin",
+      name: "Email code",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        pin: { label: "Sign-in code", type: "text" },
+      },
+      async authorize(credentials) {
+        const email = String(credentials?.email ?? "").trim().toLowerCase();
+        const pin = String(credentials?.pin ?? "").trim();
+        if (!email || !/^\d{6}$/.test(pin)) return null;
+        const result = await loginWithPin(email, pin);
+        if (!result) return null;
+        return {
+          id: result.user.id,
+          email: result.user.email,
+          name: result.user.displayName,
+          role: result.user.role,
+          apiToken: result.accessToken,
+        };
+      },
+    }),
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [GoogleProvider({
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        })]
+      : []),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
+      if (account?.provider === "google") {
+        const result = account.id_token ? await loginWithGoogle(account.id_token) : null;
+        if (!result) throw new Error("Google sign-in could not be completed");
+        token.userId = result.user.id;
+        token.email = result.user.email;
+        token.name = result.user.displayName;
+        token.role = result.user.role;
+        token.apiToken = result.accessToken;
+        token.apiTokenExpires = getTokenExpiryMs(result.accessToken);
+        delete token.error;
+        return token;
+      }
+
       // Initial sign-in: persist the API token and its expiry.
       if (user) {
         const apiToken = (user as { apiToken?: string }).apiToken ?? "";

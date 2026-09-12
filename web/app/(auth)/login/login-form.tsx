@@ -4,11 +4,15 @@ import { type FormEvent, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { establishApiSession } from "@/lib/browser-auth";
+import { postPublicJson } from "@/lib/public-api";
 
-export function LoginForm() {
+export function LoginForm({ googleEnabled = false }: { googleEnabled?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [isPending, setIsPending] = useState(false);
+  const [email, setEmail] = useState("");
+  const [pinRequested, setPinRequested] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -21,21 +25,29 @@ export function LoginForm() {
     setIsPending(true);
     setError("");
 
-    const email = String(formData.get("email") ?? "").trim().toLowerCase();
-    const password = String(formData.get("password") ?? "");
+    const normalizedEmail = String(formData.get("email") ?? "").trim().toLowerCase();
 
     try {
-      await establishApiSession({ email, password });
-
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
+      let result;
+      if (pinRequested) {
+        result = await signIn("email-pin", {
+          email: normalizedEmail,
+          pin: String(formData.get("pin") ?? "").trim(),
+          redirect: false,
+        });
+      } else {
+        const password = String(formData.get("password") ?? "");
+        await establishApiSession({ email: normalizedEmail, password });
+        result = await signIn("credentials", {
+          email: normalizedEmail,
+          password,
+          redirect: false,
+        });
+      }
 
       if (result?.error) {
         setIsPending(false);
-        setError("Login failed. Check your email, password, bootstrap env vars, and database connection.");
+        setError(pinRequested ? "That code is incorrect or has expired." : "Login failed. Check your email and password.");
         return;
       }
 
@@ -48,30 +60,90 @@ export function LoginForm() {
     }
   }
 
+  async function requestPIN() {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setError("Enter your email address first.");
+      return;
+    }
+    setIsPending(true);
+    setError("");
+    setNotice("");
+    try {
+      await postPublicJson("/v1/auth/pin/request", { email: normalizedEmail });
+      setPinRequested(true);
+      setNotice("If that account is available, a six-digit code is on its way. It expires in 10 minutes.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not send a sign-in code.");
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function signInWithGoogle() {
+    setIsPending(true);
+    setError("");
+    try {
+      await signIn("google", { callbackUrl: "/today" });
+    } catch {
+      setError("Google sign-in could not be started. Please try again.");
+    } finally {
+      // The redirect normally takes the page away before this runs. When it
+      // does not — a blocked redirect, a misconfigured provider — the form
+      // would otherwise stay disabled with no way back.
+      setIsPending(false);
+    }
+  }
+
   return (
     <form
       className={`loginForm mt-6 ${isPending ? "loginFormPending" : ""}`}
       onSubmit={(event) => void handleSubmit(event)}
       aria-busy={isPending}
     >
-      <div className="field">
-        <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" autoComplete="email" required disabled={isPending} />
-      </div>
+      {googleEnabled ? (
+        <>
+          <button type="button" className="btn btn-ghost" disabled={isPending} onClick={() => void signInWithGoogle()}>
+            Continue with Google
+          </button>
+          <div className="authDivider" aria-hidden="true"><span>or</span></div>
+        </>
+      ) : null}
 
       <div className="field">
-        <label htmlFor="password">Password</label>
+        <label htmlFor="email">Email</label>
         <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
           required
           disabled={isPending}
+          value={email}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            if (pinRequested) {
+              setPinRequested(false);
+              setNotice("");
+            }
+          }}
         />
       </div>
 
+      {pinRequested ? (
+        <div className="field">
+          <label htmlFor="pin">Six-digit code</label>
+          <input id="pin" name="pin" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required disabled={isPending} autoFocus />
+        </div>
+      ) : (
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input id="password" name="password" type="password" autoComplete="current-password" required disabled={isPending} />
+        </div>
+      )}
+
       {error ? <p className="field-error" role="alert">{error}</p> : null}
+      {notice ? <p className="statusText" role="status">{notice}</p> : null}
 
       <button type="submit" className="btn btn-primary" disabled={isPending}>
         {isPending ? (
@@ -85,9 +157,19 @@ export function LoginForm() {
             </span>
           </>
         ) : (
-          "Sign in"
+          pinRequested ? "Verify code" : "Sign in"
         )}
       </button>
+
+      <button type="button" className="authTextButton" disabled={isPending} onClick={() => void requestPIN()}>
+        {pinRequested ? "Send a new code" : "Email me a sign-in code"}
+      </button>
+
+      {pinRequested ? (
+        <button type="button" className="authTextButton" disabled={isPending} onClick={() => { setPinRequested(false); setNotice(""); setError(""); }}>
+          Use my password instead
+        </button>
+      ) : null}
 
       {isPending ? (
         <p className="loginStatus" role="status">
