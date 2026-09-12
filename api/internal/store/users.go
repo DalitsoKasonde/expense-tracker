@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,6 +16,12 @@ type User struct {
 	PasswordHash string
 	Role         string `json:"role"`
 	IsActive     bool
+	// Plan and PlanExpiresAt together describe entitlement; a nil expiry never
+	// lapses. Resolve them through plans.Effective rather than reading Plan
+	// directly, or a lapsed trial keeps its entitlements.
+	Plan          string     `json:"plan"`
+	PlanExpiresAt *time.Time `json:"planExpiresAt"`
+	PlanSource    string     `json:"planSource"`
 	// EmailVerifiedAt is nil until someone follows the link they were sent.
 	// Accounts created before verification existed are left nil rather than
 	// backfilled, so the flag never claims an address was proven when it wasn't.
@@ -43,7 +50,8 @@ func (s *UserStore) CountUsers(ctx context.Context) (int, error) {
 func (s *UserStore) FindByEmail(ctx context.Context, email string) (User, error) {
 	var user User
 	err := s.db.QueryRow(ctx, `
-		select id, email, display_name, password_hash, role, is_active, email_verified_at::text
+		select id, email, display_name, password_hash, role, is_active, email_verified_at::text,
+		       plan, plan_expires_at, plan_source
 		from users
 		where email = $1
 	`, email).Scan(
@@ -54,6 +62,9 @@ func (s *UserStore) FindByEmail(ctx context.Context, email string) (User, error)
 		&user.Role,
 		&user.IsActive,
 		&user.EmailVerifiedAt,
+		&user.Plan,
+		&user.PlanExpiresAt,
+		&user.PlanSource,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -68,7 +79,8 @@ func (s *UserStore) FindByEmail(ctx context.Context, email string) (User, error)
 func (s *UserStore) FindByGoogleSubject(ctx context.Context, subject string) (User, error) {
 	var user User
 	err := s.db.QueryRow(ctx, `
-		select id, email, display_name, password_hash, role, is_active, email_verified_at::text
+		select id, email, display_name, password_hash, role, is_active, email_verified_at::text,
+		       plan, plan_expires_at, plan_source
 		from users
 		where google_subject = $1
 	`, subject).Scan(
@@ -79,6 +91,9 @@ func (s *UserStore) FindByGoogleSubject(ctx context.Context, subject string) (Us
 		&user.Role,
 		&user.IsActive,
 		&user.EmailVerifiedAt,
+		&user.Plan,
+		&user.PlanExpiresAt,
+		&user.PlanSource,
 	)
 	return user, err
 }
@@ -118,35 +133,74 @@ func (s *UserStore) CreateBootstrapAdmin(ctx context.Context, email, passwordHas
 	return user, nil
 }
 
-func (s *UserStore) CreateInvitedUser(ctx context.Context, email, passwordHash, displayName string) (User, error) {
+// NewUser is an account about to be created. The plan is set in the same
+// statement as the account so a new user is never briefly on the free plan
+// before their trial is applied.
+type NewUser struct {
+	Email         string
+	PasswordHash  string
+	DisplayName   string
+	Plan          string
+	PlanExpiresAt *time.Time
+	PlanSource    string
+}
+
+func (s *UserStore) CreateUser(ctx context.Context, in NewUser) (User, error) {
 	var user User
 	err := s.db.QueryRow(ctx, `
-		insert into users (email, display_name, password_hash, role, is_active)
-		values ($1, $2, $3, 'member', true)
-		returning id, email, display_name, role, is_active
-	`, email, displayName, passwordHash).Scan(
+		insert into users (email, display_name, password_hash, role, is_active, plan, plan_expires_at, plan_source)
+		values ($1, $2, $3, 'member', true, $4, $5, $6)
+		returning id, email, display_name, role, is_active, plan, plan_expires_at, plan_source
+	`, in.Email, in.DisplayName, in.PasswordHash, in.Plan, in.PlanExpiresAt, in.PlanSource).Scan(
 		&user.ID,
 		&user.Email,
 		&user.DisplayName,
 		&user.Role,
 		&user.IsActive,
+		&user.Plan,
+		&user.PlanExpiresAt,
+		&user.PlanSource,
 	)
 	return user, err
 }
 
-func (s *UserStore) CreateGoogleUser(ctx context.Context, email, passwordHash, displayName, subject string) (User, error) {
+// SetPlan changes entitlement. A nil expiry means the plan never lapses, which
+// is how a complimentary account is granted.
+func (s *UserStore) SetPlan(ctx context.Context, userID, plan string, expiresAt *time.Time, source string) error {
+	tag, err := s.db.Exec(ctx, `
+		update users
+		set plan = $2, plan_expires_at = $3, plan_source = $4, updated_at = now()
+		where id = $1
+	`, userID, plan, expiresAt, source)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// CreateGoogleUser registers someone arriving through Google. They get the
+// same trial as any other new account: how a person chose to sign in should
+// not decide what they are entitled to.
+func (s *UserStore) CreateGoogleUser(ctx context.Context, email, passwordHash, displayName, subject string, plan string, planExpiresAt *time.Time, planSource string) (User, error) {
 	var user User
 	err := s.db.QueryRow(ctx, `
-		insert into users (email, display_name, password_hash, role, is_active, email_verified_at, google_subject)
-		values ($1, $2, $3, 'member', true, now(), $4)
-		returning id, email, display_name, role, is_active, email_verified_at::text
-	`, email, displayName, passwordHash, subject).Scan(
+		insert into users (email, display_name, password_hash, role, is_active, email_verified_at, google_subject,
+		                   plan, plan_expires_at, plan_source)
+		values ($1, $2, $3, 'member', true, now(), $4, $5, $6, $7)
+		returning id, email, display_name, role, is_active, email_verified_at::text, plan, plan_expires_at, plan_source
+	`, email, displayName, passwordHash, subject, plan, planExpiresAt, planSource).Scan(
 		&user.ID,
 		&user.Email,
 		&user.DisplayName,
 		&user.Role,
 		&user.IsActive,
 		&user.EmailVerifiedAt,
+		&user.Plan,
+		&user.PlanExpiresAt,
+		&user.PlanSource,
 	)
 	return user, err
 }
@@ -176,7 +230,8 @@ func (s *UserStore) LinkGoogleIdentity(ctx context.Context, userID, subject stri
 func (s *UserStore) FindByID(ctx context.Context, userID string) (User, error) {
 	var user User
 	err := s.db.QueryRow(ctx, `
-		select id, email, display_name, password_hash, role, is_active, email_verified_at::text
+		select id, email, display_name, password_hash, role, is_active, email_verified_at::text,
+		       plan, plan_expires_at, plan_source
 		from users
 		where id = $1
 	`, userID).Scan(
@@ -187,6 +242,9 @@ func (s *UserStore) FindByID(ctx context.Context, userID string) (User, error) {
 		&user.Role,
 		&user.IsActive,
 		&user.EmailVerifiedAt,
+		&user.Plan,
+		&user.PlanExpiresAt,
+		&user.PlanSource,
 	)
 	return user, err
 }

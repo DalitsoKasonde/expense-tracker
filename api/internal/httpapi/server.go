@@ -17,6 +17,7 @@ import (
 	"github.com/dalitsokasonde/expense-tracker/api/internal/auth"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/config"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/mail"
+	"github.com/dalitsokasonde/expense-tracker/api/internal/plans"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/store"
 )
 
@@ -45,6 +46,7 @@ type Server struct {
 	feedback         *store.FeedbackStore
 	authTokens       *store.AuthTokenStore
 	loginPins        *store.LoginPINStore
+	invitations      *store.InvitationStore
 	emailDeliveries  *store.EmailDeliveryStore
 	mailer           *mailer
 	googleVerifier   *googleIdentityVerifier
@@ -85,6 +87,7 @@ func NewServer(cfg config.Config, db *pgxpool.Pool) *Server {
 		feedback:         store.NewFeedbackStore(db),
 		authTokens:       store.NewAuthTokenStore(db),
 		loginPins:        store.NewLoginPINStore(db),
+		invitations:      store.NewInvitationStore(db),
 		emailDeliveries:  deliveries,
 		googleVerifier:   newGoogleIdentityVerifier(),
 	}
@@ -149,6 +152,8 @@ func (s *Server) registerRoutes(router chi.Router) {
 	router.With(registerLimiter.middleware).Post("/v1/auth/forgot-password", s.forgotPassword)
 	router.With(authLimiter.middleware).Post("/v1/auth/reset-password", s.resetPassword)
 	router.With(authLimiter.middleware).Post("/v1/auth/verify-email", s.verifyEmail)
+	router.Get("/v1/auth/invitations", s.previewInvitation)
+	router.With(registerLimiter.middleware).Post("/v1/auth/invitations/accept", s.acceptInvitation)
 
 	router.Group(func(protected chi.Router) {
 		protected.Use(auth.Middleware(s.config.JWTSecret, s.config.CookieName))
@@ -163,6 +168,11 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/audit", s.listAdminAudit)
 		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/backups", s.listAdminBackups)
 		protected.With(auth.RequireRole("system_admin")).Post("/v1/admin/backups", s.createAdminBackup)
+		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/invitations", s.listInvitations)
+		protected.With(auth.RequireRole("system_admin")).Post("/v1/admin/invitations", s.createInvitation)
+		protected.With(auth.RequireRole("system_admin")).Delete("/v1/admin/invitations/{id}", s.revokeInvitation)
+		protected.With(auth.RequireRole("system_admin")).Patch("/v1/admin/users/{id}/plan", s.updateAdminUserPlan)
+		protected.Get("/v1/user/plan", s.getUserPlan)
 		protected.With(auth.RequireRole("system_admin")).Get("/v1/admin/feedback", s.listAdminFeedback)
 		protected.With(auth.RequireRole("system_admin")).Patch("/v1/admin/feedback/{id}/status", s.updateAdminFeedbackStatus)
 		protected.Post("/v1/feedback", s.createFeedback)
@@ -444,7 +454,16 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.users.CreateInvitedUser(r.Context(), email, hash, displayName)
+	// A new account opens on a short premium trial so someone can see what the
+	// paid tier actually does before deciding. It lapses to free, never locks.
+	user, err := s.users.CreateUser(r.Context(), store.NewUser{
+		Email:         email,
+		PasswordHash:  hash,
+		DisplayName:   displayName,
+		Plan:          plans.Premium,
+		PlanExpiresAt: plans.TrialExpiry(plans.SignupTrialMonths, time.Now()),
+		PlanSource:    plans.SourceSignup,
+	})
 	if err != nil {
 		http.Error(w, "could not create user", http.StatusInternalServerError)
 		return

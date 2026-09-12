@@ -16,6 +16,7 @@ const (
 	EmailKindReport        = "report"
 	EmailKindAdminAlert    = "admin_alert"
 	EmailKindLoginPIN      = "login_pin"
+	EmailKindInvitation    = "invitation"
 )
 
 // ErrEmailAlreadySent means a message with this dedupe key has already gone

@@ -3,8 +3,9 @@
 import { PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { InvitationsPanel } from "@/components/admin/invitations-panel";
 
-type AdminUser = { id: string; maskedEmail: string; role: string; isActive: boolean; createdAt: string; lastLoginAt?: string | null };
+type AdminUser = { id: string; maskedEmail: string; role: string; isActive: boolean; createdAt: string; lastLoginAt?: string | null; plan: string; planExpiresAt?: string | null; planSource: string };
 type BackupJob = { id: string; status: string; fileName?: string | null; sizeBytes?: number | null; checksumSha256?: string | null; errorMessage?: string | null; requestedAt: string; completedAt?: string | null };
 type AuditLog = { id: string; action: string; targetType: string; targetId?: string | null; createdAt: string };
 type FeedbackStatus = "new" | "reviewed" | "resolved";
@@ -13,6 +14,16 @@ type FeedbackItem = { id: string; maskedEmail: string; message: string; pagePath
 const feedbackStatuses: FeedbackStatus[] = ["new", "reviewed", "resolved"];
 
 function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : "Never"; }
+
+/** What the person is entitled to right now. The stored column still reads
+ *  "premium" after a trial lapses, so the expiry has to be applied here too. */
+function describePlan(user: AdminUser) {
+  if (user.plan !== "premium") return "Free";
+  if (!user.planExpiresAt) return "Premium · never expires";
+  const expiry = new Date(user.planExpiresAt);
+  if (expiry.getTime() < Date.now()) return "Free (trial ended)";
+  return `Premium · until ${expiry.toLocaleDateString(undefined, { dateStyle: "medium" })}`;
+}
 function formatBytes(value?: number | null) {
   if (!value) return "—";
   const units = ["B", "KB", "MB", "GB"];
@@ -52,6 +63,20 @@ export default function AdminPage() {
       await loadData(); setMessage(isActive ? "User activated." : "User suspended.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Failed to update user"); }
     finally { setPending(false); }
+  }
+
+  async function setUserPlan(user: AdminUser, change: { plan: string; months?: number; neverExpires?: boolean }) {
+    setPending(true);
+    setMessage("");
+    try {
+      await apiCall(`/v1/admin/users/${user.id}/plan`, { method: "PATCH", body: change });
+      setMessage(`Plan updated for ${user.maskedEmail}.`);
+      await loadData();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The plan could not be changed.");
+    } finally {
+      setPending(false);
+    }
   }
 
   async function setFeedbackStatus(item: FeedbackItem, status: FeedbackStatus) {
@@ -115,10 +140,12 @@ export default function AdminPage() {
           </form>
         </section>
 
+        <section id="invitations" className="scroll-mt-20"><InvitationsPanel /></section>
+
         <section id="users" className="card settingsListPanel scroll-mt-20 overflow-hidden">
           <div className="settingsHeaderRow"><div><strong>Users</strong><p className="muted">Only masked identity and operational metadata are available.</p></div></div>
           {loading ? <p className="muted p-4">Loading users...</p> : null}
-          {!loading ? <div className="overflow-x-auto"><table className="dataTable"><thead><tr><th>User</th><th>Joined</th><th>Last login</th><th>Status</th><th>Action</th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td data-label="User"><strong>{user.maskedEmail}</strong></td><td data-label="Joined">{formatDate(user.createdAt)}</td><td data-label="Last login">{formatDate(user.lastLoginAt)}</td><td data-label="Status"><span className="metaBadge">{user.isActive ? "Active" : "Suspended"}</span></td><td data-label="Action"><button className={user.isActive ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={pending} onClick={() => void setUserActive(user, !user.isActive)}>{user.isActive ? "Suspend" : "Activate"}</button></td></tr>)}</tbody></table></div> : null}
+          {!loading ? <div className="overflow-x-auto"><table className="dataTable"><thead><tr><th>User</th><th>Plan</th><th>Joined</th><th>Last login</th><th>Status</th><th>Action</th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td data-label="User"><strong>{user.maskedEmail}</strong></td><td data-label="Plan"><span className="metaBadge">{describePlan(user)}</span><span className="adminPlanActions"><button className="btn btn-ghost btn-sm" type="button" disabled={pending} onClick={() => void setUserPlan(user, { plan: "premium", neverExpires: true })}>Free forever</button><button className="btn btn-ghost btn-sm" type="button" disabled={pending} onClick={() => void setUserPlan(user, { plan: "premium", months: 12 })}>+12 months</button><button className="btn btn-ghost btn-sm" type="button" disabled={pending} onClick={() => void setUserPlan(user, { plan: "free" })}>Free</button></span></td><td data-label="Joined">{formatDate(user.createdAt)}</td><td data-label="Last login">{formatDate(user.lastLoginAt)}</td><td data-label="Status"><span className="metaBadge">{user.isActive ? "Active" : "Suspended"}</span></td><td data-label="Action"><button className={user.isActive ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={pending} onClick={() => void setUserActive(user, !user.isActive)}>{user.isActive ? "Suspend" : "Activate"}</button></td></tr>)}</tbody></table></div> : null}
         </section>
 
         <section id="feedback" className="card settingsListPanel scroll-mt-20 overflow-hidden">

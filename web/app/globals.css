@@ -2173,3 +2173,13 @@ textarea.control {
     break-inside: avoid;
   }
 }
+
+/* The plan grants sit under the badge in the admin user table. They wrap
+   rather than widening the column, which would push the table into a
+   horizontal scroll on a laptop. */
+.adminPlanActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}

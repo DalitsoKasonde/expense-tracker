@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,6 +16,11 @@ type AdminUserSummary struct {
 	IsActive    bool    `json:"isActive"`
 	CreatedAt   string  `json:"createdAt"`
 	LastLoginAt *string `json:"lastLoginAt"`
+	// Plan is the stored column, not the resolved entitlement; the console
+	// shows the expiry alongside it so a lapsed trial is visible as such.
+	Plan          string     `json:"plan"`
+	PlanExpiresAt *time.Time `json:"planExpiresAt"`
+	PlanSource    string     `json:"planSource"`
 }
 
 type AdminAuditLog struct {
@@ -53,7 +59,8 @@ func (s *UserStore) CountSystemAdmins(ctx context.Context) (int, error) {
 
 func (s *AdminStore) ListUsers(ctx context.Context) ([]AdminUserSummary, error) {
 	rows, err := s.db.Query(ctx, `
-		select id, email, role, is_active, created_at::text, last_login_at::text
+		select id, email, role, is_active, created_at::text, last_login_at::text,
+		       plan, plan_expires_at, plan_source
 		from users where role <> 'system_admin'
 		order by created_at desc
 	`)
@@ -65,7 +72,10 @@ func (s *AdminStore) ListUsers(ctx context.Context) ([]AdminUserSummary, error) 
 	for rows.Next() {
 		var item AdminUserSummary
 		var email string
-		if err := rows.Scan(&item.ID, &email, &item.Role, &item.IsActive, &item.CreatedAt, &item.LastLoginAt); err != nil {
+		if err := rows.Scan(
+			&item.ID, &email, &item.Role, &item.IsActive, &item.CreatedAt, &item.LastLoginAt,
+			&item.Plan, &item.PlanExpiresAt, &item.PlanSource,
+		); err != nil {
 			return nil, err
 		}
 		item.MaskedEmail = maskEmail(email)

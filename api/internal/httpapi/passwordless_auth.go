@@ -18,6 +18,7 @@ import (
 
 	"github.com/dalitsokasonde/expense-tracker/api/internal/auth"
 	appmail "github.com/dalitsokasonde/expense-tracker/api/internal/mail"
+	"github.com/dalitsokasonde/expense-tracker/api/internal/plans"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/store"
 )
 
@@ -156,7 +157,12 @@ func (s *Server) googleLogin(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Google sign-in is temporarily unavailable", http.StatusInternalServerError)
 				return
 			}
-			user, err = s.users.CreateGoogleUser(r.Context(), identity.Email, passwordHash, name, identity.Subject)
+			user, err = s.users.CreateGoogleUser(
+				r.Context(), identity.Email, passwordHash, name, identity.Subject,
+				// Someone arriving through Google gets the same trial as anyone
+				// else; how a person signed in should not decide entitlement.
+				plans.Premium, plans.TrialExpiry(plans.SignupTrialMonths, time.Now()), plans.SourceSignup,
+			)
 		} else if err == nil {
 			if user.Role == "system_admin" || !user.IsActive {
 				http.Error(w, "Google sign-in failed", http.StatusUnauthorized)

@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Accounts now sit on a plan: a new account opens with a month of premium, an invited beta account with six, and either lapses to the free plan rather than locking anyone out of their own records
+- Administrators can invite people by email, with the free premium period set per invitation, and revoke an invitation that has not been used
+- The admin console shows what plan each account is on and can grant premium for a period, grant it permanently, or return an account to free
 - Visiting the site now opens a homepage explaining what Inscribed Expenses does, how you sign in, and exactly what a Google account is asked for, instead of sending everyone straight to the sign-in form
 - A privacy policy is published at /privacy, linked from sign-in, registration and Settings, setting out what the service records about your money and who it reaches
 - You can sign in with a six-digit code emailed to you, or with a Google account, instead of having to remember a password
