@@ -74,8 +74,8 @@ func (s *Server) requestLoginPIN(w http.ResponseWriter, r *http.Request) {
 			Heading:   "Sign in to Inscribed Expenses",
 			Blocks: []appmail.Block{
 				appmail.Paragraph(greeting(user.DisplayName)),
-				appmail.Paragraph("Enter this one-time code on the sign-in screen:"),
-				appmail.FactList{{Label: "Sign-in code", Value: pin}},
+				appmail.Paragraph("Enter this code on the sign-in screen:"),
+				appmail.Code{Label: "Sign-in code", Value: pin},
 				appmail.Paragraph("The code expires in 10 minutes and stops working after you use it."),
 				appmail.Paragraph("If you did not request this code, you can ignore this email."),
 			},

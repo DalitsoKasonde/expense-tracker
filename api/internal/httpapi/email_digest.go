@@ -128,6 +128,7 @@ func buildDigestDocument(recipient store.DigestRecipient, insight monthlyInsight
 	return mail.Document{
 		Preheader:  digestPreheader(items),
 		Heading:    digestSubject(recipient.Frequency, now),
+		Style:      mail.Bulletin,
 		Blocks:     blocks,
 		FooterNote: "You receive this because email summaries are on. Change what you get, or turn them off, in Settings › Preferences.",
 	}, true
@@ -229,6 +230,9 @@ func (s *Server) sendDigest(ctx context.Context, recipient store.DigestRecipient
 		Subject:   digestSubject(recipient.Frequency, now),
 		DedupeKey: fmt.Sprintf("digest:%s:%s:%s", recipient.UserID, recipient.Frequency, digestPeriodKey(recipient.Frequency, now)),
 		Document:  document,
+		// The only mail here anyone subscribes to, so the only mail that
+		// should advertise a way out of it.
+		ListUnsubscribe: s.mailer.link("/settings/preferences"),
 	})
 	if err != nil && !errors.Is(err, store.ErrEmailAlreadySent) {
 		return err

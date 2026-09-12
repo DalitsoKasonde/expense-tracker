@@ -40,6 +40,22 @@ type Block interface {
 	text() string
 }
 
+// Style picks the chrome a Document wears. The zero value is a letter, because
+// almost everything the app sends is a one-off message to one person and the
+// wrong chrome has a real cost: a security code dressed in newsletter
+// furniture — a filled banner, a pill-shaped call to action — reads to a spam
+// filter as marketing and lands beside the marketing.
+type Style int
+
+const (
+	// Letter is a plain message to one person: password resets, sign-in codes,
+	// address confirmations, invitations. Quiet on purpose.
+	Letter Style = iota
+	// Bulletin is mail a person subscribed to and expects to be a publication:
+	// the digest and the yearly statement. It can afford a masthead.
+	Bulletin
+)
+
 // Document assembles blocks into a finished message. Callers build one of
 // these instead of writing markup, so every email shares a layout and footer.
 type Document struct {
@@ -48,6 +64,7 @@ type Document struct {
 	// the greeting and tells the reader nothing.
 	Preheader string
 	Heading   string
+	Style     Style
 	Blocks    []Block
 	// FooterNote explains why this email arrived, which is both a courtesy and
 	// what keeps automated mail out of the spam folder.
@@ -57,23 +74,38 @@ type Document struct {
 func (d Document) Render() (htmlBody string, textBody string) {
 	var h, t strings.Builder
 
-	h.WriteString(`<!doctype html><html><body style="margin:0;padding:0;background:` + colourPageBackground + `;">`)
+	page := colourSurface
+	if d.Style == Bulletin {
+		page = colourPageBackground
+	}
+
+	h.WriteString(`<!doctype html><html><body style="margin:0;padding:0;background:` + page + `;">`)
 	if d.Preheader != "" {
 		h.WriteString(`<div style="display:none;max-height:0;overflow:hidden;opacity:0;">` + esc(d.Preheader) + `</div>`)
 	}
 	// Tables rather than flexbox: Outlook still renders with Word's engine,
 	// which supports neither flex nor grid.
-	h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:` + colourPageBackground + `;padding:24px 12px;">`)
+	h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:` + page + `;padding:32px 16px;">`)
 	h.WriteString(`<tr><td align="center">`)
-	h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:` + colourSurface + `;border:1px solid ` + colourBorder + `;border-radius:16px;overflow:hidden;">`)
 
-	h.WriteString(`<tr><td style="background:` + colourPrimaryDeep + `;padding:20px 24px;">`)
-	h.WriteString(`<span style="font-family:` + fontStack + `;font-size:18px;font-weight:700;color:` + colourActionContrast + `;letter-spacing:0.02em;">Inscribed Expenses</span>`)
-	h.WriteString(`</td></tr>`)
+	if d.Style == Bulletin {
+		h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:` + colourSurface + `;border:1px solid ` + colourBorder + `;border-radius:16px;overflow:hidden;">`)
+		h.WriteString(`<tr><td style="background:` + colourPrimaryDeep + `;padding:20px 24px;">`)
+		h.WriteString(`<span style="font-family:` + fontStack + `;font-size:18px;font-weight:700;color:` + colourActionContrast + `;letter-spacing:0.02em;">Inscribed Expenses</span>`)
+		h.WriteString(`</td></tr>`)
+		h.WriteString(`<tr><td style="padding:24px;font-family:` + fontStack + `;font-size:15px;line-height:1.6;color:` + colourText + `;">`)
+	} else {
+		// A letter has no card and no banner: a rule under a small wordmark,
+		// the way a statement from a bank reads.
+		h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">`)
+		h.WriteString(`<tr><td style="padding:0 0 20px;border-bottom:1px solid ` + colourBorder + `;">`)
+		h.WriteString(`<span style="font-family:` + fontStack + `;font-size:13px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:` + colourPrimary + `;">Inscribed Expenses</span>`)
+		h.WriteString(`</td></tr>`)
+		h.WriteString(`<tr><td style="padding:24px 0 0;font-family:` + fontStack + `;font-size:15px;line-height:1.6;color:` + colourText + `;">`)
+	}
 
-	h.WriteString(`<tr><td style="padding:24px;font-family:` + fontStack + `;font-size:15px;line-height:1.6;color:` + colourText + `;">`)
 	if d.Heading != "" {
-		h.WriteString(`<h1 style="margin:0 0 16px;font-family:` + fontStack + `;font-size:20px;line-height:1.3;color:` + colourPrimaryDeep + `;">` + esc(d.Heading) + `</h1>`)
+		h.WriteString(`<h1 style="margin:0 0 16px;font-family:` + fontStack + `;font-size:22px;line-height:1.3;font-weight:700;color:` + colourPrimaryDeep + `;">` + esc(d.Heading) + `</h1>`)
 		t.WriteString(d.Heading + "\n" + strings.Repeat("=", len(d.Heading)) + "\n\n")
 	}
 	for _, block := range d.Blocks {
@@ -83,7 +115,11 @@ func (d Document) Render() (htmlBody string, textBody string) {
 	h.WriteString(`</td></tr>`)
 
 	if d.FooterNote != "" {
-		h.WriteString(`<tr><td style="padding:16px 24px 24px;border-top:1px solid ` + colourBorder + `;font-family:` + fontStack + `;font-size:12px;line-height:1.5;color:` + colourTextMuted + `;">` + esc(d.FooterNote) + `</td></tr>`)
+		padding := "16px 24px 24px"
+		if d.Style == Letter {
+			padding = "20px 0 0"
+		}
+		h.WriteString(`<tr><td style="padding:` + padding + `;border-top:1px solid ` + colourBorder + `;font-family:` + fontStack + `;font-size:12px;line-height:1.5;color:` + colourTextMuted + `;">` + esc(d.FooterNote) + `</td></tr>`)
 		t.WriteString("\n--\n" + d.FooterNote + "\n")
 	}
 
@@ -110,7 +146,7 @@ type Button struct {
 }
 
 func (b Button) html() string {
-	return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px;"><tr><td style="background:` + colourPrimary + `;border-radius:999px;">` +
+	return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px;"><tr><td style="background:` + colourPrimary + `;border-radius:8px;">` +
 		`<a href="` + esc(b.URL) + `" style="display:inline-block;padding:12px 24px;font-family:` + fontStack + `;font-size:15px;font-weight:600;color:` + colourActionContrast + `;text-decoration:none;">` + esc(b.Label) + `</a>` +
 		`</td></tr></table>` +
 		`<p style="margin:0 0 14px;font-family:` + fontStack + `;font-size:12px;line-height:1.5;color:` + colourTextMuted + `;word-break:break-all;">Or paste this into your browser: ` + esc(b.URL) + `</p>`
@@ -118,6 +154,36 @@ func (b Button) html() string {
 
 func (b Button) text() string {
 	return b.Label + ":\n" + b.URL + "\n\n"
+}
+
+// Code is a one-time code, set as the thing the reader came for. It was a row
+// in a FactList before, which put a six-digit code in a right-aligned cell in
+// the same size as its own label — the reader had to hunt for the only part of
+// the message that mattered.
+type Code struct {
+	Label string
+	Value string
+}
+
+func (c Code) html() string {
+	var b strings.Builder
+	b.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;background:` + colourInfoSoft + `;border:1px solid ` + colourBorder + `;border-radius:12px;">`)
+	b.WriteString(`<tr><td align="center" style="padding:20px 16px;font-family:` + fontStack + `;">`)
+	if c.Label != "" {
+		b.WriteString(`<div style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:` + colourTextMuted + `;">` + esc(c.Label) + `</div>`)
+	}
+	// Monospace and wide tracking so a reader copying by hand cannot confuse
+	// one character for another, and so the digits do not kern together.
+	b.WriteString(`<div style="font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:30px;font-weight:700;letter-spacing:0.22em;line-height:1.2;color:` + colourPrimaryDeep + `;">` + esc(c.Value) + `</div>`)
+	b.WriteString(`</td></tr></table>`)
+	return b.String()
+}
+
+func (c Code) text() string {
+	if c.Label == "" {
+		return c.Value + "\n\n"
+	}
+	return c.Label + ": " + c.Value + "\n\n"
 }
 
 // Alert is one notification as it appears in a digest, tinted by level the way

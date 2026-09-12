@@ -94,6 +94,7 @@ func (s *Server) emailReport(w http.ResponseWriter, r *http.Request) {
 			},
 			mail.Button{Label: "Open the full report", URL: s.mailer.link("/reports")},
 		},
+		Style:      mail.Bulletin,
 		FooterNote: "You asked for this statement from the Reports page.",
 	}
 
