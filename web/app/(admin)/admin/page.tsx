@@ -1,194 +1,179 @@
 "use client";
 
+import Link from "next/link";
 import { PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { InvitationsPanel } from "@/components/admin/invitations-panel";
+import { useEffect, useState } from "react";
+import { type AdminUser, type BackupJob, type FeedbackItem, formatDate, isOnPremium } from "@/components/admin/admin-data";
+import type { Invitation } from "@/components/admin/invitations-panel";
+import { adminSections } from "@/components/admin/admin-sections";
 
-type AdminUser = { id: string; maskedEmail: string; role: string; isActive: boolean; createdAt: string; lastLoginAt?: string | null; plan: string; planExpiresAt?: string | null; planSource: string };
-type BackupJob = { id: string; status: string; fileName?: string | null; sizeBytes?: number | null; checksumSha256?: string | null; errorMessage?: string | null; requestedAt: string; completedAt?: string | null };
-type AuditLog = { id: string; action: string; targetType: string; targetId?: string | null; createdAt: string };
-type FeedbackStatus = "new" | "reviewed" | "resolved";
-type FeedbackItem = { id: string; maskedEmail: string; message: string; pagePath?: string; status: FeedbackStatus; createdAt: string };
+type Attention = { key: string; text: string; href: (typeof adminSections)[number]["href"]; action: string };
 
-const feedbackStatuses: FeedbackStatus[] = ["new", "reviewed", "resolved"];
+/** The console is only useful if it says what needs doing. Everything here is
+ *  something an operator would otherwise have to go looking for section by
+ *  section, which is exactly what the single scrolling page used to force. */
+function whatNeedsAttention(
+  users: AdminUser[],
+  feedback: FeedbackItem[],
+  invitations: Invitation[],
+  backups: BackupJob[]
+): Attention[] {
+  const items: Attention[] = [];
 
-function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : "Never"; }
+  const unread = feedback.filter((item) => item.status === "new").length;
+  if (unread) {
+    items.push({
+      key: "feedback",
+      text: `${unread} ${unread === 1 ? "note has" : "notes have"} not been read yet.`,
+      href: "/admin/feedback" as Attention["href"],
+      action: "Read feedback",
+    });
+  }
 
-/** What the person is entitled to right now. The stored column still reads
- *  "premium" after a trial lapses, so the expiry has to be applied here too. */
-function describePlan(user: AdminUser) {
-  if (user.plan !== "premium") return "Free";
-  if (!user.planExpiresAt) return "Premium · never expires";
-  const expiry = new Date(user.planExpiresAt);
-  if (expiry.getTime() < Date.now()) return "Free (trial ended)";
-  return `Premium · until ${expiry.toLocaleDateString(undefined, { dateStyle: "medium" })}`;
-}
-function formatBytes(value?: number | null) {
-  if (!value) return "—";
-  const units = ["B", "KB", "MB", "GB"];
-  let amount = value; let unit = 0;
-  while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit += 1; }
-  return `${amount.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+  const open = invitations.filter(
+    (invitation) => !invitation.acceptedAt && !invitation.revokedAt && new Date(invitation.expiresAt).getTime() >= Date.now()
+  ).length;
+  if (open) {
+    items.push({
+      key: "invitations",
+      text: `${open} ${open === 1 ? "invitation is" : "invitations are"} still waiting to be accepted.`,
+      href: "/admin/invitations" as Attention["href"],
+      action: "See invitations",
+    });
+  }
+
+  const suspended = users.filter((user) => !user.isActive).length;
+  if (suspended) {
+    items.push({
+      key: "suspended",
+      text: `${suspended} ${suspended === 1 ? "account is" : "accounts are"} suspended and cannot sign in.`,
+      href: "/admin/users" as Attention["href"],
+      action: "Review accounts",
+    });
+  }
+
+  const latest = backups[0];
+  if (!latest) {
+    items.push({
+      key: "backup-missing",
+      text: "No database backup has ever been taken.",
+      href: "/admin/backups" as Attention["href"],
+      action: "Take a backup",
+    });
+  } else if (latest.status === "failed") {
+    items.push({
+      key: "backup-failed",
+      text: `The most recent backup failed${latest.errorMessage ? `: ${latest.errorMessage}` : "."}`,
+      href: "/admin/backups" as Attention["href"],
+      action: "Try again",
+    });
+  }
+
+  return items;
 }
 
 export default function AdminPage() {
   const apiCall = useApiCall();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [backups, setBackups] = useState<BackupJob[]>([]);
-  const [audit, setAudit] = useState<AuditLog[]>([]);
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
-  const activeUsers = useMemo(() => users.filter((user) => user.isActive).length, [users]);
-  const newFeedbackCount = useMemo(() => feedback.filter((item) => item.status === "new").length, [feedback]);
 
-  const loadData = useCallback(async () => {
-    const [loadedUsers, loadedBackups, loadedAudit, loadedFeedback] = await Promise.all([
+  useEffect(() => {
+    void Promise.all([
       apiCall<AdminUser[]>("/v1/admin/users"),
       apiCall<BackupJob[]>("/v1/admin/backups"),
-      apiCall<AuditLog[]>("/v1/admin/audit"),
       apiCall<FeedbackItem[]>("/v1/admin/feedback"),
-    ]);
-    setUsers(loadedUsers ?? []); setBackups(loadedBackups ?? []); setAudit(loadedAudit ?? []); setFeedback(loadedFeedback ?? []);
-  }, [apiCall]);
+      apiCall<Invitation[]>("/v1/admin/invitations"),
+    ])
+      .then(([loadedUsers, loadedBackups, loadedFeedback, loadedInvitations]) => {
+        setUsers(loadedUsers ?? []);
+        setBackups(loadedBackups ?? []);
+        setFeedback(loadedFeedback ?? []);
+        setInvitations(loadedInvitations ?? []);
+      })
+      .catch((error) => setMessage(error instanceof Error ? error.message : "The overview could not be loaded."))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => { void loadData().catch((error) => setMessage(error instanceof Error ? error.message : "Failed to load administration data")).finally(() => setLoading(false)); }, [loadData]);
-
-  async function setUserActive(user: AdminUser, isActive: boolean) {
-    setPending(true); setMessage("");
-    try {
-      await apiCall(`/v1/admin/users/${user.id}/status`, { method: "PATCH", body: { isActive } });
-      await loadData(); setMessage(isActive ? "User activated." : "User suspended.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Failed to update user"); }
-    finally { setPending(false); }
-  }
-
-  async function setUserPlan(user: AdminUser, change: { plan: string; months?: number; neverExpires?: boolean }) {
-    setPending(true);
-    setMessage("");
-    try {
-      await apiCall(`/v1/admin/users/${user.id}/plan`, { method: "PATCH", body: change });
-      setMessage(`Plan updated for ${user.maskedEmail}.`);
-      await loadData();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The plan could not be changed.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function setFeedbackStatus(item: FeedbackItem, status: FeedbackStatus) {
-    setPending(true); setMessage("");
-    try {
-      await apiCall(`/v1/admin/feedback/${item.id}/status`, { method: "PATCH", body: { status } });
-      await loadData();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Failed to update feedback"); }
-    finally { setPending(false); }
-  }
-
-  async function requestBackup() {
-    setPending(true); setMessage("");
-    try {
-      await apiCall("/v1/admin/backups", { method: "POST" });
-      await loadData(); setMessage("Encrypted database backup requested.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Failed to request backup"); }
-    finally { setPending(false); }
-  }
-
-  async function createSystemAdmin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true); setMessage("");
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    try {
-      await apiCall("/v1/admin/system-admins", {
-        method: "POST",
-        body: {
-          email: String(data.get("email") ?? "").trim().toLowerCase(),
-          displayName: String(data.get("displayName") ?? "").trim(),
-          password: String(data.get("password") ?? ""),
-        },
-      });
-      form.reset(); setMessage("System administrator created.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Failed to create system administrator"); }
-    finally { setPending(false); }
-  }
+  const attention = whatNeedsAttention(users, feedback, invitations, backups);
+  const premium = users.filter(isOnPremium).length;
+  const workspaces = adminSections.filter((section) => section.href !== "/admin");
 
   return (
     <PageShell>
       <div className="workspaceStack">
-        <section id="overview" className="grid scroll-mt-20 gap-6" aria-labelledby="admin-overview-title">
-          <div id="admin-overview-title"><PageHeader eyebrow="System administration" title="Application operations" subtitle="Manage user access and encrypted backups without opening anyone's financial records." actions={<button className="btn btn-primary" type="button" disabled={pending} onClick={() => void requestBackup()}>Create encrypted backup</button>} /></div>
-          <div className="statsGrid">
-            <div className="statCard"><span className="muted">Registered users</span><strong>{users.length}</strong></div>
-            <div className="statCard"><span className="muted">Active users</span><strong>{activeUsers}</strong></div>
-            <div className="statCard"><span className="muted">Latest backup</span><strong>{backups[0]?.status ?? "None"}</strong></div>
-            <div className="statCard"><span className="muted">New feedback</span><strong>{newFeedbackCount}</strong></div>
-          </div>
-        </section>
+        <PageHeader
+          eyebrow="System administration"
+          title="Overview"
+          subtitle="Running the service: who can use it, what they are entitled to, and whether the data is safe. Nothing here can open anyone's financial records."
+        />
+
         {message ? <p className="statusText" role="status">{message}</p> : null}
 
-        <section id="administrators" className="card settingsListPanel scroll-mt-20">
-          <div className="settingsHeaderRow"><div><strong>Add a system administrator</strong><p className="muted">Create additional operational administrators after the first account has been bootstrapped.</p></div></div>
-          <form className="settingsGrid" onSubmit={(event) => void createSystemAdmin(event)}>
-            <div className="field"><label htmlFor="admin-display-name">Display name</label><input id="admin-display-name" name="displayName" autoComplete="name" /></div>
-            <div className="field"><label htmlFor="admin-email">Email</label><input id="admin-email" name="email" type="email" autoComplete="off" required /></div>
-            <div className="field"><label htmlFor="admin-password">Initial password</label><input id="admin-password" name="password" type="password" autoComplete="new-password" minLength={8} required /><span className="field-hint">Must contain at least one letter and one number.</span></div>
-            <div className="field"><button className="btn btn-primary" type="submit" disabled={pending}>Create administrator</button></div>
-          </form>
-        </section>
+        <div className="statsGrid">
+          <Link className="statCard" href="/admin/users">
+            <span className="muted">Accounts</span>
+            <strong>{loading ? "—" : users.length}</strong>
+          </Link>
+          <Link className="statCard" href="/admin/users">
+            <span className="muted">On premium</span>
+            <strong>{loading ? "—" : premium}</strong>
+          </Link>
+          <Link className="statCard" href="/admin/feedback">
+            <span className="muted">Unread feedback</span>
+            <strong>{loading ? "—" : feedback.filter((item) => item.status === "new").length}</strong>
+          </Link>
+          <Link className="statCard" href="/admin/backups">
+            <span className="muted">Last backup</span>
+            <strong>{loading ? "—" : backups[0] ? formatDate(backups[0].requestedAt) : "None"}</strong>
+          </Link>
+        </div>
 
-        <section id="invitations" className="scroll-mt-20"><InvitationsPanel /></section>
-
-        <section id="users" className="card settingsListPanel scroll-mt-20 overflow-hidden">
-          <div className="settingsHeaderRow"><div><strong>Users</strong><p className="muted">Only masked identity and operational metadata are available.</p></div></div>
-          {loading ? <p className="muted p-4">Loading users...</p> : null}
-          {!loading ? <div className="overflow-x-auto"><table className="dataTable"><thead><tr><th>User</th><th>Plan</th><th>Joined</th><th>Last login</th><th>Status</th><th>Action</th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td data-label="User"><strong>{user.maskedEmail}</strong></td><td data-label="Plan"><span className="metaBadge">{describePlan(user)}</span><span className="adminPlanActions"><button className="btn btn-ghost btn-sm" type="button" disabled={pending} onClick={() => void setUserPlan(user, { plan: "premium", neverExpires: true })}>Free forever</button><button className="btn btn-ghost btn-sm" type="button" disabled={pending} onClick={() => void setUserPlan(user, { plan: "premium", months: 12 })}>+12 months</button><button className="btn btn-ghost btn-sm" type="button" disabled={pending} onClick={() => void setUserPlan(user, { plan: "free" })}>Free</button></span></td><td data-label="Joined">{formatDate(user.createdAt)}</td><td data-label="Last login">{formatDate(user.lastLoginAt)}</td><td data-label="Status"><span className="metaBadge">{user.isActive ? "Active" : "Suspended"}</span></td><td data-label="Action"><button className={user.isActive ? "btn btn-danger" : "btn btn-primary"} type="button" disabled={pending} onClick={() => void setUserActive(user, !user.isActive)}>{user.isActive ? "Suspend" : "Activate"}</button></td></tr>)}</tbody></table></div> : null}
-        </section>
-
-        <section id="feedback" className="card settingsListPanel scroll-mt-20 overflow-hidden">
-          <div className="settingsHeaderRow"><div><strong>Beta feedback</strong><p className="muted">Notes submitted from the app&apos;s &ldquo;Send feedback&rdquo; menu, newest first.</p></div></div>
-          {loading ? <p className="muted p-4">Loading feedback...</p> : null}
-          {!loading && feedback.length === 0 ? <p className="muted p-4">No feedback submitted yet.</p> : null}
-          {!loading && feedback.length ? (
-            <div className="overflow-x-auto">
-              <table className="dataTable">
-                <thead><tr><th>From</th><th>Message</th><th>Page</th><th>Received</th><th>Status</th></tr></thead>
-                <tbody>
-                  {feedback.map((item) => (
-                    <tr key={item.id}>
-                      <td data-label="From">{item.maskedEmail}</td>
-                      <td data-label="Message" className="max-w-md whitespace-pre-wrap">{item.message}</td>
-                      <td data-label="Page" className="font-mono text-xs">{item.pagePath || "—"}</td>
-                      <td data-label="Received">{formatDate(item.createdAt)}</td>
-                      <td data-label="Status">
-                        <select
-                          className="metaBadge"
-                          value={item.status}
-                          disabled={pending}
-                          onChange={(event) => void setFeedbackStatus(item, event.target.value as FeedbackStatus)}
-                        >
-                          {feedbackStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <section className="card settingsListPanel">
+          <div className="settingsHeaderRow">
+            <div>
+              <strong>Needs attention</strong>
+              <p className="muted">Things waiting on you right now.</p>
             </div>
+          </div>
+          {loading ? <p className="muted p-4">Checking…</p> : null}
+          {!loading && attention.length === 0 ? (
+            <p className="muted p-4">Nothing is waiting. Feedback is read, invitations are settled and a backup exists.</p>
+          ) : null}
+          {!loading && attention.length ? (
+            <ul className="resourceList">
+              {attention.map((item) => (
+                <li key={item.key} className="resourceRow">
+                  <span className="resourceBody">
+                    <strong>{item.text}</strong>
+                  </span>
+                  <Link className="btn btn-ghost btn-sm" href={item.href}>
+                    {item.action}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </section>
 
-        <section id="backups" className="card settingsListPanel scroll-mt-20 overflow-hidden">
-          <div className="settingsHeaderRow"><div><strong>Encrypted backups</strong><p className="muted">Backups are stored encrypted. This console cannot download or inspect them.</p></div></div>
-          <div className="overflow-x-auto"><table className="dataTable"><thead><tr><th>Requested</th><th>Status</th><th>Size</th><th>Checksum</th></tr></thead><tbody>{backups.map((job) => <tr key={job.id}><td data-label="Requested">{formatDate(job.requestedAt)}</td><td data-label="Status"><span className="metaBadge">{job.status}</span>{job.errorMessage ? <div className="text-negative">{job.errorMessage}</div> : null}</td><td data-label="Size">{formatBytes(job.sizeBytes)}</td><td data-label="Checksum" className="font-mono text-xs">{job.checksumSha256?.slice(0, 16) ?? "—"}</td></tr>)}</tbody></table></div>
-        </section>
-
-        <section id="audit" className="card settingsListPanel scroll-mt-20 overflow-hidden">
-          <div className="settingsHeaderRow"><strong>Administrative audit trail</strong></div>
-          <div className="overflow-x-auto"><table className="dataTable"><thead><tr><th>Time</th><th>Action</th><th>Target</th></tr></thead><tbody>{audit.map((item) => <tr key={item.id}><td data-label="Time">{formatDate(item.createdAt)}</td><td data-label="Action">{item.action.replaceAll(".", " ")}</td><td data-label="Target">{item.targetType}{item.targetId ? ` · ${item.targetId.slice(0, 8)}` : ""}</td></tr>)}</tbody></table></div>
+        <section className="grid gap-4">
+          <div className="grid gap-1">
+            <h2 className="text-lg font-semibold text-on-surface">Where things are</h2>
+            <p className="muted text-sm">Each of these is its own page, also in the sidebar.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {workspaces.map((section) => (
+              <Link key={section.href} className="card card-pad grid content-start gap-1" href={section.href}>
+                <strong className="text-on-surface">{section.label}</strong>
+                <span className="muted text-sm leading-6">{section.description}</span>
+              </Link>
+            ))}
+          </div>
         </section>
       </div>
     </PageShell>

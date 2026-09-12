@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -57,13 +58,22 @@ func (s *UserStore) CountSystemAdmins(ctx context.Context) (int, error) {
 	return count, err
 }
 
-func (s *AdminStore) ListUsers(ctx context.Context) ([]AdminUserSummary, error) {
+// ListUsers returns every member account, or just the one whose address is
+// exactly emailFilter. The console only ever shows a masked address, so an
+// administrator who needs to act on a specific person — granting their own
+// accounts a permanent plan, say — has no way to tell two masked addresses
+// apart. Matching an address the administrator already typed in full gives
+// them that back without making the list enumerable.
+func (s *AdminStore) ListUsers(ctx context.Context, emailFilter string) ([]AdminUserSummary, error) {
+	emailFilter = strings.ToLower(strings.TrimSpace(emailFilter))
 	rows, err := s.db.Query(ctx, `
 		select id, email, role, is_active, created_at::text, last_login_at::text,
 		       plan, plan_expires_at, plan_source
-		from users where role <> 'system_admin'
+		from users
+		where role <> 'system_admin'
+		  and ($1 = '' or lower(email) = $1)
 		order by created_at desc
-	`)
+	`, emailFilter)
 	if err != nil {
 		return nil, err
 	}

@@ -2183,3 +2183,17 @@ textarea.control {
   gap: var(--space-xs);
   margin-top: var(--space-xs);
 }
+
+/* The administration overview turns its stat cards and section cards into
+   links, so they need the affordance a card alone does not carry. */
+a.statCard,
+a.card {
+  text-decoration: none;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+
+a.statCard:hover,
+a.card:hover {
+  border-color: var(--primary);
+  background: var(--surface-soft);
+}

@@ -4,6 +4,10 @@
 - Accounts now sit on a plan: a new account opens with a month of premium, an invited beta account with six, and either lapses to the free plan rather than locking anyone out of their own records
 - Administrators can invite people by email, with the free premium period set per invitation, and revoke an invitation that has not been used
 - The admin console shows what plan each account is on and can grant premium for a period, grant it permanently, or return an account to free
+- The admin console is now one page per job — People, Invitations, Feedback, Backups, Administrators, Audit trail — instead of six sections stacked on a single scrolling page, with the sidebar marking the page you are on
+- The admin console opens on an overview that says what is waiting: unread feedback, invitations nobody has accepted, suspended accounts, and whether a backup has ever been taken, each linking straight to the page that settles it
+- Administrators can look an account up by its full email address, which is the only way to tell masked addresses apart when granting a plan
+- The plan buttons say what they do to the account — "Premium, no expiry" rather than "Free forever" — and suspending an account or dropping it to free now asks first
 - Visiting the site now opens a homepage explaining what Inscribed Expenses does, how you sign in, and exactly what a Google account is asked for, instead of sending everyone straight to the sign-in form
 - A privacy policy is published at /privacy, linked from sign-in, registration and Settings, setting out what the service records about your money and who it reaches
 - You can sign in with a six-digit code emailed to you, or with a Google account, instead of having to remember a password

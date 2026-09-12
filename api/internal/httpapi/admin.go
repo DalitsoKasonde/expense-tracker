@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Server) listAdminUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := s.admin.ListUsers(r.Context())
+	users, err := s.admin.ListUsers(r.Context(), r.URL.Query().Get("email"))
 	if err != nil {
 		http.Error(w, "failed to list users", http.StatusInternalServerError)
 		return
