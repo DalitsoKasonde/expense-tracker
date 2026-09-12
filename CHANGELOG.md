@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- A privacy policy is published at /privacy, linked from sign-in, registration and Settings, setting out what the service records about your money and who it reaches
 - Replying to an email from Chuma reaches a real inbox; the sending address is a no-reply on a domain with no mailbox, so a reply used to vanish without either side knowing
 - Forgetting your password is recoverable: ask for a reset link from the sign-in page, follow it, and set a new one — until now there was no way back into an account at all
 - You can confirm your email address from Preferences, which is what makes a password reset reachable if you ever need one

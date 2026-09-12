@@ -22,6 +22,10 @@ export default async function RegisterPage() {
           <h1 className="text-center text-3xl font-semibold text-on-surface">Create your account</h1>
           <p className="mt-2 text-center text-sm text-on-surface-soft">Start building a clearer view of your money.</p>
           <RegisterForm />
+          <p className="mt-4 text-center text-xs leading-5 text-on-surface-soft">
+            By creating an account, you acknowledge the{" "}
+            <Link href="/privacy" className="font-semibold text-accent hover:underline">Privacy Policy</Link>.
+          </p>
           <p className="mt-5 text-center text-sm text-on-surface-soft">
             Already have an account?{" "}
             <Link href="/login" className="font-semibold text-accent hover:underline">
