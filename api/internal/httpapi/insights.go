@@ -59,6 +59,7 @@ type insightSummaryResponse struct {
 
 type notificationItem struct {
 	ID        string `json:"id"`
+	Type      string `json:"type"`
 	Title     string `json:"title"`
 	Body      string `json:"body"`
 	Level     string `json:"level"`
@@ -236,7 +237,6 @@ func (s *Server) notifications(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, r, "notifications.monthly_insights", "notifications are temporarily unavailable", err)
 		return
 	}
-	current := data[int(asOf.Month())-1]
 
 	loans, err := s.loans.ListByUser(r.Context(), claims.UserID)
 	if err != nil {
@@ -244,104 +244,26 @@ func (s *Server) notifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items := make([]notificationItem, 0)
-	for index, alert := range buildInsightAlerts(current) {
-		items = append(items, notificationItem{
-			ID:        "insight-" + strconv.Itoa(index+1),
-			Title:     insightTitleForAlert(alert),
-			Body:      alert,
-			Level:     insightLevelForAlert(alert),
-			Href:      notificationHrefForAlert(alert),
-			CreatedAt: asOf.Format(time.RFC3339),
-		})
-	}
-
-	activeLoanCount := 0
-	totalDebtRemaining := int64(0)
-	for _, loan := range loans {
-		if loan.TotalRemainingBalance <= 0 {
-			continue
-		}
-		activeLoanCount++
-		totalDebtRemaining += loan.TotalRemainingBalance
-	}
-	if activeLoanCount > 0 {
-		items = append(items, notificationItem{
-			ID:        "loan-balance",
-			Title:     "Outstanding loan balance",
-			Body:      "You still have active loan balances to monitor in the Loans section. Total remaining debt is " + formatMinorAsMoney(totalDebtRemaining, prefs.DefaultCurrency) + ".",
-			Level:     "info",
-			Href:      "/loans",
-			CreatedAt: asOf.Format(time.RFC3339),
-		})
-	}
-	if activeLoanCount > 0 && current.FreeCashFlow < 0 {
-		items = append(items, notificationItem{
-			ID:        "loan-cashflow",
-			Title:     "Debt and cash flow need attention",
-			Body:      "Loan balances are still open while free cash flow is negative this month.",
-			Level:     "warning",
-			Href:      "/reports",
-			CreatedAt: asOf.Format(time.RFC3339),
-		})
-	}
-
-	response.Items = items
+	response.Items = buildNotifications(notificationInputs{
+		Insight:  data[int(asOf.Month())-1],
+		Loans:    loans,
+		Currency: prefs.DefaultCurrency,
+		AsOf:     asOf,
+	})
 	writeJSON(w, http.StatusOK, response)
 }
 
+// buildInsightAlerts returns the alert sentences the insight summary shows.
+// It reads them off the same rules the notification bell uses so the two views
+// of a month can never contradict each other. Loans are deliberately omitted:
+// this summary describes the month's flows, not the balance sheet.
 func buildInsightAlerts(current monthlyInsight) []string {
-	alerts := make([]string, 0)
-	if current.EarnedIncome > 0 {
-		if current.LivingExpenses*10000/current.EarnedIncome > 7000 {
-			alerts = append(alerts, "Living expenses exceeded 70% of earned income.")
-		}
-		if (current.DebtPrincipalPaid+current.DebtInterestFees)*10000/current.EarnedIncome > 3000 {
-			alerts = append(alerts, "Debt payments exceeded 30% of earned income.")
-		}
-	}
-	if current.BorrowedIncome > 0 {
-		alerts = append(alerts, "Borrowed money was used this month.")
-	}
-	if current.FreeCashFlow < 0 {
-		alerts = append(alerts, "Free cash flow is negative this month.")
+	items := buildNotifications(notificationInputs{Insight: current})
+	alerts := make([]string, 0, len(items))
+	for _, item := range items {
+		alerts = append(alerts, item.Body)
 	}
 	return alerts
-}
-
-func insightTitleForAlert(alert string) string {
-	switch {
-	case alert == "Living expenses exceeded 70% of earned income.":
-		return "Spending is running high"
-	case alert == "Debt payments exceeded 30% of earned income.":
-		return "Debt payments are heavy"
-	case alert == "Borrowed money was used this month.":
-		return "Borrowed money used this month"
-	case alert == "Free cash flow is negative this month.":
-		return "Free cash flow is negative"
-	default:
-		return "Financial alert"
-	}
-}
-
-func insightLevelForAlert(alert string) string {
-	switch {
-	case alert == "Free cash flow is negative this month.", alert == "Debt payments exceeded 30% of earned income.":
-		return "warning"
-	default:
-		return "info"
-	}
-}
-
-func notificationHrefForAlert(alert string) string {
-	switch {
-	case alert == "Borrowed money was used this month.", alert == "Debt payments exceeded 30% of earned income.":
-		return "/loans"
-	case alert == "Living expenses exceeded 70% of earned income.", alert == "Free cash flow is negative this month.":
-		return "/reports"
-	default:
-		return "/today"
-	}
 }
 
 func formatMinorAsMoney(amount int64, currency string) string {

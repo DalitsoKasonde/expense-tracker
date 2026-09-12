@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- Forgetting your password is recoverable: ask for a reset link from the sign-in page, follow it, and set a new one — until now there was no way back into an account at all
+- You can confirm your email address from Preferences, which is what makes a password reset reachable if you ever need one
+- Chuma can email you a summary of what needs attention — every day, every Monday, or on the first of the month — and you choose which alerts are worth an email and which are not
+- A daily summary is only sent when something actually needs attention; weekly and monthly ones always carry the month's figures
+- Preferences lists the emails Chuma has actually sent you, so "did my summary go out?" has an answer
+- The Reports page can email you the year's statement, with every month attached as a spreadsheet
+- Feedback you submit reaches the operator by email instead of waiting to be noticed in the admin console
 - A stock's page shows what each share is carried at and can fetch the latest LuSE close and save it as the valuation in one tap, instead of the price lookup living inside the update-value dialog
 - A stock's page offers "Add to this stock", which opens the add form with that stock already selected, matching what bonds already had
 - Share counts read as "150" rather than "150.0000"; fractional shares still show their decimals

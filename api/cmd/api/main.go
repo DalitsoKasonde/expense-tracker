@@ -41,9 +41,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	api := httpapi.NewServer(cfg, db)
+
+	// Scheduled email runs in this process rather than a second container: the
+	// deployment host is small and already busy, and a ticker in a process that
+	// has to be up anyway costs nothing extra.
+	api.StartDigestScheduler(context.Background())
+
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.New(cfg, db),
+		Handler:           api.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

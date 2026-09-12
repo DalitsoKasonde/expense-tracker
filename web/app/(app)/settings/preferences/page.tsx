@@ -6,12 +6,15 @@ import { supportedCurrencies } from "@/lib/currencies";
 import { applyColorScheme, applyTheme } from "@/components/preference-theme-sync";
 import { primeUserCurrency } from "@/lib/use-user-currency";
 import type { ColorScheme } from "@/lib/theme";
+import { EmailNotifications, type DigestFrequency } from "@/components/settings/email-notifications";
 
 type UserPreferences = {
   defaultCurrency: string;
   theme: "light" | "dark";
   colorScheme: ColorScheme;
   notificationsEnabled: boolean;
+  emailDigestFrequency: DigestFrequency;
+  emailMutedNotificationTypes: string[];
 };
 
 const colorSchemes: Array<{ value: ColorScheme; label: string }> = [
@@ -28,6 +31,8 @@ export default function PreferencesSettingsPage() {
     theme: "light",
     colorScheme: "default",
     notificationsEnabled: false,
+    emailDigestFrequency: "off",
+    emailMutedNotificationTypes: [],
   });
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -38,7 +43,7 @@ export default function PreferencesSettingsPage() {
   useEffect(() => {
     void apiCallRef.current<UserPreferences>("/v1/user/preferences")
       .then((prefs) => {
-        setForm(prefs);
+        setForm({ ...prefs, emailMutedNotificationTypes: prefs.emailMutedNotificationTypes ?? [] });
         lastSavedRef.current = JSON.stringify(prefs);
         primeUserCurrency(prefs.defaultCurrency);
         applyTheme(prefs.theme);
@@ -158,6 +163,13 @@ export default function PreferencesSettingsPage() {
         {status ? <p className="statusText">{status}</p> : null}
         {!status && hasLoaded ? <p className="statusText">Changes save automatically.</p> : null}
       </form>
+
+      <EmailNotifications
+        frequency={form.emailDigestFrequency}
+        mutedTypes={form.emailMutedNotificationTypes}
+        disabled={loading}
+        onChange={(next) => setForm((current) => ({ ...current, ...next }))}
+      />
     </section>
   );
 }

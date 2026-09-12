@@ -196,6 +196,8 @@ export default function ReportsPage() {
   // first page load fetched the whole report twice.
   const yearInitializedRef = useRef(false);
   const [retryVersion, setRetryVersion] = useState(0);
+  const [emailStatus, setEmailStatus] = useState("");
+  const [emailPending, setEmailPending] = useState(false);
 
   // A newly saved entry (from this page or elsewhere in the app) should be
   // reflected here without a manual reload.
@@ -329,6 +331,25 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   }
 
+  // The statement goes to the account's own address: the API deliberately does
+  // not accept a recipient, so this cannot become a way to mail anyone.
+  async function emailStatement() {
+    setEmailPending(true);
+    setEmailStatus("");
+
+    try {
+      const result = await apiCallRef.current<{ sentTo: string }>("/v1/reports/email", {
+        method: "POST",
+        body: { year: selectedYear },
+      });
+      setEmailStatus(`Your ${selectedYear} statement is on its way to ${result?.sentTo ?? "your inbox"}.`);
+    } catch (caught) {
+      setEmailStatus(caught instanceof Error ? caught.message : "We could not send the statement.");
+    } finally {
+      setEmailPending(false);
+    }
+  }
+
   if (loading || sessionStatus === "loading") return <ReportsLoading />;
 
   return (
@@ -342,6 +363,14 @@ export default function ReportsPage() {
             <div className="flex flex-wrap items-end gap-3 print:hidden">
               <button className="btn btn-ghost" type="button" onClick={exportAnnualReport}>
                 Export CSV
+              </button>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => void emailStatement()}
+                disabled={emailPending}
+              >
+                {emailPending ? "Sending" : "Email me this"}
               </button>
               <button className="btn btn-ghost" type="button" onClick={() => window.print()}>
                 Print
@@ -364,6 +393,10 @@ export default function ReportsPage() {
           ) : null
         }
       />
+
+      {emailStatus ? (
+        <p className="statusText print:hidden" role="status">{emailStatus}</p>
+      ) : null}
 
       {error ? (
         <AsyncErrorState

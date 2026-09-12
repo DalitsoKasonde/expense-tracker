@@ -1816,6 +1816,21 @@ textarea.control {
   gap: var(--space-md);
 }
 
+/* A group of related toggles. The browser default fieldset border and padding
+   would fight the card's own edge, so both are cleared and the group is held
+   together by its legend instead. */
+.settingsFieldset{
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settingsFieldset > legend{
+  padding: var(--space-xs) 0;
+}
+
 .settingsLeadCard{
   display: grid;
   gap: var(--space-xs);

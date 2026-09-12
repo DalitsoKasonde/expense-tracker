@@ -17,6 +17,9 @@ const (
 	defaultCookieSameSite       = "lax"
 	defaultMaxBodyBytes   int64 = 25 << 20
 	defaultAppVersion           = "dev"
+	defaultSMTPPort             = 587
+	defaultMailFromName         = "Chuma"
+	defaultAppPublicURL         = "http://localhost:3000"
 )
 
 type Config struct {
@@ -39,6 +42,21 @@ type Config struct {
 	MansaAPIKey         string
 	BackupDir           string
 	BackupEncryptionKey string
+
+	// Mail. SMTPHost empty means outgoing mail is disabled: the app still
+	// works, it just logs what it would have sent instead of sending it.
+	SMTPHost        string
+	SMTPPort        int
+	SMTPUsername    string
+	SMTPPassword    string
+	MailFromAddress string
+	MailFromName    string
+	// AppPublicURL is the origin links in emails point at. Emails are read
+	// outside the app, so a relative href is useless and there is no request
+	// to infer the host from.
+	AppPublicURL string
+	// AdminAlertEmail receives operator mail such as new user feedback.
+	AdminAlertEmail string
 }
 
 func Load() (Config, error) {
@@ -58,6 +76,13 @@ func Load() (Config, error) {
 		MansaAPIKey:                  os.Getenv("MANSA_API_KEY"),
 		BackupDir:                    os.Getenv("BACKUP_DIR"),
 		BackupEncryptionKey:          os.Getenv("BACKUP_ENCRYPTION_KEY"),
+		SMTPHost:                     strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		SMTPUsername:                 os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:                 os.Getenv("SMTP_PASSWORD"),
+		MailFromAddress:              strings.TrimSpace(os.Getenv("MAIL_FROM_ADDRESS")),
+		MailFromName:                 envOrDefault("MAIL_FROM_NAME", defaultMailFromName),
+		AppPublicURL:                 strings.TrimRight(envOrDefault("APP_PUBLIC_URL", defaultAppPublicURL), "/"),
+		AdminAlertEmail:              strings.TrimSpace(strings.ToLower(os.Getenv("ADMIN_ALERT_EMAIL"))),
 	}
 
 	if cfg.AppEnv == "" {
@@ -70,6 +95,18 @@ func Load() (Config, error) {
 	cfg.MaxBodyBytes, err = envOrDefaultInt64("MAX_BODY_BYTES", defaultMaxBodyBytes)
 	if err != nil {
 		return Config{}, err
+	}
+
+	port, err := envOrDefaultInt64("SMTP_PORT", defaultSMTPPort)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.SMTPPort = int(port)
+
+	// Catching this at boot beats discovering it when a password reset is
+	// already in flight and there is no address to send it from.
+	if cfg.SMTPHost != "" && cfg.MailFromAddress == "" {
+		return Config{}, errors.New("MAIL_FROM_ADDRESS is required when SMTP_HOST is set")
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -101,6 +138,13 @@ func Load() (Config, error) {
 
 func (c Config) IsProduction() bool {
 	return c.AppEnv == "production"
+}
+
+// MailEnabled reports whether a relay is configured. Callers use it to decide
+// whether to offer a feature that depends on delivery, rather than promising
+// an email that would only ever reach the log.
+func (c Config) MailEnabled() bool {
+	return c.SMTPHost != ""
 }
 
 func envOrDefault(key, fallback string) string {

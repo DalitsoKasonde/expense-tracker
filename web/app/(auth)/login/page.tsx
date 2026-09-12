@@ -24,7 +24,12 @@ export default async function LoginPage() {
             Sign in to see your accounts, goals, and latest money movement.
           </p>
           <LoginForm />
-          <p className="mt-5 text-center text-sm text-on-surface-soft">
+          <p className="mt-4 text-center text-sm">
+            <Link href="/forgot-password" className="font-semibold text-accent hover:underline">
+              Forgot your password?
+            </Link>
+          </p>
+          <p className="mt-3 text-center text-sm text-on-surface-soft">
             New to Expenses?{" "}
             <Link href="/register" className="font-semibold text-accent hover:underline">
               Create an account

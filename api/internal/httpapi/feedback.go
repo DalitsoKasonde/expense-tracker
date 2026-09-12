@@ -36,10 +36,17 @@ func (s *Server) createFeedback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := s.feedback.Create(r.Context(), claims.UserID, message, strings.TrimSpace(req.PagePath))
+	pagePath := strings.TrimSpace(req.PagePath)
+	item, err := s.feedback.Create(r.Context(), claims.UserID, message, pagePath)
 	if err != nil {
 		writeSettingsError(w, err, "failed to submit feedback")
 		return
+	}
+
+	// Best effort: the feedback is already saved, so failing to look up the
+	// sender's address is a reason to skip the alert, not to fail the request.
+	if user, lookupErr := s.users.FindByID(r.Context(), claims.UserID); lookupErr == nil {
+		s.notifyAdminOfFeedback(user.Email, message, pagePath)
 	}
 
 	writeJSON(w, http.StatusCreated, item)

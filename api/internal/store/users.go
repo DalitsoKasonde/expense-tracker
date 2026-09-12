@@ -15,6 +15,10 @@ type User struct {
 	PasswordHash string
 	Role         string `json:"role"`
 	IsActive     bool
+	// EmailVerifiedAt is nil until someone follows the link they were sent.
+	// Accounts created before verification existed are left nil rather than
+	// backfilled, so the flag never claims an address was proven when it wasn't.
+	EmailVerifiedAt *string `json:"emailVerifiedAt"`
 }
 
 type UserStore struct {
@@ -39,7 +43,7 @@ func (s *UserStore) CountUsers(ctx context.Context) (int, error) {
 func (s *UserStore) FindByEmail(ctx context.Context, email string) (User, error) {
 	var user User
 	err := s.db.QueryRow(ctx, `
-		select id, email, display_name, password_hash, role, is_active
+		select id, email, display_name, password_hash, role, is_active, email_verified_at::text
 		from users
 		where email = $1
 	`, email).Scan(
@@ -49,6 +53,7 @@ func (s *UserStore) FindByEmail(ctx context.Context, email string) (User, error)
 		&user.PasswordHash,
 		&user.Role,
 		&user.IsActive,
+		&user.EmailVerifiedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -109,4 +114,43 @@ func (s *UserStore) CreateInvitedUser(ctx context.Context, email, passwordHash, 
 		&user.IsActive,
 	)
 	return user, err
+}
+
+// FindByID loads the account behind an authenticated request. Handlers that
+// send mail need the address and name, which the JWT deliberately does not carry.
+func (s *UserStore) FindByID(ctx context.Context, userID string) (User, error) {
+	var user User
+	err := s.db.QueryRow(ctx, `
+		select id, email, display_name, password_hash, role, is_active, email_verified_at::text
+		from users
+		where id = $1
+	`, userID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.DisplayName,
+		&user.PasswordHash,
+		&user.Role,
+		&user.IsActive,
+		&user.EmailVerifiedAt,
+	)
+	return user, err
+}
+
+func (s *UserStore) UpdatePassword(ctx context.Context, userID, passwordHash string) error {
+	_, err := s.db.Exec(ctx, `
+		update users set password_hash = $2, updated_at = now() where id = $1
+	`, userID, passwordHash)
+	return err
+}
+
+// MarkEmailVerified is written to only once. Re-verifying an already-verified
+// address must not move the date, which is the record of when the address was
+// actually proven.
+func (s *UserStore) MarkEmailVerified(ctx context.Context, userID string) error {
+	_, err := s.db.Exec(ctx, `
+		update users
+		set email_verified_at = coalesce(email_verified_at, now()), updated_at = now()
+		where id = $1
+	`, userID)
+	return err
 }

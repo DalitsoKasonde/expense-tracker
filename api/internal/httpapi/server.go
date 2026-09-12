@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"slices"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/dalitsokasonde/expense-tracker/api/internal/auth"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/config"
+	"github.com/dalitsokasonde/expense-tracker/api/internal/mail"
 	"github.com/dalitsokasonde/expense-tracker/api/internal/store"
 )
 
@@ -41,11 +43,21 @@ type Server struct {
 	idempotencyKeys  *store.IdempotencyKeyStore
 	admin            *store.AdminStore
 	feedback         *store.FeedbackStore
+	authTokens       *store.AuthTokenStore
+	emailDeliveries  *store.EmailDeliveryStore
+	mailer           *mailer
 	marketStocks     marketStockDirectoryCache
 }
 
+// New builds the server and its HTTP handler. Prefer NewServer when the caller
+// also needs to start background work such as the digest scheduler.
 func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
+	return NewServer(cfg, db).Handler()
+}
+
+func NewServer(cfg config.Config, db *pgxpool.Pool) *Server {
 	bondStore := store.NewBondStore(db)
+	deliveries := store.NewEmailDeliveryStore(db)
 	s := &Server{
 		config:           cfg,
 		db:               db,
@@ -69,14 +81,47 @@ func New(cfg config.Config, db *pgxpool.Pool) http.Handler {
 		idempotencyKeys:  store.NewIdempotencyKeyStore(db),
 		admin:            store.NewAdminStore(db),
 		feedback:         store.NewFeedbackStore(db),
+		authTokens:       store.NewAuthTokenStore(db),
+		emailDeliveries:  deliveries,
 	}
 
+	s.mailer = &mailer{
+		sender:     newMailSender(cfg),
+		deliveries: deliveries,
+		publicURL:  cfg.AppPublicURL,
+	}
+
+	return s
+}
+
+// newMailSender falls back to logging rather than failing to start. A relay
+// that is misconfigured or not yet provisioned must not take the whole API
+// down; everything except email keeps working, and the log says what was
+// dropped.
+func newMailSender(cfg config.Config) mail.Sender {
+	if !cfg.MailEnabled() {
+		log.Print("mail: SMTP_HOST is not set, outgoing email will be logged instead of sent")
+		return mail.LogSender{}
+	}
+
+	sender, err := mail.NewSMTPSender(
+		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword,
+		cfg.MailFromAddress, cfg.MailFromName,
+	)
+	if err != nil {
+		log.Printf("mail: %v; outgoing email will be logged instead of sent", err)
+		return mail.LogSender{}
+	}
+	return sender
+}
+
+func (s *Server) Handler() http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
-	router.Use(limitRequestBody(cfg.MaxBodyBytes))
-	router.Use(cors(cfg.AppOrigins))
+	router.Use(limitRequestBody(s.config.MaxBodyBytes))
+	router.Use(cors(s.config.AppOrigins))
 
 	s.registerRoutes(router)
 	router.Route("/api", s.registerRoutes)
@@ -92,6 +137,11 @@ func (s *Server) registerRoutes(router chi.Router) {
 	router.Get("/v1/setup/status", s.setupStatus)
 	router.With(authLimiter.middleware).Post("/v1/auth/login", s.login)
 	router.With(registerLimiter.middleware).Post("/v1/auth/register", s.register)
+	// Rate limited like login: both accept an unauthenticated email address and
+	// would otherwise be a way to mail somebody repeatedly.
+	router.With(registerLimiter.middleware).Post("/v1/auth/forgot-password", s.forgotPassword)
+	router.With(authLimiter.middleware).Post("/v1/auth/reset-password", s.resetPassword)
+	router.With(authLimiter.middleware).Post("/v1/auth/verify-email", s.verifyEmail)
 
 	router.Group(func(protected chi.Router) {
 		protected.Use(auth.Middleware(s.config.JWTSecret, s.config.CookieName))
@@ -113,6 +163,10 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.Post("/v1/onboarding/complete", s.completeOnboarding)
 		protected.Get("/v1/user/preferences", s.getUserPreferences)
 		protected.Patch("/v1/user/preferences", s.updateUserPreferences)
+		protected.Get("/v1/notifications/types", s.listNotificationTypes)
+		protected.Post("/v1/user/email/verify", s.sendVerificationEmail)
+		protected.Get("/v1/user/emails", s.listEmailDeliveries)
+		protected.Post("/v1/reports/email", s.emailReport)
 
 		// Accounts
 		protected.Get("/v1/accounts", s.listAccounts)
