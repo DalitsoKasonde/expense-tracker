@@ -8,6 +8,7 @@
 - The admin console opens on an overview that says what is waiting: unread feedback, invitations nobody has accepted, suspended accounts, and whether a backup has ever been taken, each linking straight to the page that settles it
 - Administrators can look an account up by its full email address, which is the only way to tell masked addresses apart when granting a plan
 - The plan buttons say what they do to the account — "Premium, no expiry" rather than "Free forever" — and suspending an account or dropping it to free now asks first
+- An invitation says which of its two dates is which: the link lapses in 14 days, while the premium months only start counting when the person accepts. Both were printed as one phrase, so a 12-month invitation read as though its premium ran out in a fortnight
 - Visiting the site now opens a homepage explaining what Inscribed Expenses does, how you sign in, and exactly what a Google account is asked for, instead of sending everyone straight to the sign-in form
 - A privacy policy is published at /privacy, linked from sign-in, registration and Settings, setting out what the service records about your money and who it reaches
 - You can sign in with a six-digit code emailed to you, or with a Google account, instead of having to remember a password

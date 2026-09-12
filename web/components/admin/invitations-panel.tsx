@@ -2,30 +2,9 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
+import { describeInvitation, type Invitation } from "@/components/admin/admin-data";
 
-export type Invitation = {
-  id: string;
-  email: string;
-  premiumMonths: number;
-  note?: string | null;
-  expiresAt: string;
-  acceptedAt?: string | null;
-  revokedAt?: string | null;
-  createdAt: string;
-};
-
-function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—";
-}
-
-/** An invitation is in exactly one of these states, and the order matters:
- *  accepted and revoked both outrank expiry. */
-function statusOf(invitation: Invitation) {
-  if (invitation.acceptedAt) return "Accepted";
-  if (invitation.revokedAt) return "Revoked";
-  if (new Date(invitation.expiresAt).getTime() < Date.now()) return "Expired";
-  return "Open";
-}
+export type { Invitation };
 
 export function InvitationsPanel() {
   const apiCall = useApiCall();
@@ -95,7 +74,8 @@ export function InvitationsPanel() {
       <div className="grid gap-1">
         <h2 className="text-lg font-semibold text-on-surface">Beta invitations</h2>
         <span className="muted text-sm">
-          An invited person sets their own password and starts with premium included.
+          An invited person sets their own password and starts with premium included. The link is good for 14
+          days; their premium months only start counting once they accept.
         </span>
       </div>
 
@@ -122,6 +102,7 @@ export function InvitationsPanel() {
             disabled={pending}
             onChange={(event) => setMonths(Number(event.target.value))}
           />
+          <span className="field-hint">Counted from the day they accept, not from today.</span>
         </div>
         <button type="submit" className="btn btn-primary" disabled={pending}>
           {pending ? "Working" : "Send invitation"}
@@ -143,13 +124,13 @@ export function InvitationsPanel() {
       {invitations.length ? (
         <ul className="resourceList">
           {invitations.map((invitation) => {
-            const status = statusOf(invitation);
+            const { status, detail } = describeInvitation(invitation);
             return (
               <li key={invitation.id} className="resourceRow">
                 <span className="resourceBody">
                   <strong>{invitation.email}</strong>
                   <span className="muted">
-                    {status} · {invitation.premiumMonths} months premium · expires {formatDate(invitation.expiresAt)}
+                    <span className="metaBadge">{status}</span> {detail}
                     {invitation.note ? ` · ${invitation.note}` : ""}
                   </span>
                 </span>
