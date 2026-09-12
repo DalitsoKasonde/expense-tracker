@@ -8,7 +8,7 @@ export default function AdminInvitationsPage() {
         <PageHeader
           eyebrow="System administration"
           title="Invitations"
-          subtitle="Invite someone to the beta by email. They set their own password, and the premium months you choose start the moment they accept."
+          subtitle="Invite someone to the beta by email. Each invitation grants its own stretch of premium, counted from the day it is accepted rather than the day you send it."
         />
         <InvitationsPanel />
       </div>

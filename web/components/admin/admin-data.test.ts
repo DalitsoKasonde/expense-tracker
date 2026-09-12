@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { describeInvitation, type Invitation } from "./admin-data";
+import { describeInvitation, formatDay, type Invitation } from "./admin-data";
 
 const base: Invitation = {
   id: "inv-1",
-  email: "kasondedalitso@example.com",
+  email: "someone@example.com",
   premiumMonths: 12,
   expiresAt: "2026-09-26T00:00:00Z",
   createdAt: "2026-09-12T00:00:00Z",
@@ -12,29 +12,41 @@ const base: Invitation = {
 const now = new Date("2026-09-12T12:00:00Z");
 
 describe("describeInvitation", () => {
-  it("does not read as though the premium expires with the link", () => {
-    const { status, detail } = describeInvitation(base, now);
+  it("keeps the link expiry out of the premium column, where it read as the premium running out", () => {
+    const { status, timing, premium } = describeInvitation(base, now);
 
+    // The old copy was one phrase — "12 months premium · expires 26 Sep 2026" —
+    // which put the 14-day link expiry directly after a twelve-month figure.
     expect(status).toBe("Open");
-    // The old copy was "12 months premium · expires 26 Sep 2026", which put the
-    // 14-day link expiry immediately after the months and made 12 months of
-    // premium look like a fortnight of it.
-    expect(detail).toContain("Link expires");
-    expect(detail).toContain("counted from the day they accept");
-    expect(detail).not.toMatch(/months of premium.*expires/);
+    expect(timing).toBe(`Link expires ${formatDay("2026-09-26T00:00:00Z")}`);
+    expect(premium).toBe("12 months once accepted");
+    expect(premium).not.toContain("2026");
   });
 
-  it("stops mentioning the link once the invitation has been accepted", () => {
-    const { status, detail } = describeInvitation({ ...base, acceptedAt: "2026-09-14T09:00:00Z" }, now);
+  it("shows when the premium actually ends once the invitation is accepted", () => {
+    const { status, timing, premium } = describeInvitation({ ...base, acceptedAt: "2026-09-14T09:00:00Z" }, now);
 
     expect(status).toBe("Accepted");
-    expect(detail).toContain("started 12 months of premium");
-    expect(detail).not.toContain("Link expires");
+    expect(timing).toBe(`Accepted ${formatDay("2026-09-14T09:00:00Z")}`);
+    // Twelve months from acceptance, not from the invitation being sent.
+    expect(premium).toBe(`12 months · until ${formatDay("2027-09-14T09:00:00Z")}`);
   });
 
-  it("treats a revoked invitation as settled even before the link would lapse", () => {
-    const { status } = describeInvitation({ ...base, revokedAt: "2026-09-13T09:00:00Z" }, now);
-    expect(status).toBe("Revoked");
+  it("dates the premium the same way the server does, overflow included", () => {
+    // plans.TrialExpiry is from.AddDate(0, months, 0); Go rolls 31 January plus
+    // one month to 3 March, and setMonth does the same.
+    const { premium } = describeInvitation(
+      { ...base, premiumMonths: 1, acceptedAt: "2027-01-31T00:00:00Z" },
+      new Date("2027-02-01T00:00:00Z")
+    );
+    expect(premium).toBe(`1 month · until ${formatDay("2027-03-03T00:00:00Z")}`);
+  });
+
+  it("offers a revoke only while the link can still be used", () => {
+    expect(describeInvitation(base, now).canRevoke).toBe(true);
+    expect(describeInvitation({ ...base, acceptedAt: "2026-09-13T00:00:00Z" }, now).canRevoke).toBe(false);
+    expect(describeInvitation({ ...base, revokedAt: "2026-09-13T00:00:00Z" }, now).canRevoke).toBe(false);
+    expect(describeInvitation(base, new Date("2026-10-01T00:00:00Z")).canRevoke).toBe(false);
   });
 
   it("prefers accepted over revoked, since a used link cannot be taken back", () => {
@@ -45,20 +57,25 @@ describe("describeInvitation", () => {
     expect(status).toBe("Accepted");
   });
 
-  it("says a lapsed link was never used rather than leaving it looking open", () => {
-    const { status, detail } = describeInvitation(base, new Date("2026-10-01T00:00:00Z"));
-
-    expect(status).toBe("Expired");
-    expect(detail).toContain("Never accepted");
+  it("says a lapsed or withdrawn invitation granted nothing", () => {
+    expect(describeInvitation(base, new Date("2026-10-01T00:00:00Z"))).toMatchObject({
+      status: "Expired",
+      timing: `Lapsed ${formatDay("2026-09-26T00:00:00Z")}`,
+      premium: "Not granted",
+    });
+    expect(describeInvitation({ ...base, revokedAt: "2026-09-13T00:00:00Z" }, now)).toMatchObject({
+      status: "Revoked",
+      timing: `Revoked ${formatDay("2026-09-13T00:00:00Z")}`,
+      premium: "Not granted",
+    });
   });
 
   it("does not promise premium when the invitation grants none", () => {
-    const { detail } = describeInvitation({ ...base, premiumMonths: 0 }, now);
-    expect(detail).toContain("no premium included");
+    expect(describeInvitation({ ...base, premiumMonths: 0 }, now).premium).toBe("None");
+    expect(describeInvitation({ ...base, premiumMonths: 0, acceptedAt: "2026-09-13T00:00:00Z" }, now).premium).toBe("None");
   });
 
   it("says one month, not one months", () => {
-    const { detail } = describeInvitation({ ...base, premiumMonths: 1 }, now);
-    expect(detail).toContain("1 month of premium");
+    expect(describeInvitation({ ...base, premiumMonths: 1 }, now).premium).toBe("1 month once accepted");
   });
 });

@@ -2,7 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
-import { describeInvitation, type Invitation } from "@/components/admin/admin-data";
+import { describeInvitation, formatDay, type Invitation } from "@/components/admin/admin-data";
 
 export type { Invitation };
 
@@ -12,6 +12,7 @@ export function InvitationsPanel() {
   const [email, setEmail] = useState("");
   const [months, setMonths] = useState(6);
   const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -26,7 +27,7 @@ export function InvitationsPanel() {
   }, []);
 
   useEffect(() => {
-    void load();
+    void load().finally(() => setLoading(false));
   }, [load]);
 
   async function invite(event: FormEvent<HTMLFormElement>) {
@@ -56,6 +57,7 @@ export function InvitationsPanel() {
   }
 
   async function revoke(invitation: Invitation) {
+    if (!window.confirm(`Revoke the invitation for ${invitation.email}? The link they were sent stops working.`)) return;
     setPending(true);
     setMessage("");
     try {
@@ -69,83 +71,134 @@ export function InvitationsPanel() {
     }
   }
 
+  const open = invitations.filter((invitation) => describeInvitation(invitation).status === "Open").length;
+
   return (
-    <section className="card card-pad grid gap-4">
-      <div className="grid gap-1">
-        <h2 className="text-lg font-semibold text-on-surface">Beta invitations</h2>
-        <span className="muted text-sm">
-          An invited person sets their own password and starts with premium included. The link is good for 14
-          days; their premium months only start counting once they accept.
-        </span>
-      </div>
-
-      <form className="grid gap-3 sm:grid-cols-[2fr_auto_auto] sm:items-end" onSubmit={(event) => void invite(event)}>
-        <div className="field">
-          <label htmlFor="inviteEmail">Email address</label>
-          <input
-            id="inviteEmail"
-            type="email"
-            required
-            value={email}
-            disabled={pending}
-            onChange={(event) => setEmail(event.target.value)}
-          />
+    <>
+      <section className="card settingsListPanel">
+        <div className="settingsHeaderRow">
+          <div>
+            <strong>Send an invitation</strong>
+            <p className="muted">
+              They set their own password when they accept. The link is good for 14 days.
+            </p>
+          </div>
         </div>
-        <div className="field">
-          <label htmlFor="inviteMonths">Premium months</label>
-          <input
-            id="inviteMonths"
-            type="number"
-            min={0}
-            max={60}
-            value={months}
-            disabled={pending}
-            onChange={(event) => setMonths(Number(event.target.value))}
-          />
-          <span className="field-hint">Counted from the day they accept, not from today.</span>
-        </div>
-        <button type="submit" className="btn btn-primary" disabled={pending}>
-          {pending ? "Working" : "Send invitation"}
-        </button>
-        <div className="field sm:col-span-3">
-          <label htmlFor="inviteNote">Note (optional, for your own records)</label>
-          <input
-            id="inviteNote"
-            type="text"
-            value={note}
-            disabled={pending}
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </div>
-      </form>
 
-      {message ? <p className="statusText" role="status">{message}</p> : null}
+        <form className="grid gap-4" onSubmit={(event) => void invite(event)}>
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-start">
+            <div className="field">
+              <label htmlFor="inviteEmail">Email address</label>
+              <input
+                id="inviteEmail"
+                type="email"
+                required
+                placeholder="someone@example.com"
+                value={email}
+                disabled={pending}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="inviteMonths">Premium months</label>
+              <input
+                id="inviteMonths"
+                type="number"
+                min={0}
+                max={60}
+                value={months}
+                disabled={pending}
+                onChange={(event) => setMonths(Number(event.target.value))}
+              />
+              <span className="field-hint">Counted from the day they accept.</span>
+            </div>
+          </div>
 
-      {invitations.length ? (
-        <ul className="resourceList">
-          {invitations.map((invitation) => {
-            const { status, detail } = describeInvitation(invitation);
-            return (
-              <li key={invitation.id} className="resourceRow">
-                <span className="resourceBody">
-                  <strong>{invitation.email}</strong>
-                  <span className="muted">
-                    <span className="metaBadge">{status}</span> {detail}
-                    {invitation.note ? ` · ${invitation.note}` : ""}
-                  </span>
-                </span>
-                {status === "Open" ? (
-                  <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => void revoke(invitation)}>
-                    Revoke
-                  </button>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="muted text-sm">No invitations yet.</p>
-      )}
-    </section>
+          <div className="field">
+            <label htmlFor="inviteNote">Note</label>
+            <input
+              id="inviteNote"
+              type="text"
+              placeholder="Optional, for your own records"
+              value={note}
+              disabled={pending}
+              onChange={(event) => setNote(event.target.value)}
+            />
+          </div>
+
+          <div>
+            <button type="submit" className="btn btn-primary" disabled={pending}>
+              {pending ? "Working" : "Send invitation"}
+            </button>
+          </div>
+        </form>
+
+        {message ? <p className="statusText" role="status">{message}</p> : null}
+      </section>
+
+      <section className="card settingsListPanel overflow-hidden">
+        <div className="settingsHeaderRow">
+          <div>
+            <strong>Sent invitations</strong>
+            <p className="muted">
+              {loading
+                ? "Loading…"
+                : `${invitations.length} ${invitations.length === 1 ? "invitation" : "invitations"}${open ? `, ${open} still open` : ""}`}
+            </p>
+          </div>
+        </div>
+
+        {!loading && invitations.length === 0 ? <p className="muted p-4">Nobody has been invited yet.</p> : null}
+
+        {!loading && invitations.length ? (
+          <div className="overflow-x-auto">
+            <table className="dataTable">
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  <th>Status</th>
+                  <th>Premium</th>
+                  <th>Note</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invitations.map((invitation) => {
+                  const { status, timing, premium, canRevoke } = describeInvitation(invitation);
+                  return (
+                    <tr key={invitation.id}>
+                      <td data-label="Person">
+                        <strong>{invitation.email}</strong>
+                        <span className="muted block text-xs">Sent {formatDay(invitation.createdAt)}</span>
+                      </td>
+                      <td data-label="Status">
+                        <span className="metaBadge">{status}</span>
+                        <span className="muted block text-xs">{timing}</span>
+                      </td>
+                      <td data-label="Premium">{premium}</td>
+                      <td data-label="Note">{invitation.note?.trim() || "—"}</td>
+                      <td data-label="Action">
+                        {canRevoke ? (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            disabled={pending}
+                            onClick={() => void revoke(invitation)}
+                          >
+                            Revoke
+                          </button>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+    </>
   );
 }

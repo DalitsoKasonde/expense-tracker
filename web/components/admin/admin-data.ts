@@ -111,33 +111,61 @@ export type Invitation = {
 export type InvitationStatus = "Open" | "Accepted" | "Revoked" | "Expired";
 
 function describeMonths(months: number) {
-  if (months <= 0) return "no premium included";
-  return `${months} ${months === 1 ? "month" : "months"} of premium`;
+  return `${months} ${months === 1 ? "month" : "months"}`;
+}
+
+/** Matches plans.TrialExpiry on the server, which is from.AddDate(0, months, 0).
+ *  Go and JavaScript normalise a month-end overflow the same way — 31 January
+ *  plus one month lands on 3 March in both — so the date shown here is the date
+ *  the account will actually carry. */
+function addMonths(from: string, months: number) {
+  const expiry = new Date(from);
+  expiry.setMonth(expiry.getMonth() + months);
+  return expiry.toISOString();
 }
 
 /** An invitation carries two unrelated dates: the link dies after a fortnight,
- *  and the premium runs for its own months from whenever the person accepts.
+ *  and the premium runs for its own months from the day the person accepts.
  *  Printing them in one clause read as though the premium expired with the
- *  link, so each state now says which date it is talking about. */
+ *  link, so each is now its own column and says which date it means. */
 export function describeInvitation(invitation: Invitation, now: Date = new Date()): {
   status: InvitationStatus;
-  detail: string;
+  timing: string;
+  premium: string;
+  canRevoke: boolean;
 } {
+  const months = invitation.premiumMonths;
+
   // Accepted and revoked both outrank expiry: a link that was used or
   // withdrawn is settled, whatever its expiry date says.
   if (invitation.acceptedAt) {
-    const months = invitation.premiumMonths > 0 ? `started ${describeMonths(invitation.premiumMonths)}` : "no premium included";
-    return { status: "Accepted", detail: `Accepted ${formatDay(invitation.acceptedAt)} · ${months}` };
+    return {
+      status: "Accepted",
+      timing: `Accepted ${formatDay(invitation.acceptedAt)}`,
+      premium: months > 0 ? `${describeMonths(months)} · until ${formatDay(addMonths(invitation.acceptedAt, months))}` : "None",
+      canRevoke: false,
+    };
   }
   if (invitation.revokedAt) {
-    return { status: "Revoked", detail: `Revoked ${formatDay(invitation.revokedAt)} · the link no longer works` };
+    return {
+      status: "Revoked",
+      timing: `Revoked ${formatDay(invitation.revokedAt)}`,
+      premium: "Not granted",
+      canRevoke: false,
+    };
   }
   if (new Date(invitation.expiresAt).getTime() < now.getTime()) {
-    return { status: "Expired", detail: `Never accepted · the link expired ${formatDay(invitation.expiresAt)}` };
+    return {
+      status: "Expired",
+      timing: `Lapsed ${formatDay(invitation.expiresAt)}`,
+      premium: "Not granted",
+      canRevoke: false,
+    };
   }
-  const months =
-    invitation.premiumMonths > 0
-      ? `${describeMonths(invitation.premiumMonths)}, counted from the day they accept`
-      : "no premium included";
-  return { status: "Open", detail: `Link expires ${formatDay(invitation.expiresAt)} · ${months}` };
+  return {
+    status: "Open",
+    timing: `Link expires ${formatDay(invitation.expiresAt)}`,
+    premium: months > 0 ? `${describeMonths(months)} once accepted` : "None",
+    canRevoke: true,
+  };
 }
