@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
 import { describeInvitation, formatDay, type Invitation } from "@/components/admin/admin-data";
+import { AdminStatusPill, statusTone } from "@/components/admin/status-pill";
 
 export type { Invitation };
 
@@ -75,7 +76,7 @@ export function InvitationsPanel() {
 
   return (
     <>
-      <section className="card settingsListPanel">
+      <section className="card settingsListPanel adminContentCard">
         <div className="settingsHeaderRow">
           <div>
             <strong>Send an invitation</strong>
@@ -86,7 +87,7 @@ export function InvitationsPanel() {
         </div>
 
         <form className="grid gap-4" onSubmit={(event) => void invite(event)}>
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-start">
+          <div className="adminInvitationFields">
             <div className="field">
               <label htmlFor="inviteEmail">Email address</label>
               <input
@@ -172,7 +173,7 @@ export function InvitationsPanel() {
                         <span className="muted block text-xs">Sent {formatDay(invitation.createdAt)}</span>
                       </td>
                       <td data-label="Status">
-                        <span className="metaBadge">{status}</span>
+                        <AdminStatusPill tone={statusTone(status)}>{status}</AdminStatusPill>
                         <span className="muted block text-xs">{timing}</span>
                       </td>
                       <td data-label="Premium">{premium}</td>
@@ -181,7 +182,7 @@ export function InvitationsPanel() {
                         {canRevoke ? (
                           <button
                             type="button"
-                            className="btn btn-ghost btn-sm"
+                            className="btn btn-danger btn-sm"
                             disabled={pending}
                             onClick={() => void revoke(invitation)}
                           >

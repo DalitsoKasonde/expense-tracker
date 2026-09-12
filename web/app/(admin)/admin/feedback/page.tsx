@@ -3,7 +3,9 @@
 import { PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { useCallback, useEffect, useState } from "react";
-import { type FeedbackItem, type FeedbackStatus, feedbackStatuses, formatDate } from "@/components/admin/admin-data";
+import { type FeedbackItem, type FeedbackStatus } from "@/components/admin/admin-data";
+import { AdminDate } from "@/components/admin/admin-date";
+import { AdminStatusPill, statusTone } from "@/components/admin/status-pill";
 
 export default function AdminFeedbackPage() {
   const apiCall = useApiCall();
@@ -29,6 +31,7 @@ export default function AdminFeedbackPage() {
     try {
       await apiCall(`/v1/admin/feedback/${item.id}/status`, { method: "PATCH", body: { status } });
       await load();
+      window.dispatchEvent(new Event("admin-feedback-updated"));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The status could not be changed.");
     } finally {
@@ -49,7 +52,7 @@ export default function AdminFeedbackPage() {
 
         {message ? <p className="statusText" role="status">{message}</p> : null}
 
-        <section className="card settingsListPanel overflow-hidden">
+        <section className="card settingsListPanel adminFeedbackCard overflow-hidden">
           <div className="settingsHeaderRow">
             <div>
               <strong>{loading ? "Loading…" : `${feedback.length} ${feedback.length === 1 ? "note" : "notes"}`}</strong>
@@ -60,42 +63,34 @@ export default function AdminFeedbackPage() {
           {!loading && feedback.length === 0 ? <p className="muted p-4">Nobody has sent feedback yet.</p> : null}
 
           {!loading && feedback.length ? (
-            <div className="overflow-x-auto">
-              <table className="dataTable">
-                <thead>
-                  <tr>
-                    <th>From</th>
-                    <th>Message</th>
-                    <th>Page</th>
-                    <th>Received</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {feedback.map((item) => (
-                    <tr key={item.id}>
-                      <td data-label="From">{item.maskedEmail}</td>
-                      <td data-label="Message" className="max-w-md whitespace-pre-wrap">{item.message}</td>
-                      <td data-label="Page" className="font-mono text-xs">{item.pagePath || "—"}</td>
-                      <td data-label="Received">{formatDate(item.createdAt)}</td>
-                      <td data-label="Status">
-                        <select
-                          aria-label={`Status of the note from ${item.maskedEmail}`}
-                          className="metaBadge"
-                          value={item.status}
-                          disabled={pending}
-                          onChange={(event) => void setStatus(item, event.target.value as FeedbackStatus)}
-                        >
-                          {feedbackStatuses.map((status) => (
-                            <option key={status} value={status}>{status}</option>
-                          ))}
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ul className="adminFeedbackList">
+              {feedback.map((item) => (
+                <li className="adminFeedbackRow" key={item.id}>
+                  <div className="adminFeedbackMeta">
+                    <AdminStatusPill tone={statusTone(item.status)} compact>{item.status}</AdminStatusPill>
+                    <strong>{item.maskedEmail}</strong>
+                    <AdminDate value={item.createdAt} />
+                  </div>
+                  <div className="adminFeedbackBody">
+                    <p>{item.message}</p>
+                    {item.pagePath ? <span className="adminReference">{item.pagePath}</span> : null}
+                  </div>
+                  <div className="adminFeedbackAction">
+                    {item.status === "new" ? (
+                      <button className="btn btn-outline btn-sm" type="button" disabled={pending} onClick={() => void setStatus(item, "reviewed")}>
+                        Mark reviewed
+                      </button>
+                    ) : item.status === "reviewed" ? (
+                      <button className="btn btn-outline btn-sm" type="button" disabled={pending} onClick={() => void setStatus(item, "resolved")}>
+                        Mark resolved
+                      </button>
+                    ) : (
+                      <span className="adminResolvedLabel">Resolved</span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </section>
       </div>

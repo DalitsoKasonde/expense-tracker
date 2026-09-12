@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { adminSections } from "@/components/admin/admin-sections";
+import { useCallback, useEffect, useState } from "react";
+import { useApiCall } from "@/lib/client-api";
+import type { FeedbackItem } from "@/components/admin/admin-data";
 
 /** Overview is the only section whose path prefixes every other one, so it has
  *  to match exactly or it would stay highlighted everywhere. */
@@ -13,15 +16,43 @@ function isCurrent(pathname: string, href: string) {
 
 export function AdminNavigation() {
   const pathname = usePathname() ?? "";
+  const apiCall = useApiCall();
+  const [unreadFeedback, setUnreadFeedback] = useState(0);
+
+  const loadUnreadFeedback = useCallback(() => {
+    void apiCall<FeedbackItem[]>("/v1/admin/feedback")
+      .then((items) => setUnreadFeedback((items ?? []).filter((item) => item.status === "new").length))
+      .catch(() => setUnreadFeedback(0));
+  }, [apiCall]);
+
+  useEffect(() => {
+    loadUnreadFeedback();
+    window.addEventListener("admin-feedback-updated", loadUnreadFeedback);
+    return () => window.removeEventListener("admin-feedback-updated", loadUnreadFeedback);
+  }, [loadUnreadFeedback]);
+
+  function label(item: (typeof adminSections)[number], mobile = false) {
+    return (
+      <>
+        <span>{mobile ? item.shortLabel : item.label}</span>
+        {item.href === "/admin/feedback" && unreadFeedback > 0 ? (
+          <span className="adminNavCount" aria-label={`${unreadFeedback} unread feedback ${unreadFeedback === 1 ? "note" : "notes"}`}>
+            {unreadFeedback}
+          </span>
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-dvh border-r border-outline bg-surface px-5 py-6 lg:block print:hidden">
-        <div className="border-b border-outline px-3 pb-5">
-          <p className="text-xs font-bold uppercase tracking-wider text-accent">Operations</p>
-          <p className="mt-1 text-sm text-on-surface-soft">System administration</p>
+      <aside className="adminSidebar print:hidden">
+        <div className="adminSidebarInner">
+        <div className="adminNavIntro">
+          <p>Operations</p>
+          <span>System administration</span>
         </div>
-        <nav className="mt-5 grid gap-1" aria-label="System administration navigation">
+        <nav className="adminNav" aria-label="System administration navigation">
           {adminSections.map((item) => {
             const current = isCurrent(pathname, item.href);
             return (
@@ -29,23 +60,24 @@ export function AdminNavigation() {
                 key={item.href}
                 href={item.href}
                 aria-current={current ? "page" : undefined}
-                className={`flex min-h-11 items-center rounded-md px-3 py-2.5 text-sm font-semibold transition-colors ${current ? "bg-primary-softer text-primary" : "text-on-surface-soft hover:bg-surface-soft hover:text-on-surface"}`}
+                className={`adminNavLink${current ? " is-active" : ""}`}
               >
-                {item.label}
+                {label(item)}
               </Link>
             );
           })}
         </nav>
-        <div className="mt-8 rounded-md border border-primary/20 bg-primary-softer p-3 text-xs leading-relaxed text-on-surface-soft">
+        <div className="adminSidebarNote">
           Financial records are intentionally unavailable to system administrators.
+        </div>
         </div>
       </aside>
 
       <nav
-        className="sticky top-0 z-20 overflow-x-auto border-b border-outline bg-surface/95 px-4 py-2 backdrop-blur lg:hidden print:hidden"
+        className="adminMobileNav print:hidden"
         aria-label="System administration navigation"
       >
-        <div className="mx-auto flex min-w-max gap-2">
+        <div className="adminMobileNavInner">
           {adminSections.map((item) => {
             const current = isCurrent(pathname, item.href);
             return (
@@ -53,9 +85,9 @@ export function AdminNavigation() {
                 key={item.href}
                 href={item.href}
                 aria-current={current ? "page" : undefined}
-                className={`min-h-10 rounded-md px-3 py-2 text-sm font-semibold ${current ? "bg-primary-softer text-primary" : "text-on-surface-soft hover:bg-surface-soft hover:text-on-surface"}`}
+                className={`adminNavLink${current ? " is-active" : ""}`}
               >
-                {item.shortLabel}
+                {label(item, true)}
               </Link>
             );
           })}

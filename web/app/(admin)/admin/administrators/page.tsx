@@ -44,7 +44,7 @@ export default function AdminAdministratorsPage() {
 
         {message ? <p className="statusText" role="status">{message}</p> : null}
 
-        <section className="card settingsListPanel">
+        <section className="card settingsListPanel adminContentCard adminAdminFormCard">
           <div className="settingsHeaderRow">
             <div>
               <strong>Add an administrator</strong>
@@ -68,7 +68,7 @@ export default function AdminAdministratorsPage() {
               <input id="admin-password" name="password" type="password" autoComplete="new-password" minLength={8} required />
               <span className="field-hint">At least eight characters, with a letter and a number.</span>
             </div>
-            <div className="field">
+            <div className="adminFormAction">
               <button className="btn btn-primary" type="submit" disabled={pending}>
                 Create administrator
               </button>

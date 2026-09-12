@@ -2,9 +2,10 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AdminNavigation } from "./admin-navigation";
 
-const mocks = vi.hoisted(() => ({ pathname: "/admin" }));
+const mocks = vi.hoisted(() => ({ pathname: "/admin", apiCall: vi.fn(() => Promise.resolve([])) }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => mocks.pathname }));
+vi.mock("@/lib/client-api", () => ({ useApiCall: () => mocks.apiCall }));
 
 describe("AdminNavigation", () => {
   it("links every administrative workspace on desktop and mobile", () => {

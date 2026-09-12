@@ -3,7 +3,9 @@
 import { PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { useCallback, useEffect, useState } from "react";
-import { type BackupJob, formatBytes, formatDate } from "@/components/admin/admin-data";
+import { type BackupJob, formatBytes } from "@/components/admin/admin-data";
+import { AdminStatusPill, statusTone } from "@/components/admin/status-pill";
+import { AdminDate } from "@/components/admin/admin-date";
 
 export default function AdminBackupsPage() {
   const apiCall = useApiCall();
@@ -71,19 +73,19 @@ export default function AdminBackupsPage() {
                     <th>Requested</th>
                     <th>Status</th>
                     <th>Size</th>
-                    <th>Checksum</th>
+                    <th>Reference</th>
                   </tr>
                 </thead>
                 <tbody>
                   {backups.map((job) => (
                     <tr key={job.id}>
-                      <td data-label="Requested">{formatDate(job.requestedAt)}</td>
+                      <td data-label="Requested"><AdminDate value={job.requestedAt} /></td>
                       <td data-label="Status">
-                        <span className="metaBadge">{job.status}</span>
+                        <AdminStatusPill tone={statusTone(job.status)}>{job.status}</AdminStatusPill>
                         {job.errorMessage ? <div className="text-negative">{job.errorMessage}</div> : null}
                       </td>
                       <td data-label="Size">{formatBytes(job.sizeBytes)}</td>
-                      <td data-label="Checksum" className="font-mono text-xs">{job.checksumSha256?.slice(0, 16) ?? "—"}</td>
+                      <td data-label="Reference" className="adminReference">{job.checksumSha256?.slice(0, 16) ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

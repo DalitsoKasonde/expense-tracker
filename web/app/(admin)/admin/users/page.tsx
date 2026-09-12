@@ -7,9 +7,10 @@ import {
   type AdminUser,
   describePlan,
   describePlanSource,
-  formatDate,
   isOnPremium,
 } from "@/components/admin/admin-data";
+import { AdminStatusPill } from "@/components/admin/status-pill";
+import { AdminDate } from "@/components/admin/admin-date";
 
 type PlanChange = { plan: string; months?: number; neverExpires?: boolean };
 
@@ -104,7 +105,7 @@ export default function AdminUsersPage() {
           subtitle="Every account except other administrators. Addresses are masked on purpose — nobody here can read a person's financial records."
         />
 
-        <section className="card card-pad grid gap-3">
+        <section className="card adminContentCard grid gap-3">
           <div className="grid gap-1">
             <h2 className="text-base font-semibold text-on-surface">Find an account</h2>
             <p className="muted text-sm">
@@ -155,7 +156,7 @@ export default function AdminUsersPage() {
 
           {!loading && users.length ? (
             <div className="overflow-x-auto">
-              <table className="dataTable">
+              <table className="dataTable adminPeopleTable">
                 <thead>
                   <tr>
                     <th>Account</th>
@@ -168,18 +169,18 @@ export default function AdminUsersPage() {
                 </thead>
                 <tbody>
                   {users.map((user) => (
-                    <tr key={user.id}>
+                    <tr key={user.id} className={!user.isActive ? "adminRow-muted" : undefined}>
                       <td data-label="Account">
                         <strong>{user.maskedEmail}</strong>
                         <span className="muted block text-xs">{describePlanSource(user)}</span>
                       </td>
                       <td data-label="Plan">
-                        <span className="metaBadge">{describePlan(user)}</span>
+                        <AdminStatusPill tone={isOnPremium(user) ? "info" : "neutral"}>{describePlan(user)}</AdminStatusPill>
                       </td>
                       <td data-label="Change plan">
                         <span className="adminPlanActions">
                           <button
-                            className="btn btn-ghost btn-sm"
+                            className="btn btn-outline btn-sm"
                             type="button"
                             disabled={pending}
                             onClick={() => void changePlan(user, { plan: "premium", neverExpires: true })}
@@ -187,7 +188,7 @@ export default function AdminUsersPage() {
                             Premium, no expiry
                           </button>
                           <button
-                            className="btn btn-ghost btn-sm"
+                            className="btn btn-outline btn-sm"
                             type="button"
                             disabled={pending}
                             onClick={() => void changePlan(user, { plan: "premium", months: 12 })}
@@ -196,7 +197,7 @@ export default function AdminUsersPage() {
                           </button>
                           {isOnPremium(user) ? (
                             <button
-                              className="btn btn-ghost btn-sm"
+                              className="btn btn-outline btn-sm"
                               type="button"
                               disabled={pending}
                               onClick={() =>
@@ -212,10 +213,10 @@ export default function AdminUsersPage() {
                           ) : null}
                         </span>
                       </td>
-                      <td data-label="Joined">{formatDate(user.createdAt)}</td>
-                      <td data-label="Last signed in">{formatDate(user.lastLoginAt)}</td>
+                      <td data-label="Joined"><AdminDate value={user.createdAt} /></td>
+                      <td data-label="Last signed in"><AdminDate value={user.lastLoginAt} /></td>
                       <td data-label="Access">
-                        <span className="metaBadge">{user.isActive ? "Active" : "Suspended"}</span>
+                        <AdminStatusPill tone={user.isActive ? "success" : "danger"}>{user.isActive ? "Active" : "Suspended"}</AdminStatusPill>
                         <span className="adminPlanActions">
                           <button
                             className={user.isActive ? "btn btn-danger btn-sm" : "btn btn-primary btn-sm"}

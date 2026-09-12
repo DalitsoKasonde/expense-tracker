@@ -115,7 +115,7 @@ export default function AdminPage() {
 
         {message ? <p className="statusText" role="status">{message}</p> : null}
 
-        <div className="statsGrid">
+        <div className="statsGrid adminStatsGrid">
           <Link className="statCard" href="/admin/users">
             <span className="muted">Accounts</span>
             <strong>{loading ? "—" : users.length}</strong>
@@ -134,7 +134,7 @@ export default function AdminPage() {
           </Link>
         </div>
 
-        <section className="card settingsListPanel">
+        <section className="card settingsListPanel adminListCard">
           <div className="settingsHeaderRow">
             <div>
               <strong>Needs attention</strong>
@@ -149,10 +149,11 @@ export default function AdminPage() {
             <ul className="resourceList">
               {attention.map((item) => (
                 <li key={item.key} className="resourceRow">
-                  <span className="resourceBody">
+                  <span className="resourceBody adminAttentionBody">
+                    <span className={`adminAttentionDot adminAttentionDot-${item.key}`} aria-hidden="true" />
                     <strong>{item.text}</strong>
                   </span>
-                  <Link className="btn btn-ghost btn-sm" href={item.href}>
+                  <Link className="btn btn-outline btn-sm" href={item.href}>
                     {item.action}
                   </Link>
                 </li>
@@ -166,10 +167,10 @@ export default function AdminPage() {
             <h2 className="text-lg font-semibold text-on-surface">Where things are</h2>
             <p className="muted text-sm">Each of these is its own page, also in the sidebar.</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="adminWorkspaceGrid">
             {workspaces.map((section) => (
-              <Link key={section.href} className="card card-pad grid content-start gap-1" href={section.href}>
-                <strong className="text-on-surface">{section.label}</strong>
+              <Link key={section.href} className="card adminWorkspaceCard" href={section.href}>
+                <span className="adminWorkspaceCardTitle"><strong>{section.label}</strong><span>Open →</span></span>
                 <span className="muted text-sm leading-6">{section.description}</span>
               </Link>
             ))}

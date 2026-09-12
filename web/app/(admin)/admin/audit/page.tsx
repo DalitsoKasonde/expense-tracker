@@ -3,7 +3,9 @@
 import { PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { useEffect, useState } from "react";
-import { type AuditLog, formatDate } from "@/components/admin/admin-data";
+import { type AuditLog } from "@/components/admin/admin-data";
+import { AdminStatusPill } from "@/components/admin/status-pill";
+import { AdminDate } from "@/components/admin/admin-date";
 
 export default function AdminAuditPage() {
   const apiCall = useApiCall();
@@ -53,11 +55,11 @@ export default function AdminAuditPage() {
                 <tbody>
                   {audit.map((item) => (
                     <tr key={item.id}>
-                      <td data-label="Time">{formatDate(item.createdAt)}</td>
-                      <td data-label="Action">{item.action.replaceAll(".", " ")}</td>
+                      <td data-label="Time"><AdminDate value={item.createdAt} /></td>
+                      <td data-label="Action"><AdminStatusPill>{item.action.replaceAll(".", " ")}</AdminStatusPill></td>
                       <td data-label="Target">
                         {item.targetType}
-                        {item.targetId ? ` · ${item.targetId.slice(0, 8)}` : ""}
+                        {item.targetId ? <span className="adminReference"> · {item.targetId.slice(0, 8)}</span> : ""}
                       </td>
                     </tr>
                   ))}
