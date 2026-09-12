@@ -156,14 +156,61 @@ func TestDocumentEscapesContentSoAmountsAndNamesCannotBreakTheMarkup(t *testing.
 }
 
 func TestNewSMTPSenderRefusesAHalfConfiguredRelay(t *testing.T) {
-	if _, err := NewSMTPSender("", 587, "resend", "key", "no-reply@chuma.app", "Chuma"); err == nil {
+	if _, err := NewSMTPSender("", 587, "resend", "key", "no-reply@chuma.app", "Chuma", ""); err == nil {
 		t.Error("expected an error when the host is missing")
 	}
-	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "", "Chuma"); err == nil {
+	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "", "Chuma", ""); err == nil {
 		t.Error("expected an error when the from address is missing")
 	}
-	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "not-an-address", "Chuma"); err == nil {
+	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "not-an-address", "Chuma", ""); err == nil {
 		t.Error("expected an error when the from address is malformed")
+	}
+	// A malformed reply address would be dropped into every outgoing header.
+	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "no-reply@chuma.app", "Chuma", "nope"); err == nil {
+		t.Error("expected an error when the reply-to address is malformed")
+	}
+}
+
+// The From address sits on a domain that need not host a mailbox, so replies
+// have to be redirected explicitly or they go nowhere.
+func TestRenderCarriesReplyToSoRepliesReachARealInbox(t *testing.T) {
+	raw, err := Render(testAddress(), Message{
+		To:      []string{"person@example.com"},
+		Subject: "Reset your password",
+		ReplyTo: "support@example.com",
+		HTML:    "<p>Hi</p>",
+		Text:    "Hi",
+	}, time.Now())
+	if err != nil {
+		t.Fatalf("Render returned an error: %v", err)
+	}
+
+	parsed, err := mail.ReadMessage(strings.NewReader(string(raw)))
+	if err != nil {
+		t.Fatalf("rendered message is not valid RFC 5322: %v", err)
+	}
+	if got := parsed.Header.Get("Reply-To"); got != "support@example.com" {
+		t.Fatalf("Reply-To = %q", got)
+	}
+}
+
+func TestRenderOmitsReplyToWhenNoneIsConfigured(t *testing.T) {
+	raw, err := Render(testAddress(), Message{
+		To:      []string{"person@example.com"},
+		Subject: "Reset your password",
+		HTML:    "<p>Hi</p>",
+		Text:    "Hi",
+	}, time.Now())
+	if err != nil {
+		t.Fatalf("Render returned an error: %v", err)
+	}
+
+	parsed, err := mail.ReadMessage(strings.NewReader(string(raw)))
+	if err != nil {
+		t.Fatalf("rendered message is not valid RFC 5322: %v", err)
+	}
+	if got := parsed.Header.Get("Reply-To"); got != "" {
+		t.Fatalf("an empty Reply-To was written as %q", got)
 	}
 }
 

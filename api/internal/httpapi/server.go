@@ -106,7 +106,7 @@ func newMailSender(cfg config.Config) mail.Sender {
 
 	sender, err := mail.NewSMTPSender(
 		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword,
-		cfg.MailFromAddress, cfg.MailFromName,
+		cfg.MailFromAddress, cfg.MailFromName, cfg.MailReplyTo,
 	)
 	if err != nil {
 		log.Printf("mail: %v; outgoing email will be logged instead of sent", err)

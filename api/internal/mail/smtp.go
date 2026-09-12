@@ -21,12 +21,13 @@ type SMTPSender struct {
 	username string
 	password string
 	from     mail.Address
+	replyTo  string
 }
 
 // NewSMTPSender fails fast on a half-configured relay: a host with no from
 // address would produce mail every provider rejects, and finding that out at
 // send time means losing a password reset.
-func NewSMTPSender(host string, port int, username, password, fromAddress, fromName string) (*SMTPSender, error) {
+func NewSMTPSender(host string, port int, username, password, fromAddress, fromName, replyTo string) (*SMTPSender, error) {
 	if host == "" {
 		return nil, fmt.Errorf("mail: SMTP_HOST is required")
 	}
@@ -35,6 +36,11 @@ func NewSMTPSender(host string, port int, username, password, fromAddress, fromN
 	}
 	if _, err := mail.ParseAddress(fromAddress); err != nil {
 		return nil, fmt.Errorf("mail: MAIL_FROM_ADDRESS is not a valid email address: %w", err)
+	}
+	if replyTo != "" {
+		if _, err := mail.ParseAddress(replyTo); err != nil {
+			return nil, fmt.Errorf("mail: MAIL_REPLY_TO is not a valid email address: %w", err)
+		}
 	}
 	if port <= 0 {
 		port = 587
@@ -46,12 +52,18 @@ func NewSMTPSender(host string, port int, username, password, fromAddress, fromN
 		username: username,
 		password: password,
 		from:     mail.Address{Name: fromName, Address: fromAddress},
+		replyTo:  replyTo,
 	}, nil
 }
 
 func (s *SMTPSender) Configured() bool { return true }
 
 func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
+	// A caller may set its own Reply-To; otherwise the deployment's applies.
+	if msg.ReplyTo == "" {
+		msg.ReplyTo = s.replyTo
+	}
+
 	body, err := Render(s.from, msg, time.Now())
 	if err != nil {
 		return err

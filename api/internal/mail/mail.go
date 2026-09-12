@@ -25,8 +25,12 @@ import (
 // and the plain-text alternative is what keeps the message out of spam folders
 // and readable in a text client.
 type Message struct {
-	To          []string
-	Subject     string
+	To      []string
+	Subject string
+	// ReplyTo redirects replies. The From address is usually a no-reply on a
+	// domain with no inbox, so without this a person who hits reply is talking
+	// to nobody and never finds out.
+	ReplyTo     string
 	HTML        string
 	Text        string
 	Attachments []Attachment
@@ -84,6 +88,9 @@ func Render(from mail.Address, msg Message, sentAt time.Time) ([]byte, error) {
 	var b strings.Builder
 	writeHeader(&b, "From", from.String())
 	writeHeader(&b, "To", strings.Join(msg.To, ", "))
+	if msg.ReplyTo != "" {
+		writeHeader(&b, "Reply-To", msg.ReplyTo)
+	}
 	// Subjects carry names and currency symbols, so they are encoded rather
 	// than written raw — a bare non-ASCII byte in a header is invalid.
 	writeHeader(&b, "Subject", mime.QEncoding.Encode("utf-8", msg.Subject))

@@ -51,6 +51,10 @@ type Config struct {
 	SMTPPassword    string
 	MailFromAddress string
 	MailFromName    string
+	// MailReplyTo is where replies land. The From address is a no-reply on a
+	// domain that need not host a mailbox at all, so replies would otherwise
+	// disappear silently.
+	MailReplyTo string
 	// AppPublicURL is the origin links in emails point at. Emails are read
 	// outside the app, so a relative href is useless and there is no request
 	// to infer the host from.
@@ -81,6 +85,7 @@ func Load() (Config, error) {
 		SMTPPassword:                 os.Getenv("SMTP_PASSWORD"),
 		MailFromAddress:              strings.TrimSpace(os.Getenv("MAIL_FROM_ADDRESS")),
 		MailFromName:                 envOrDefault("MAIL_FROM_NAME", defaultMailFromName),
+		MailReplyTo:                  strings.TrimSpace(os.Getenv("MAIL_REPLY_TO")),
 		AppPublicURL:                 strings.TrimRight(envOrDefault("APP_PUBLIC_URL", defaultAppPublicURL), "/"),
 		AdminAlertEmail:              strings.TrimSpace(strings.ToLower(os.Getenv("ADMIN_ALERT_EMAIL"))),
 	}
