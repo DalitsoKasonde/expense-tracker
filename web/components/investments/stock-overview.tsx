@@ -1,6 +1,7 @@
 "use client";
 
-import { Money } from "@/components/ui";
+import Link from "next/link";
+import { Money, SummaryMetric } from "@/components/ui";
 import { formatPurchaseDate, formatShares, stockReturn } from "@/lib/asset-detail";
 import { formatMoney } from "@/lib/format-money";
 
@@ -13,17 +14,9 @@ export interface StockQuote {
   sourceUrl: string;
 }
 
-export interface StockOverviewProps {
-  currency: string;
-  investedMinor: number;
-  currentValueMinor: number;
-  holding: { quantity: number; avgCostBasis: number } | null;
-  dividendTotalMinor: number;
-  /** The last LuSE close fetched this visit, once the valuation has been saved from it. */
-  quote: StockQuote | null;
-  pricing: boolean;
-  priceError: string;
-  onGetMarketPrice: () => void;
+export interface StockHolding {
+  quantity: number;
+  avgCostBasis: number;
 }
 
 function signedPercent(value: number) {
@@ -31,113 +24,153 @@ function signedPercent(value: number) {
 }
 
 /**
- * The value card for a stock: what it is worth, what a share is carried at,
- * and what the holding has returned once dividends are counted.
- *
- * Extracted from the asset page so the figures come from one tested function
- * and the market-price action sits beside the number it changes, rather than
- * inside a dialog two clicks away.
+ * The two header actions for a stock. Pricing the holding and buying more are
+ * the things done on most visits, so they sit where the stocks dashboard puts
+ * its own, rather than in a column of buttons beside the figures.
  */
-export function StockOverview({
+export function StockHeaderActions({
+  assetId,
+  canPrice,
+  pricing,
+  onGetMarketPrice,
+}: {
+  assetId: string;
+  canPrice: boolean;
+  pricing: boolean;
+  onGetMarketPrice: () => void;
+}) {
+  return (
+    <>
+      <button type="button" className="btn btn-primary" disabled={pricing || !canPrice} onClick={onGetMarketPrice}>
+        {pricing ? "Getting price…" : "Get market price"}
+      </button>
+      <Link href={`/investments/add?type=stock&mode=existing&stock=${assetId}`} className="btn btn-ghost">
+        Add to this stock
+      </Link>
+    </>
+  );
+}
+
+/**
+ * The summary row for a stock, in the same shape as the stocks dashboard so
+ * the two pages read as one system: four figures, each with its context in a
+ * line underneath, and nothing nested inside anything else.
+ *
+ * Dividends are the fourth figure rather than part of the third: they were
+ * paid to a cash account, so the holding's value never shows them, and the
+ * return is only honest once they are added back in view.
+ */
+export function StockSummary({
   currency,
   investedMinor,
   currentValueMinor,
   holding,
   dividendTotalMinor,
+  dividendCount,
   quote,
-  pricing,
   priceError,
-  onGetMarketPrice,
-}: StockOverviewProps) {
+}: {
+  currency: string;
+  investedMinor: number;
+  currentValueMinor: number;
+  holding: StockHolding | null;
+  dividendTotalMinor: number;
+  dividendCount: number;
+  quote: StockQuote | null;
+  priceError: string;
+}) {
   const quantity = holding?.quantity ?? 0;
   const figures = stockReturn({ investedMinor, currentValueMinor, dividendTotalMinor, quantity });
-  const canPrice = quantity > 0;
+
+  const valueDetail = quote ? (
+    <>
+      {formatMoney(quote.priceMinor, currency)} per share · LuSE close {formatPurchaseDate(quote.marketDate)}
+      {Number.isFinite(quote.changePercent) ? `, ${signedPercent(quote.changePercent)} on the day` : ""}
+    </>
+  ) : figures.pricePerShareMinor === null ? (
+    "Nothing bought yet"
+  ) : (
+    `${formatMoney(figures.pricePerShareMinor, currency)} per share on your books`
+  );
+
+  const investedDetail = holding
+    ? `${formatShares(quantity)} shares · average cost ${formatMoney(holding.avgCostBasis, currency)}`
+    : undefined;
+
+  const returnDetail = (
+    <>
+      {figures.totalReturnPercent === null ? "" : `${signedPercent(figures.totalReturnPercent)} · `}
+      Price {figures.priceReturnMinor >= 0 ? "+" : ""}
+      {formatMoney(figures.priceReturnMinor, currency)} · Dividends +{formatMoney(dividendTotalMinor, currency)}
+    </>
+  );
+
+  const dividendDetail = dividendCount
+    ? `${dividendCount} ${dividendCount === 1 ? "payment" : "payments"}${
+        figures.costRecoveredPercent === null ? "" : ` · ${figures.costRecoveredPercent.toFixed(1)}% of cost repaid`
+      }${
+        figures.breakEvenPriceMinor === null
+          ? ""
+          : figures.breakEvenPriceMinor === 0
+            ? " · cost fully repaid"
+            : ` · break-even ${formatMoney(figures.breakEvenPriceMinor, currency)} a share`
+      }`
+    : "No dividends recorded yet";
 
   return (
-    <section className="heroCard investmentValueCard">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="sectionKicker">Current value</p>
-          <h2 className="my-2 text-2xl font-bold text-on-surface">
-            <Money amountMinor={currentValueMinor} currency={currency} />
-          </h2>
-          {figures.pricePerShareMinor === null ? (
-            <p className="muted">What this investment is worth today.</p>
-          ) : quote ? (
-            <p className="muted">
-              {formatMoney(quote.priceMinor, currency)} per share · LuSE close {formatPurchaseDate(quote.marketDate)}
-              {Number.isFinite(quote.changePercent) ? ` (${signedPercent(quote.changePercent)} on the day)` : ""} ·{" "}
-              <a href={quote.sourceUrl} target="_blank" rel="noreferrer">{quote.sourceName}</a>
-            </p>
-          ) : (
-            <p className="muted">
-              {formatMoney(figures.pricePerShareMinor, currency)} per share across {formatShares(quantity)} shares, from your last valuation.
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          className="btn btn-ghost shrink-0"
-          disabled={pricing || !canPrice}
-          onClick={onGetMarketPrice}
-        >
-          {pricing ? "Getting price…" : "Get market price"}
-        </button>
+    <section className="card" aria-label="Holding summary">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryMetric label="Market value" value={<Money amountMinor={currentValueMinor} currency={currency} />} detail={valueDetail} />
+        <SummaryMetric label="Invested" value={<Money amountMinor={investedMinor} currency={currency} />} detail={investedDetail} />
+        <SummaryMetric
+          label={figures.totalReturnMinor >= 0 ? "Total return" : "Total loss"}
+          value={<Money amountMinor={figures.totalReturnMinor} currency={currency} signed tone="auto" />}
+          detail={returnDetail}
+        />
+        <SummaryMetric
+          label="Dividends received"
+          value={<Money amountMinor={dividendTotalMinor} currency={currency} signed tone={dividendTotalMinor > 0 ? "positive" : "neutral"} />}
+          detail={dividendDetail}
+        />
       </div>
-      {priceError ? <p className="field-error mt-2" role="alert">{priceError}</p> : null}
+      {priceError ? <p className="field-error mt-4" role="alert">{priceError}</p> : null}
+    </section>
+  );
+}
 
-      <div className="portfolioMiniGrid mt-4">
-        <div className="metricCard">
-          <span className="metricCardLabel">Money invested</span>
-          <strong className="metricCardValue"><Money amountMinor={investedMinor} currency={currency} /></strong>
-        </div>
-        {holding ? (
-          <div className="metricCard">
-            <span className="metricCardLabel">Shares owned</span>
-            <strong className="metricCardValue">{formatShares(quantity)}</strong>
-          </div>
-        ) : null}
-        {/* The percentage sits with the breakdown, not the figure: at display
-            size the money alone already fills a card, and a wrapped value is
-            harder to scan than a second line of detail. */}
-        <div className="metricCard">
-          <span className="metricCardLabel">Total return</span>
-          <strong className="metricCardValue">
-            <Money amountMinor={figures.totalReturnMinor} currency={currency} signed tone="auto" />
-          </strong>
-          <span className="muted">
-            {figures.totalReturnPercent === null ? "" : `${signedPercent(figures.totalReturnPercent)} · `}
-            Price {figures.priceReturnMinor >= 0 ? "+" : ""}
-            {formatMoney(figures.priceReturnMinor, currency)} · Dividends {formatMoney(dividendTotalMinor, currency)}
-          </span>
-        </div>
-        <div className="metricCard">
-          <span className="metricCardLabel">Cost recovered</span>
-          <strong className="metricCardValue">
-            {figures.costRecoveredPercent === null ? "—" : `${figures.costRecoveredPercent.toFixed(1)}%`}
-          </strong>
-          <span className="muted">
-            {formatMoney(dividendTotalMinor, currency)} of {formatMoney(investedMinor, currency)} paid back in dividends.
-          </span>
-        </div>
-        {holding ? (
-          <div className="metricCard">
-            <span className="metricCardLabel">Average cost per share</span>
-            <strong className="metricCardValue"><Money amountMinor={holding.avgCostBasis} currency={currency} /></strong>
-            <span className="muted">Includes allocated brokerage fees.</span>
-          </div>
-        ) : null}
-        {figures.breakEvenPriceMinor === null ? null : (
-          <div className="metricCard">
-            <span className="metricCardLabel">Break-even price</span>
-            <strong className="metricCardValue"><Money amountMinor={figures.breakEvenPriceMinor} currency={currency} /></strong>
-            <span className="muted">
-              {figures.breakEvenPriceMinor === 0
-                ? "Dividends alone have already returned what you paid."
-                : "What a share must be worth for the dividends to have made you whole."}
-            </span>
-          </div>
-        )}
+/**
+ * The less frequent actions, in one quiet strip instead of a card of stacked
+ * buttons that stood as tall as the figures it sat beside. Delete keeps its
+ * confirmation dialog; putting it in the same row is not the same as making
+ * it easy.
+ */
+export function StockManageBar({
+  onRecordDividend,
+  onRecordSale,
+  onUpdateValue,
+  onEdit,
+  onDelete,
+  deleting,
+}: {
+  onRecordDividend: () => void;
+  onRecordSale: () => void;
+  onUpdateValue: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  return (
+    <section className="card" aria-label="Manage this stock">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="mr-2 text-xs font-bold uppercase tracking-wider text-on-surface-soft">Manage</p>
+        <button type="button" className="btn btn-ghost" onClick={onRecordDividend}>Record a dividend</button>
+        <button type="button" className="btn btn-ghost" onClick={onRecordSale}>Record a sale</button>
+        <button type="button" className="btn btn-ghost" onClick={onUpdateValue}>Update current value</button>
+        <button type="button" className="btn btn-ghost" onClick={onEdit}>Edit investment</button>
+        <span className="flex-1" aria-hidden="true" />
+        <button type="button" className="btn btn-ghost" disabled={deleting} onClick={onDelete}>
+          Delete investment
+        </button>
       </div>
     </section>
   );

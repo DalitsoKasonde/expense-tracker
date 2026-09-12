@@ -12,7 +12,7 @@ import {
   PageHeader,
   PageShell,
 } from "@/components/ui";
-import { StockOverview } from "@/components/investments/stock-overview";
+import { StockHeaderActions, StockManageBar, StockSummary } from "@/components/investments/stock-overview";
 import { useApiCall } from "@/lib/client-api";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
 import {
@@ -660,31 +660,54 @@ export default function AssetDetailPage() {
           ]}
         />
         <PageHeader
-          eyebrow="Portfolio"
+          eyebrow={asset.assetClass === "bond" ? "Government bond" : `${asset.symbol?.trim() || "Stock"} · LuSE`}
           title={asset.name}
           subtitle={
             asset.assetClass === "bond"
               ? "See what your bond is worth and when payments are due."
-              : "See what you own, what it is worth, and every dividend you have received."
+              : "What you own, what it is worth, and what it has paid you."
+          }
+          actions={
+            asset.assetClass !== "bond" ? (
+              <StockHeaderActions
+                assetId={assetId}
+                canPrice={(holding?.quantity ?? 0) > 0}
+                pricing={loadingMarketQuote}
+                onGetMarketPrice={() => void refreshMarketPrice()}
+              />
+            ) : undefined
           }
         />
 
         {actionStatus ? <p className="investmentSuccess" role="status">{actionStatus}</p> : null}
 
-        <div className="investmentOverview">
-          {asset.assetClass !== "bond" ? (
-            <StockOverview
+        {asset.assetClass !== "bond" ? (
+          <>
+            <StockSummary
               currency={asset.currency}
               investedMinor={asset.investedAmountMinor}
               currentValueMinor={asset.currentValueMinor}
               holding={holding}
               dividendTotalMinor={dividendTotalMinor}
+              dividendCount={dividends.length}
               quote={marketQuote}
-              pricing={loadingMarketQuote}
               priceError={equityDialog === null ? marketQuoteError : ""}
-              onGetMarketPrice={() => void refreshMarketPrice()}
             />
-          ) : (
+            <StockManageBar
+              onRecordDividend={() => openEquityDialog("dividend")}
+              onRecordSale={() => openEquityDialog("sell")}
+              onUpdateValue={() => openEquityDialog("value")}
+              onEdit={openEditInvestment}
+              onDelete={() => {
+                setActionError("");
+                setDeleteOpen(true);
+              }}
+              deleting={deleting}
+            />
+            {actionError && equityDialog === null && !editOpen && !deleteOpen ? <p className="field-error" role="alert">{actionError}</p> : null}
+          </>
+        ) : (
+        <div className="investmentOverview">
           <section className="heroCard investmentValueCard">
             <p className="sectionKicker">Principal value</p>
             <h2 className="text-2xl font-bold my-2">
@@ -727,52 +750,21 @@ export default function AssetDetailPage() {
                   </div>
             </div>
           </section>
-          )}
           <aside className="card investmentActionsCard">
             <div>
               <p className="sectionKicker">What would you like to do?</p>
               <h2 className="sectionHeading">Manage {asset.name}</h2>
             </div>
-            {asset.assetClass !== "bond" ? (
-              <div className="investmentActionList">
-                <Link
-                  href={`/investments/add?type=stock&mode=existing&stock=${assetId}`}
-                  className="investmentActionButton primary"
-                >
-                  <span>Add to this stock</span>
-                  <small>Record another purchase of {asset.name}</small>
-                </Link>
-                <button type="button" className="investmentActionButton" onClick={() => openEquityDialog("dividend")}>
-                  <span>Record a dividend</span>
-                  <small>Add a cash payment or reinvested dividend</small>
-                </button>
-                <button type="button" className="investmentActionButton" onClick={() => openEquityDialog("value")}>
-                  <span>Update current value</span>
-                  <small>Keep your portfolio value up to date</small>
-                </button>
-                <button type="button" className="investmentActionButton" onClick={() => openEquityDialog("sell")}>
-                  <span>Record a sale</span>
-                  <small>Reduce the number of shares you own</small>
-                </button>
-                <Link href="/investments/add" className="investmentActionButton">
-                  <span>Add another investment</span>
-                  <small>Record another stock or government bond purchase</small>
-                </Link>
-              </div>
-            ) : (
-              <>
-                <div className="investmentActionList">
-                  <Link
-                    href={`/investments/add?type=bond&mode=existing&bond=${assetId}`}
-                    className="investmentActionButton primary"
-                  >
-                    <span>Add to this bond</span>
-                    <small>Record another purchase that increases the principal</small>
-                  </Link>
-                </div>
-                <p className="muted">Review the payment schedule below and confirm each payment when it arrives.</p>
-              </>
-            )}
+            <div className="investmentActionList">
+              <Link
+                href={`/investments/add?type=bond&mode=existing&bond=${assetId}`}
+                className="investmentActionButton primary"
+              >
+                <span>Add to this bond</span>
+                <small>Record another purchase that increases the principal</small>
+              </Link>
+            </div>
+            <p className="muted">Review the payment schedule below and confirm each payment when it arrives.</p>
             <button type="button" className="btn btn-ghost" onClick={openEditInvestment}>
               Edit investment
             </button>
@@ -793,6 +785,7 @@ export default function AssetDetailPage() {
             {actionError && equityDialog === null ? <p className="field-error" role="alert">{actionError}</p> : null}
           </aside>
         </div>
+        )}
 
         {asset.assetClass !== "bond" ? (
           <section className="card settingsListPanel overflow-hidden">

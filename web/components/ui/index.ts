@@ -14,5 +14,6 @@ export * from "./money";
 export * from "./page-header";
 export * from "./page-shell";
 export * from "./savings-goal-card";
+export * from "./summary-metric";
 export * from "./transaction-filters";
 export * from "./transaction-row";

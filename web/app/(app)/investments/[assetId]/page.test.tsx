@@ -190,11 +190,10 @@ describe("AssetDetailPage", () => {
     render(<AssetDetailPage />);
 
     // Invested 100.00, worth 110.00, dividends 25.00 -> price +10.00, total +35.00 (35%).
-    expect(await screen.findByText("+35.0% · Price +ZMW 10.00 · Dividends ZMW 25.00")).toBeInTheDocument();
-    expect(screen.getByText("Total return").closest(".metricCard")).toHaveTextContent("+ZMW 35.00");
-    expect(screen.getByText("25.0%")).toBeInTheDocument();
+    expect(await screen.findByText("+35.0% · Price +ZMW 10.00 · Dividends +ZMW 25.00")).toBeInTheDocument();
+    expect(screen.getByText("Total return").nextElementSibling).toHaveTextContent("+ZMW 35.00");
     // (100.00 - 25.00) across 10 shares.
-    expect(screen.getByText("Break-even price").closest(".metricCard")).toHaveTextContent("ZMW 7.50");
+    expect(screen.getByText("1 payment · 25.0% of cost repaid · break-even ZMW 7.50 a share")).toBeInTheDocument();
   });
 
   it("shows each stock purchase lot with its one-off brokerage fee", async () => {
@@ -208,15 +207,14 @@ describe("AssetDetailPage", () => {
     expect(within(table).getByText("ZMW 0.12")).toBeInTheDocument();
     expect(within(table).getByText("ZMW 10.12")).toBeInTheDocument();
     expect(within(table).getByText("ZMW 2.02")).toBeInTheDocument();
-    expect(screen.getByText("Average cost per share")).toBeInTheDocument();
-    expect(screen.getByText("Includes allocated brokerage fees.")).toBeInTheDocument();
+    expect(await screen.findByText("10 shares · average cost ZMW 10.00")).toBeInTheDocument();
   });
 
   it("shows what a share is carried at, from the last valuation", async () => {
     render(<AssetDetailPage />);
 
     // 110.00 across 10 shares.
-    expect(await screen.findByText(/ZMW 11\.00 per share across 10 shares/)).toBeInTheDocument();
+    expect(await screen.findByText("ZMW 11.00 per share on your books")).toBeInTheDocument();
   });
 
   it("prices the holding from the LuSE close and saves that as the valuation", async () => {
@@ -248,7 +246,7 @@ describe("AssetDetailPage", () => {
       method: "POST",
       body: { valuationDate: "2026-09-04", currentValueMinor: 12_500, currency: "ZMW", source: "mansa_market" },
     });
-    expect(screen.getByText(/ZMW 12\.50 per share · LuSE close/)).toBeInTheDocument();
+    expect(screen.getByText(/ZMW 12\.50 per share · LuSE close .*, \+2\.0% on the day/)).toBeInTheDocument();
     expect(mocks.reload).toHaveBeenCalled();
   });
 
@@ -258,15 +256,6 @@ describe("AssetDetailPage", () => {
     expect(screen.getByRole("link", { name: /Add to this stock/ })).toHaveAttribute(
       "href",
       "/investments/add?type=stock&mode=existing&stock=asset-1",
-    );
-  });
-
-  it("links from an existing stock to the add-investment form", async () => {
-    render(<AssetDetailPage />);
-
-    expect(screen.getByRole("link", { name: /Add another investment/ })).toHaveAttribute(
-      "href",
-      "/investments/add",
     );
   });
 

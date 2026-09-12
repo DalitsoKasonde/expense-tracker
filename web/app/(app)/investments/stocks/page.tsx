@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Breadcrumbs, EmptyState, LoadingSkeleton, Money, PageHeader, PageShell } from "@/components/ui";
+import { Breadcrumbs, EmptyState, LoadingSkeleton, Money, PageHeader, PageShell, SummaryMetric } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
 import type { MarketStock, MarketStockDirectory } from "@/lib/market-data";
@@ -323,16 +323,6 @@ function DividendMetric({
           ) : null}
         </>
       )}
-    </div>
-  );
-}
-
-function SummaryMetric({ label, value, detail, tone }: { label: string; value: string; detail?: string; tone?: "positive" | "negative" }) {
-  return (
-    <div>
-      <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">{label}</p>
-      <p className={`mt-2 font-display text-2xl font-semibold tabular-nums ${tone === "positive" ? "text-positive" : tone === "negative" ? "text-negative" : "text-on-surface"}`}>{value}</p>
-      {detail ? <p className={`mt-1 text-sm font-semibold ${tone === "negative" ? "text-negative" : "text-positive"}`}>{detail}</p> : null}
     </div>
   );
 }
