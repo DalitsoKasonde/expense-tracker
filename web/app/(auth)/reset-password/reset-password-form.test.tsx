@@ -71,6 +71,43 @@ describe("ResetPasswordForm", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("missing its code");
     expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ask for a new link" })).toBeInTheDocument();
+  });
+
+  // A spent link cannot be retried, so leaving the form on screen only invites
+  // the same failure a second time.
+  it("offers a new link instead of the form when the token is already spent", async () => {
+    mocks.postPublicJson.mockRejectedValue(new Error("this reset link is invalid or has expired"));
+    render(<ResetPasswordForm />);
+
+    fillPasswords("correcthorse1");
+    fireEvent.click(screen.getByRole("button", { name: "Set new password" }));
+
+    expect(await screen.findByRole("link", { name: "Ask for a new link" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
+  });
+
+  // Any other failure is retryable, so the typed password must survive it.
+  it("keeps the form up when the failure is not the link", async () => {
+    mocks.postPublicJson.mockRejectedValue(new Error("password reset is temporarily unavailable"));
+    render(<ResetPasswordForm />);
+
+    fillPasswords("correcthorse1");
+    fireEvent.click(screen.getByRole("button", { name: "Set new password" }));
+
+    expect(await screen.findByText("password reset is temporarily unavailable")).toBeInTheDocument();
+    expect(screen.getByLabelText("New password")).toBeInTheDocument();
+  });
+
+  // The rules were already evaluated on every keystroke and then collapsed
+  // into one boolean, so the only way to find out was to submit.
+  it("shows which password rules are met while typing", () => {
+    render(<ResetPasswordForm />);
+
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "short" } });
+
+    expect(screen.getByText("At least 8 characters")).toBeInTheDocument();
+    expect(screen.getByText("Contains a letter and a number")).toBeInTheDocument();
   });
 
   it("points the person at sign in once the password is set", async () => {

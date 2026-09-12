@@ -1,9 +1,14 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { postPublicJson } from "@/lib/public-api";
+
+/** What the API says when the token is spent, expired, or was never ours. */
+function isDeadLinkMessage(message: string) {
+  return message.toLowerCase().includes("invalid or has expired");
+}
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -13,6 +18,7 @@ export function ResetPasswordForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [done, setDone] = useState(false);
+  const [linkIsDead, setLinkIsDead] = useState(false);
   const [error, setError] = useState("");
 
   // Mirrors the API's rules so someone learns the password is too weak while
@@ -47,20 +53,33 @@ export function ResetPasswordForm() {
       await postPublicJson("/v1/auth/reset-password", { token, password });
       setDone(true);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We could not reset your password.");
+      const message = caught instanceof Error ? caught.message : "We could not reset your password.";
+      // A spent or expired link cannot be retried, so leaving the form on
+      // screen only invites the same failure. Send them back for a new one.
+      if (isDeadLinkMessage(message)) {
+        setLinkIsDead(true);
+      } else {
+        setError(message);
+      }
       setIsPending(false);
     }
   }
 
-  if (!token) {
+  if (!token || linkIsDead) {
     return (
-      <p className="field-error mt-6" role="alert">
-        This link is missing its code. Open the link from your email directly, or{" "}
-        <Link href="/forgot-password" className="font-semibold text-accent hover:underline">
-          ask for a new one
+      <div className="mt-6">
+        <p className="field-error" role="alert">
+          {token
+            ? "This reset link has already been used or has expired."
+            : "This link is missing its code. Open the link from your email directly."}
+        </p>
+        <p className="field-hint mt-3">
+          Reset links work once and expire an hour after they are sent.
+        </p>
+        <Link href="/forgot-password" className="btn btn-primary btn-block mt-4">
+          Ask for a new link
         </Link>
-        .
-      </p>
+      </div>
     );
   }
 
@@ -86,10 +105,25 @@ export function ResetPasswordForm() {
           autoComplete="new-password"
           required
           disabled={isPending}
+          autoFocus
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
       </div>
+
+      {/* The rules were already being evaluated on every keystroke and then
+          collapsed into a single boolean, so the only way to discover a weak
+          password was to submit. Showing them is what makes that comment
+          true. */}
+      {password ? (
+        <ul className="field-hint grid gap-1" aria-live="polite">
+          <Rule met={checks.minimumLength}>At least 8 characters</Rule>
+          <Rule met={checks.hasLetterAndNumber}>Contains a letter and a number</Rule>
+          {!checks.maximumLength ? <Rule met={false}>Too long — shorten it a little</Rule> : null}
+        </ul>
+      ) : (
+        <p className="field-hint">At least 8 characters, including a letter and a number.</p>
+      )}
 
       <div className="field">
         <label htmlFor="confirmPassword">Confirm new password</label>
@@ -108,13 +142,25 @@ export function ResetPasswordForm() {
         ) : null}
       </div>
 
-      <p className="field-hint">At least 8 characters, including a letter and a number.</p>
-
       {error ? <p className="field-error" role="alert">{error}</p> : null}
 
       <button type="submit" className="btn btn-primary" disabled={isPending}>
         {isPending ? "Setting your password" : "Set new password"}
       </button>
     </form>
+  );
+}
+
+/**
+ * One password rule. The tick is decorative — the rule's state is carried in
+ * the text colour and announced through the list's live region, so a screen
+ * reader is not read a bare glyph.
+ */
+function Rule({ met, children }: { met: boolean; children: ReactNode }) {
+  return (
+    <li className={met ? "flex items-center gap-2 text-positive" : "flex items-center gap-2"}>
+      <span aria-hidden="true">{met ? "✓" : "•"}</span>
+      <span>{children}</span>
+    </li>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import type { Route } from "next";
+import Link from "next/link";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { establishApiSession } from "@/lib/browser-auth";
@@ -95,7 +97,16 @@ export function LoginForm({ googleEnabled = false }: { googleEnabled?: boolean }
     }
   }
 
+  // The address is already typed here; carrying it over means a forgotten
+  // password does not also cost retyping it on the next screen.
+  const forgotPasswordHref = (
+    email.trim()
+      ? `/forgot-password?email=${encodeURIComponent(email.trim().toLowerCase())}`
+      : "/forgot-password"
+  ) as Route;
+
   return (
+    <>
     <form
       className={`loginForm mt-6 ${isPending ? "loginFormPending" : ""}`}
       onSubmit={(event) => void handleSubmit(event)}
@@ -178,5 +189,12 @@ export function LoginForm({ googleEnabled = false }: { googleEnabled?: boolean }
         </p>
       ) : null}
     </form>
+
+    <p className="mt-4 text-center text-sm">
+      <Link href={forgotPasswordHref} className="font-semibold text-accent hover:underline">
+        Forgot your password?
+      </Link>
+    </p>
+    </>
   );
 }

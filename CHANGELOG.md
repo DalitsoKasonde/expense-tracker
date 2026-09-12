@@ -6,6 +6,10 @@
 - A sign-in code is now the largest thing in its email instead of a value in a table row you had to hunt for
 - Summary emails carry a proper unsubscribe header and every message is marked as machine-sent, so mail clients stop treating service mail as something a person wrote
 - The invitation email no longer opens with a sales pitch; it says who added you, what is included, and how long the link lasts
+- Asking for a password reset from the sign-in page carries the address you already typed, instead of making you type it again on the next screen
+- The reset confirmation names the address it used and offers "Use a different address", so a typo is visible immediately rather than after ten minutes of waiting for mail that was never addressed to you
+- A reset link that has already been used or expired now offers a new one, instead of leaving you on a form that cannot succeed
+- The new-password screen shows which requirements you have met as you type; the rules were already being checked on every keystroke, but the only way to find out was to submit and spend the one-use link
 - Accounts now sit on a plan: a new account opens with a month of premium, an invited beta account with six, and either lapses to the free plan rather than locking anyone out of their own records
 - Administrators can invite people by email, with the free premium period set per invitation, and revoke an invitation that has not been used
 - The admin console shows what plan each account is on and can grant premium for a period, grant it permanently, or return an account to free
