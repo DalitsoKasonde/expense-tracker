@@ -55,6 +55,10 @@ func (m *mailer) send(ctx context.Context, message outgoing) error {
 		return err
 	}
 
+	// Filled in here rather than at every call site: a handler building a
+	// document has no reason to know the app's public address.
+	message.Document.LogoURL = m.link("/inscribed-logo.png")
+
 	htmlBody, textBody := message.Document.Render()
 	sendErr := m.sender.Send(ctx, mail.Message{
 		To:          []string{recipient},

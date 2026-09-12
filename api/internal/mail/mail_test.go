@@ -369,16 +369,19 @@ func TestLetterWearsNoMastheadAndBulletinDoes(t *testing.T) {
 	blocks := []Block{Paragraph("hello")}
 
 	letter, _ := Document{Heading: "Sign in", Blocks: blocks}.Render()
-	if strings.Contains(letter, colourPrimaryDeep+";padding:20px 24px") {
-		t.Errorf("a letter should carry no filled masthead:\n%s", letter)
+	if strings.Contains(letter, "border-radius:16px") {
+		t.Errorf("a letter should not sit in a card:\n%s", letter)
+	}
+	if strings.Contains(letter, colourPageBackground) {
+		t.Errorf("a letter should sit on plain white, not a tinted page:\n%s", letter)
 	}
 	if strings.Contains(letter, "border-radius:999px") {
 		t.Errorf("a letter should carry no pill-shaped call to action:\n%s", letter)
 	}
 
 	bulletin, _ := Document{Heading: "Your week", Style: Bulletin, Blocks: blocks}.Render()
-	if !strings.Contains(bulletin, colourPrimaryDeep+";padding:20px 24px") {
-		t.Errorf("a bulletin should keep its masthead:\n%s", bulletin)
+	if !strings.Contains(bulletin, "border-radius:16px") || !strings.Contains(bulletin, colourPageBackground) {
+		t.Errorf("a bulletin should keep its card on a tinted page:\n%s", bulletin)
 	}
 }
 
@@ -389,5 +392,22 @@ func TestCodeRendersTheValueInBothBodies(t *testing.T) {
 	}
 	if !strings.Contains(text, "Sign-in code: 418205") {
 		t.Errorf("code missing from text:\n%s", text)
+	}
+}
+
+// Outlook blocks images by default, so a masthead that is only an image leaves
+// the top of the message blank.
+func TestMastheadFallsBackToTextWithoutAnImage(t *testing.T) {
+	withLogo, _ := Document{LogoURL: "https://expenses.inscribed.co.zm/inscribed-logo.png", Blocks: []Block{Paragraph("hi")}}.Render()
+	if !strings.Contains(withLogo, `alt="Inscribed"`) {
+		t.Errorf("expected the wordmark image:\n%s", withLogo)
+	}
+
+	withoutLogo, _ := Document{Blocks: []Block{Paragraph("hi")}}.Render()
+	if strings.Contains(withoutLogo, "<img") {
+		t.Errorf("no logo URL means no image tag:\n%s", withoutLogo)
+	}
+	if !strings.Contains(withoutLogo, ">Inscribed<") {
+		t.Errorf("expected the text wordmark as the fallback:\n%s", withoutLogo)
 	}
 }

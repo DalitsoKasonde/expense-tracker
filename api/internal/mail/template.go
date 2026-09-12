@@ -65,7 +65,12 @@ type Document struct {
 	Preheader string
 	Heading   string
 	Style     Style
-	Blocks    []Block
+	// LogoURL is the absolute address of the wordmark. The mailer fills it in,
+	// so a Document built in a handler or a test needs no knowledge of where
+	// the app is hosted; empty means the masthead falls back to text, which is
+	// also what a reader sees when their client blocks images.
+	LogoURL string
+	Blocks  []Block
 	// FooterNote explains why this email arrived, which is both a courtesy and
 	// what keeps automated mail out of the spam folder.
 	FooterNote string
@@ -90,17 +95,13 @@ func (d Document) Render() (htmlBody string, textBody string) {
 
 	if d.Style == Bulletin {
 		h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:` + colourSurface + `;border:1px solid ` + colourBorder + `;border-radius:16px;overflow:hidden;">`)
-		h.WriteString(`<tr><td style="background:` + colourPrimaryDeep + `;padding:20px 24px;">`)
-		h.WriteString(`<span style="font-family:` + fontStack + `;font-size:18px;font-weight:700;color:` + colourActionContrast + `;letter-spacing:0.02em;">Inscribed Expenses</span>`)
-		h.WriteString(`</td></tr>`)
+		h.WriteString(`<tr><td style="padding:24px 24px 20px;border-bottom:1px solid ` + colourBorder + `;">` + d.masthead() + `</td></tr>`)
 		h.WriteString(`<tr><td style="padding:24px;font-family:` + fontStack + `;font-size:15px;line-height:1.6;color:` + colourText + `;">`)
 	} else {
-		// A letter has no card and no banner: a rule under a small wordmark,
-		// the way a statement from a bank reads.
+		// A letter has no card and no banner: a rule under the wordmark, the
+		// way a statement from a bank reads.
 		h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">`)
-		h.WriteString(`<tr><td style="padding:0 0 20px;border-bottom:1px solid ` + colourBorder + `;">`)
-		h.WriteString(`<span style="font-family:` + fontStack + `;font-size:13px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:` + colourPrimary + `;">Inscribed Expenses</span>`)
-		h.WriteString(`</td></tr>`)
+		h.WriteString(`<tr><td style="padding:0 0 20px;border-bottom:1px solid ` + colourBorder + `;">` + d.masthead() + `</td></tr>`)
 		h.WriteString(`<tr><td style="padding:24px 0 0;font-family:` + fontStack + `;font-size:15px;line-height:1.6;color:` + colourText + `;">`)
 	}
 
@@ -126,6 +127,20 @@ func (d Document) Render() (htmlBody string, textBody string) {
 	h.WriteString(`</table></td></tr></table></body></html>`)
 
 	return h.String(), t.String()
+}
+
+// masthead is the wordmark lockup: the drawn logo over the product name, the
+// same pairing the app shows. The alt text is styled rather than left bare,
+// because Outlook blocks images by default and an unstyled alt collapses into
+// stray body copy where a wordmark should be.
+func (d Document) masthead() string {
+	name := `<div style="margin:6px 0 0;font-family:` + fontStack + `;font-size:12px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:` + colourPrimary + `;">Expenses</div>`
+	if d.LogoURL == "" {
+		return `<div style="font-family:` + fontStack + `;font-size:15px;font-weight:700;letter-spacing:0.02em;color:` + colourPrimaryDeep + `;">Inscribed</div>` + name
+	}
+	return `<img src="` + esc(d.LogoURL) + `" width="132" height="59" alt="Inscribed"` +
+		` style="display:block;border:0;outline:none;text-decoration:none;width:132px;height:auto;max-width:132px;` +
+		`font-family:` + fontStack + `;font-size:15px;font-weight:700;color:` + colourPrimaryDeep + `;">` + name
 }
 
 // Paragraph is a run of body copy.

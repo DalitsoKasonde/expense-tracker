@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Emails carry the Inscribed wordmark rather than the product name set as text, and fall back to the wordmark in text when a mail client blocks images
 - Password resets, sign-in codes and invitations are laid out as plain letters rather than as a newsletter, which is what was getting them filed under Gmail's Promotions tab; summaries and statements keep the fuller treatment, because those are the ones you actually subscribed to
 - A sign-in code is now the largest thing in its email instead of a value in a table row you had to hunt for
 - Summary emails carry a proper unsubscribe header and every message is marked as machine-sent, so mail clients stop treating service mail as something a person wrote
