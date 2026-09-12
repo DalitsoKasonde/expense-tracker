@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Visiting the site now opens a homepage explaining what Inscribed Expenses does, how you sign in, and exactly what a Google account is asked for, instead of sending everyone straight to the sign-in form
 - A privacy policy is published at /privacy, linked from sign-in, registration and Settings, setting out what the service records about your money and who it reaches
 - You can sign in with a six-digit code emailed to you, or with a Google account, instead of having to remember a password
 - Emails arrive from Inscribed Expenses rather than Chuma, so the name on the message matches the name on the site
