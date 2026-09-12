@@ -76,7 +76,7 @@ func (s *Server) emailReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	totals := sumMonths(months)
-	subject := fmt.Sprintf("Your %d Chuma statement", year)
+	subject := fmt.Sprintf("Your %d Inscribed Expenses statement", year)
 	document := mail.Document{
 		Preheader: "The full month-by-month breakdown is attached as a spreadsheet.",
 		Heading:   subject,
@@ -106,7 +106,7 @@ func (s *Server) emailReport(w http.ResponseWriter, r *http.Request) {
 		Subject:   subject,
 		Document:  document,
 		Attachments: []mail.Attachment{{
-			Filename:    fmt.Sprintf("chuma-statement-%d.csv", year),
+			Filename:    fmt.Sprintf("inscribed-expenses-statement-%d.csv", year),
 			ContentType: "text/csv; charset=utf-8",
 			Content:     statement,
 		}},
@@ -204,7 +204,7 @@ func (s *Server) notifyAdminOfFeedback(userEmail, message, pagePath string) {
 		err := s.mailer.send(ctx, outgoing{
 			Recipient: s.config.AdminAlertEmail,
 			Kind:      store.EmailKindAdminAlert,
-			Subject:   "New Chuma feedback from " + userEmail,
+			Subject:   "New Inscribed Expenses feedback from " + userEmail,
 			Document: mail.Document{
 				Preheader: "Someone left feedback in the app.",
 				Heading:   "New feedback",

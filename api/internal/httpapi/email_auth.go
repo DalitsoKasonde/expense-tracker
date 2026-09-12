@@ -76,7 +76,7 @@ func (s *Server) sendPasswordReset(ctx context.Context, user store.User) error {
 		UserID:    &user.ID,
 		Recipient: user.Email,
 		Kind:      store.EmailKindPasswordReset,
-		Subject:   "Reset your Chuma password",
+		Subject:   "Reset your Inscribed Expenses password",
 		Document: mail.Document{
 			Preheader: "This link works for one hour.",
 			Heading:   "Reset your password",
@@ -86,7 +86,7 @@ func (s *Server) sendPasswordReset(ctx context.Context, user store.User) error {
 				mail.Button{Label: "Choose a new password", URL: link},
 				mail.Paragraph("If you did not ask for this, you can ignore this email — your password stays as it is."),
 			},
-			FooterNote: "Chuma never asks for your password by email.",
+			FooterNote: "Inscribed Expenses never asks for your password by email.",
 		},
 	})
 }
@@ -183,11 +183,11 @@ func (s *Server) sendVerificationEmail(w http.ResponseWriter, r *http.Request) {
 			Heading:   "Confirm your email address",
 			Blocks: []mail.Block{
 				mail.Paragraph(greeting(user.DisplayName)),
-				mail.Paragraph("Confirming your address is what lets Chuma send you password resets and the summaries you asked for."),
+				mail.Paragraph("Confirming your address is what lets Inscribed Expenses send you password resets and the summaries you asked for."),
 				mail.Button{Label: "Confirm my address", URL: link},
 				mail.Paragraph("This link expires in two days."),
 			},
-			FooterNote: "You are receiving this because this address was used to sign up for Chuma.",
+			FooterNote: "You are receiving this because this address was used to sign up for Inscribed Expenses.",
 		},
 	})
 	if err != nil {

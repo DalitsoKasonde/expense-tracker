@@ -68,7 +68,7 @@ func (d Document) Render() (htmlBody string, textBody string) {
 	h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:` + colourSurface + `;border:1px solid ` + colourBorder + `;border-radius:16px;overflow:hidden;">`)
 
 	h.WriteString(`<tr><td style="background:` + colourPrimaryDeep + `;padding:20px 24px;">`)
-	h.WriteString(`<span style="font-family:` + fontStack + `;font-size:18px;font-weight:700;color:` + colourActionContrast + `;letter-spacing:0.02em;">Chuma</span>`)
+	h.WriteString(`<span style="font-family:` + fontStack + `;font-size:18px;font-weight:700;color:` + colourActionContrast + `;letter-spacing:0.02em;">Inscribed Expenses</span>`)
 	h.WriteString(`</td></tr>`)
 
 	h.WriteString(`<tr><td style="padding:24px;font-family:` + fontStack + `;font-size:15px;line-height:1.6;color:` + colourText + `;">`)
@@ -144,7 +144,7 @@ func (a Alert) html() string {
 	b.WriteString(`<strong style="display:block;margin:0 0 4px;font-size:15px;color:` + colourPrimaryDeep + `;">` + esc(a.Title) + `</strong>`)
 	b.WriteString(`<span style="font-size:14px;line-height:1.5;color:` + colourText + `;">` + esc(a.Body) + `</span>`)
 	if a.URL != "" {
-		b.WriteString(`<br><a href="` + esc(a.URL) + `" style="display:inline-block;margin-top:8px;font-size:13px;font-weight:600;color:` + accent + `;">Open in Chuma &rarr;</a>`)
+		b.WriteString(`<br><a href="` + esc(a.URL) + `" style="display:inline-block;margin-top:8px;font-size:13px;font-weight:600;color:` + accent + `;">Open in Inscribed Expenses &rarr;</a>`)
 	}
 	b.WriteString(`</td></tr></table>`)
 	return b.String()

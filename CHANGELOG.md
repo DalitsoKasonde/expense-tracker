@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Emails arrive from Inscribed Expenses rather than Chuma, so the name on the message matches the name on the site
 - A stock's page is laid out like the stocks dashboard: one row of four figures (market value, invested, return, dividends received) each with its context underneath, the two everyday actions in the page header, and the rest in a single strip, instead of a hero card of nested cards beside a column of buttons
 - Replying to an email from Chuma reaches a real inbox; the sending address is a no-reply on a domain with no mailbox, so a reply used to vanish without either side knowing
 - Forgetting your password is recoverable: ask for a reset link from the sign-in page, follow it, and set a new one — until now there was no way back into an account at all

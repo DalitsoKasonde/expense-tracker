@@ -12,7 +12,7 @@ import (
 )
 
 func testAddress() mail.Address {
-	return mail.Address{Name: "Chuma", Address: "no-reply@chuma.app"}
+	return mail.Address{Name: "Inscribed Expenses", Address: "no-reply@inscribed.co.zm"}
 }
 
 func TestRenderProducesBothAlternativesSoTextClientsAreNotLeftBlank(t *testing.T) {
@@ -121,19 +121,19 @@ func TestRenderRejectsMessagesThatCannotBeDelivered(t *testing.T) {
 func TestDocumentRendersEveryBlockIntoTheTextAlternative(t *testing.T) {
 	doc := Document{
 		Preheader:  "Two things need attention",
-		Heading:    "Your week in Chuma",
+		Heading:    "Your week in Inscribed Expenses",
 		FooterNote: "You receive this because email digests are on.",
 		Blocks: []Block{
 			Paragraph("Here is what stood out."),
-			Alert{Title: "Free cash flow is negative", Body: "You spent more than you earned.", Level: "warning", URL: "https://chuma.app/reports"},
+			Alert{Title: "Free cash flow is negative", Body: "You spent more than you earned.", Level: "warning", URL: "https://expenses.inscribed.co.zm/reports"},
 			FactList{{Label: "Money in", Value: "K12,000.00"}, {Label: "Money out", Value: "K13,500.00"}},
-			Button{Label: "Open Chuma", URL: "https://chuma.app"},
+			Button{Label: "Open Inscribed Expenses", URL: "https://expenses.inscribed.co.zm"},
 		},
 	}
 
 	htmlBody, textBody := doc.Render()
 
-	for _, want := range []string{"Your week in Chuma", "Free cash flow is negative", "K13,500.00", "https://chuma.app/reports"} {
+	for _, want := range []string{"Your week in Inscribed Expenses", "Free cash flow is negative", "K13,500.00", "https://expenses.inscribed.co.zm/reports"} {
 		if !strings.Contains(textBody, want) {
 			t.Errorf("text alternative is missing %q", want)
 		}
@@ -156,17 +156,17 @@ func TestDocumentEscapesContentSoAmountsAndNamesCannotBreakTheMarkup(t *testing.
 }
 
 func TestNewSMTPSenderRefusesAHalfConfiguredRelay(t *testing.T) {
-	if _, err := NewSMTPSender("", 587, "resend", "key", "no-reply@chuma.app", "Chuma", ""); err == nil {
+	if _, err := NewSMTPSender("", 587, "resend", "key", "no-reply@inscribed.co.zm", "Inscribed Expenses", ""); err == nil {
 		t.Error("expected an error when the host is missing")
 	}
-	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "", "Chuma", ""); err == nil {
+	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "", "Inscribed Expenses", ""); err == nil {
 		t.Error("expected an error when the from address is missing")
 	}
-	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "not-an-address", "Chuma", ""); err == nil {
+	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "not-an-address", "Inscribed Expenses", ""); err == nil {
 		t.Error("expected an error when the from address is malformed")
 	}
 	// A malformed reply address would be dropped into every outgoing header.
-	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "no-reply@chuma.app", "Chuma", "nope"); err == nil {
+	if _, err := NewSMTPSender("smtp.resend.com", 587, "resend", "key", "no-reply@inscribed.co.zm", "Inscribed Expenses", "nope"); err == nil {
 		t.Error("expected an error when the reply-to address is malformed")
 	}
 }

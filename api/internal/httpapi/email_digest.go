@@ -73,11 +73,11 @@ func digestIsDue(frequency string, lastSentAt *time.Time, now time.Time) bool {
 func digestSubject(frequency string, now time.Time) string {
 	switch frequency {
 	case "weekly":
-		return "Your week in Chuma — " + now.Format("2 January 2006")
+		return "Your week in Inscribed Expenses — " + now.Format("2 January 2006")
 	case "monthly":
 		return "Your " + now.AddDate(0, 0, -1).Format("January 2006") + " summary"
 	default:
-		return "Chuma today — " + now.Format("2 January 2006")
+		return "Inscribed Expenses today — " + now.Format("2 January 2006")
 	}
 }
 
@@ -122,7 +122,7 @@ func buildDigestDocument(recipient store.DigestRecipient, insight monthlyInsight
 			{Label: "Invested", Value: formatMinorAsMoney(insight.Investments, currency)},
 			{Label: "Free cash flow", Value: formatMinorAsMoney(insight.FreeCashFlow, currency)},
 		},
-		mail.Button{Label: "Open Chuma", URL: publicURL + "/today"},
+		mail.Button{Label: "Open Inscribed Expenses", URL: publicURL + "/today"},
 	)
 
 	return mail.Document{

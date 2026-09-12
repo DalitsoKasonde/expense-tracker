@@ -18,7 +18,7 @@ const (
 	defaultMaxBodyBytes   int64 = 25 << 20
 	defaultAppVersion           = "dev"
 	defaultSMTPPort             = 587
-	defaultMailFromName         = "Chuma"
+	defaultMailFromName         = "Inscribed Expenses"
 	defaultAppPublicURL         = "http://localhost:3000"
 )
 
