@@ -6,6 +6,25 @@ import { adminSections } from "@/components/admin/admin-sections";
 import { useCallback, useEffect, useState } from "react";
 import { useApiCall } from "@/lib/client-api";
 import type { FeedbackItem } from "@/components/admin/admin-data";
+import {
+  AddIcon,
+  DashboardIcon,
+  FeedbackIcon,
+  HistoryIcon,
+  ReportsIcon,
+  SettingsIcon,
+  TransactionsIcon,
+} from "@/components/nav-icons";
+
+const adminSectionIcons: Record<string, typeof DashboardIcon> = {
+  "/admin": DashboardIcon,
+  "/admin/users": TransactionsIcon,
+  "/admin/invitations": AddIcon,
+  "/admin/feedback": FeedbackIcon,
+  "/admin/backups": HistoryIcon,
+  "/admin/administrators": SettingsIcon,
+  "/admin/audit": ReportsIcon,
+};
 
 /** Overview is the only section whose path prefixes every other one, so it has
  *  to match exactly or it would stay highlighted everywhere. */
@@ -32,9 +51,13 @@ export function AdminNavigation() {
   }, [loadUnreadFeedback]);
 
   function label(item: (typeof adminSections)[number], mobile = false) {
+    const Icon = adminSectionIcons[item.href];
     return (
       <>
-        <span>{mobile ? item.shortLabel : item.label}</span>
+        <span className="adminNavLabel">
+          <span className="adminNavIcon" aria-hidden="true"><Icon /></span>
+          <span>{mobile ? item.shortLabel : item.label}</span>
+        </span>
         {item.href === "/admin/feedback" && unreadFeedback > 0 ? (
           <span className="adminNavCount" aria-label={`${unreadFeedback} unread feedback ${unreadFeedback === 1 ? "note" : "notes"}`}>
             {unreadFeedback}
@@ -48,28 +71,28 @@ export function AdminNavigation() {
     <>
       <aside className="adminSidebar print:hidden">
         <div className="adminSidebarInner">
-        <div className="adminNavIntro">
-          <p>Operations</p>
-          <span>System administration</span>
-        </div>
-        <nav className="adminNav" aria-label="System administration navigation">
-          {adminSections.map((item) => {
-            const current = isCurrent(pathname, item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={current ? "page" : undefined}
-                className={`adminNavLink${current ? " is-active" : ""}`}
-              >
-                {label(item)}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="adminSidebarNote">
-          Financial records are intentionally unavailable to system administrators.
-        </div>
+          <div className="adminNavIntro">
+            <p>Operations</p>
+            <span>System administration</span>
+          </div>
+          <nav className="adminNav" aria-label="System administration navigation">
+            {adminSections.map((item) => {
+              const current = isCurrent(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={current ? "page" : undefined}
+                  className={`adminNavLink${current ? " is-active" : ""}`}
+                >
+                  {label(item)}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="adminSidebarNote">
+            Financial records are intentionally unavailable to system administrators.
+          </div>
         </div>
       </aside>
 

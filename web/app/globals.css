@@ -2326,9 +2326,9 @@ a.card:hover {
 
 .adminNavLink {
   display: flex;
-  min-height: 42px;
+  min-height: 46px;
   align-items: center;
-  padding: 0 14px;
+  padding: 0 12px;
   border-radius: 9px;
   color: var(--admin-text);
   font-size: 15px;
@@ -2336,6 +2336,34 @@ a.card:hover {
   justify-content: space-between;
   gap: 10px;
   transition: color 160ms ease, background-color 160ms ease;
+}
+
+.adminNavLabel {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.adminNavIcon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: #f1f5f9;
+  transition: background-color 160ms ease;
+}
+
+.adminNavIcon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
+}
+
+.adminNavLink.is-active .adminNavIcon {
+  background: #d6e4f5;
 }
 
 .adminNavCount {
