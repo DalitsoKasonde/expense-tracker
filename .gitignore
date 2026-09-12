@@ -26,11 +26,14 @@ api/api
 # Machine-specific assistant permissions; shared project guidance stays tracked.
 .claude/settings.local.json
 
-# Local development notes and design exports. Keep public project history/docs.
+# Local development notes and design exports. Keep public project history/docs,
+# and the guidance agents and new contributors are meant to find.
 *.md
 !README.md
 !**/README.md
 !CHANGELOG.md
+!CLAUDE.md
+!.claude/skills/**/*.md
 stitch_untitled_project/
 
 # personal financial workbooks used for legacy imports — never commit these

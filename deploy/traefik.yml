@@ -15,10 +15,10 @@ providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false   # only route containers with traefik.enable=true
-    network: edge
+    network: traefik-public
 
 certificatesResolvers:
-  letsencrypt:
+  myresolver:
     acme:
       email: you@example.com   # replace with a real address before first run
       storage: /letsencrypt/acme.json

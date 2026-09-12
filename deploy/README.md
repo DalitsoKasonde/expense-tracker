@@ -1,35 +1,24 @@
 # Single-VM deployment (Expenses + other apps)
 
-One Ubuntu server hosts the web app and API as Docker containers. Expenses
-connects to an existing PostgreSQL container rather than creating its own.
+One Ubuntu server hosts all application containers. A separately managed
+PostgreSQL 17 container provides isolated databases and logins for Expenses,
+Pomodoro, and the Inscribed store.
 One shared Traefik container handles TLS/routing for all apps via Docker
 labels — each app is otherwise independently deployed.
 
-Sizing: start at $12/mo (1 vCPU / 2GB RAM) with just Expenses running. 1GB/1vCPU
-is too small once Docker + a Next.js container are both live. Images are built
-in CI and pulled here precisely because an on-VM `docker compose build` can
-transiently need 1GB+ RAM on its own and would compete with the live
-containers. Watch `docker stats` / `free -m` after each new app goes on the
-box and resize the Droplet (non-destructive, just a reboot) before it gets
-tight rather than guessing capacity up front.
+For Expenses, Pomodoro, and the Inscribed store together, start with 2 vCPUs,
+4 GB RAM, and the 2 GB swap configured by the bootstrap script. The Inscribed
+store currently builds on the VM, while the other apps pull CI-built images.
+Watch `docker stats` and `free -m` after deployment and resize before memory is
+tight.
 
 ## One-time VM setup
 
 ```bash
-# Docker + Compose plugin (Ubuntu droplet)
-curl -fsSL https://get.docker.com | sh
-apt-get install -y docker-compose-plugin
+# From this repository, on the new Ubuntu Droplet:
+sudo deploy/vm/bootstrap-shared-host.sh
 
-# firewall
-ufw allow OpenSSH
-ufw allow 80,443/tcp
-ufw enable
-
-# shared network + edge proxy
-docker network create edge
-mkdir -p /srv/edge/letsencrypt
-touch /srv/edge/letsencrypt/acme.json
-chmod 600 /srv/edge/letsencrypt/acme.json
+# shared edge proxy
 cd /srv/edge
 # copy deploy/docker-compose.traefik.yml and deploy/traefik.yml here;
 # edit traefik.yml's acme.email to a real address first
@@ -40,20 +29,12 @@ Point each app's domain/subdomain DNS A record at the Droplet's IP before
 first request — Traefik/Let's Encrypt won't issue a cert until DNS
 resolves (it uses the HTTP-01 challenge on port 80).
 
-## Connect the existing PostgreSQL container
+## Shared PostgreSQL
 
-Create the external database network once, then attach the existing
-PostgreSQL container with the hostname `postgres`:
-
-```bash
-docker network create chuma-database
-docker network connect --alias postgres chuma-database <existing-postgres-container>
-```
-
-If the network or connection already exists, do not recreate it. Create
-the Expenses database and user in that PostgreSQL instance, then put those
-credentials in `.env.prod`'s `DATABASE_URL`. PostgreSQL port 5432 does not
-need to be published to the host or internet.
+The host-level Compose file in `deploy/postgres` creates one PostgreSQL 17
+container on the `chuma-database` and `db-internal` private Docker networks.
+Its initialization script creates a separate database owner and database for
+each app. Port 5432 is not published to the host or internet.
 
 ## Deploying Expenses
 
@@ -68,7 +49,7 @@ First-time setup on the VM:
 mkdir -p /opt/apps && cd /opt/apps
 git clone <this-repo> expense-tracker && cd expense-tracker
 cp .env.prod.example .env.prod
-# Set DATABASE_URL for the existing PostgreSQL database.
+# Set DATABASE_URL for the shared PostgreSQL container.
 # Also set JWT_SECRET, NEXTAUTH_SECRET, the domain values, and admin credentials.
 cp docker-compose.deploy.yml.example docker-compose.deploy.yml
 # Edit the Host(...) rules, cert resolver and network names for this host.
@@ -86,9 +67,8 @@ install -o root -g root -m 0755 \
 deploy/vm/deploy.sh <commit-sha>
 ```
 
-The API reaches the existing PostgreSQL container through the external
-`chuma-database` Docker network and runs application migrations during
-startup. In production it skips migrations flagged as development-only
+The API reaches the shared PostgreSQL container through `DATABASE_URL` and
+runs application migrations during startup. In production it skips migrations flagged as development-only
 seeds (see `api/internal/migrations/runner.go`), so fixture accounts with
 well-known passwords never land in live data. Compose only manages the
 Expenses API and web containers.
@@ -121,7 +101,7 @@ registry.
 ## Adding app #2, #3, #4...
 
 
-Same shape every time, in its own directory under `/srv`:
+Same shape every time, in its own directory under `/opt/apps`:
 
 1. App needs a `Dockerfile` per service and its own
    `docker-compose.prod.yml` — copy this repo's as a template, rename
@@ -134,7 +114,7 @@ Same shape every time, in its own directory under `/srv`:
    container needed, no downtime for the other apps.
 
 Each app stays fully isolated in its own compose project; the only shared
-things are the VM's resources and the one `edge` network + Traefik
+things are the VM's resources and the one `traefik-public` network + Traefik
 instance.
 
 ## Notes
@@ -145,10 +125,8 @@ instance.
   trust-on-first-use and emits a warning on every run.
 - `.env.prod` is gitignored — create it by hand on the VM (or via your
   deploy pipeline's secrets), never commit it.
-- The existing PostgreSQL container and its volume are not managed by
-  `docker-compose.prod.yml`. Back them up and update them separately.
-- Do not expose PostgreSQL's port publicly. Use `docker exec` against the
-  existing PostgreSQL container for administrative access on the VM.
+- PostgreSQL data lives in the `postgres_data` Docker volume. Schedule an
+  encrypted off-host backup; a Droplet deletion also deletes VM-local copies.
 - `letsencrypt/acme.json` holds live TLS private keys — back it up if you
   care about avoiding Let's Encrypt rate limits on a full VM rebuild, and
   never commit it (permissions must stay `600` or Traefik refuses to use it).

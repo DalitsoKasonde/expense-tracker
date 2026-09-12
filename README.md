@@ -17,6 +17,9 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=change-me
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 API_BASE_URL=http://localhost:8080
+# Optional Google OAuth web client. Configure both or leave both empty.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 ```
 
 `NEXT_PUBLIC_API_BASE_URL` is required for browser-side requests. `API_BASE_URL` is used by server-side auth handlers.
@@ -29,6 +32,8 @@ JWT_SECRET=change-me
 APP_ORIGIN=http://localhost:3000
 ADMIN_BOOTSTRAP_EMAIL=admin@example.com
 ADMIN_BOOTSTRAP_PASSWORD=change-me
+# Same OAuth client ID used by the web app; the API verifies its audience.
+GOOGLE_CLIENT_ID=
 ```
 
 `APP_ORIGIN` accepts a comma-separated list. For local development, include every frontend origin you actually use, for example `http://localhost:3000,http://127.0.0.1:3000`. If you open the PWA from another device on your LAN, use your computer's LAN IP in both `APP_ORIGIN` and `NEXT_PUBLIC_API_BASE_URL`.
@@ -57,7 +62,7 @@ npm run dev
 
 ## Accounts and bootstrap admin
 
-New users can create a member account at `/register`. Passwords must contain at least eight characters, including a letter and a number.
+New users can create a member account at `/register`. Passwords must contain at least eight characters, including a letter and a number. When SMTP is configured, existing members can request a six-digit, single-use sign-in code that expires after ten minutes. Google sign-in is available when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured in both the API and web environments; use `/api/auth/callback/google` as the OAuth redirect path.
 
 The bootstrap credentials are only used to create the first administrator. When the database contains no users, the first successful login with:
 
@@ -70,7 +75,9 @@ After the first user exists, changing these environment variables does not chang
 
 ### Registration security
 
-Registration is intended for local or trusted-group deployments. New accounts become active immediately; email verification is not implemented. Every member request is scoped to the authenticated user's data.
+Registration is intended for local or trusted-group deployments. New accounts become active immediately. An address becomes verified after its confirmation link, a successful email-code sign-in, or a Google sign-in carrying Google's verified-email claim. A first-time Google sign-in creates a member account; matching existing accounts are linked by verified email and subsequently by Google's stable account identifier. Every member request is scoped to the authenticated user's data.
+
+The `system_admin` role deliberately remains password-only. Google and email-code sign-in reject suspended accounts and system administrators.
 
 ## System administration
 

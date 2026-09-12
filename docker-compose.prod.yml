@@ -50,7 +50,7 @@ services:
       # away from web and 404 them against the Go API's chi router.
       traefik.http.routers.chuma-api.rule: "Host(`yourdomain.com`) && (PathPrefix(`/api/v1`) || Path(`/api/healthz`))"
       traefik.http.routers.chuma-api.entrypoints: "websecure"
-      traefik.http.routers.chuma-api.tls.certresolver: "letsencrypt"
+      traefik.http.routers.chuma-api.tls.certresolver: "myresolver"
       # /api/* must beat the web catch-all. Traefik's *default* priority is the
       # rule's length, so an explicit low number here would silently lose to
       # the shorter Host()-only web rule below — both are set explicitly.
@@ -86,7 +86,7 @@ services:
       traefik.docker.network: "edge"
       traefik.http.routers.chuma-web.rule: "Host(`yourdomain.com`)"
       traefik.http.routers.chuma-web.entrypoints: "websecure"
-      traefik.http.routers.chuma-web.tls.certresolver: "letsencrypt"
+      traefik.http.routers.chuma-web.tls.certresolver: "myresolver"
       traefik.http.routers.chuma-web.priority: "1"
       traefik.http.services.chuma-web.loadbalancer.server.port: "3000"
       traefik.http.services.chuma-web.loadbalancer.healthcheck.path: "/healthz"
@@ -96,7 +96,7 @@ services:
 networks:
   edge:
     external: true
-    name: edge
+    name: traefik-public
   database:
     external: true
     name: chuma-database
