@@ -35,6 +35,9 @@ export default async function LoginPage() {
               Create an account
             </Link>
           </p>
+          <p className="mt-4 text-center text-xs text-on-surface-soft">
+            <Link href="/privacy" className="font-semibold text-accent hover:underline">Privacy Policy</Link>
+          </p>
         </section>
       </div>
     </main>
