@@ -286,3 +286,20 @@ func TestRenderWrapsAttachmentsAroundTheBodyAlternatives(t *testing.T) {
 		t.Errorf("attachment content did not survive encoding: %q", attachedBody)
 	}
 }
+
+// Choosing the wrong TLS style for a port hangs the connection instead of
+// failing it, so the classification is pinned rather than trusted to a glance.
+func TestPortsThatExpectTLSImmediatelyAreRecognised(t *testing.T) {
+	for _, port := range []int{465, 2465} {
+		if !usesImplicitTLS(port) {
+			t.Errorf("port %d should use implicit TLS", port)
+		}
+	}
+	// 2587 is the alternate for 587 and still upgrades with STARTTLS; hosts
+	// that block 587 outbound make it the port a deployment actually uses.
+	for _, port := range []int{25, 587, 2525, 2587} {
+		if usesImplicitTLS(port) {
+			t.Errorf("port %d should upgrade with STARTTLS, not open in TLS", port)
+		}
+	}
+}

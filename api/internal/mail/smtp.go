@@ -105,9 +105,21 @@ func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
 	return client.Quit()
 }
 
-// dial handles both relay styles: port 465 expects TLS from the first byte,
-// while 587 and 2525 open in the clear and upgrade with STARTTLS. Getting this
-// wrong hangs rather than erroring, so the port decides rather than a guess.
+// usesImplicitTLS reports whether the port expects TLS from the first byte
+// rather than a STARTTLS upgrade.
+//
+// The 2xxx variants exist because many hosts — DigitalOcean among them — block
+// outbound 25, 465 and 587 by default to contain spam, so providers publish
+// high-numbered equivalents. 2465 is the implicit-TLS one and mirrors 465;
+// missing it here would hang a connection rather than fail it, which is a
+// miserable thing to debug from a log that says nothing.
+func usesImplicitTLS(port int) bool {
+	return port == 465 || port == 2465
+}
+
+// dial handles both relay styles: implicit TLS ports expect TLS immediately,
+// while 587, 2587 and 2525 open in the clear and upgrade with STARTTLS. Getting
+// this wrong hangs rather than erroring, so the port decides rather than a guess.
 func (s *SMTPSender) dial(ctx context.Context) (*smtp.Client, error) {
 	address := net.JoinHostPort(s.host, strconv.Itoa(s.port))
 	dialer := &net.Dialer{Timeout: smtpDialTimeout}
@@ -116,7 +128,7 @@ func (s *SMTPSender) dial(ctx context.Context) (*smtp.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mail: dial %s: %w", address, err)
 	}
-	if s.port == 465 {
+	if usesImplicitTLS(s.port) {
 		conn = tls.Client(conn, &tls.Config{ServerName: s.host})
 	}
 
@@ -126,7 +138,7 @@ func (s *SMTPSender) dial(ctx context.Context) (*smtp.Client, error) {
 		return nil, fmt.Errorf("mail: connect %s: %w", address, err)
 	}
 
-	if s.port != 465 {
+	if !usesImplicitTLS(s.port) {
 		if ok, _ := client.Extension("STARTTLS"); ok {
 			if err := client.StartTLS(&tls.Config{ServerName: s.host}); err != nil {
 				client.Close()
