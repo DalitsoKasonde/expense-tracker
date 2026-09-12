@@ -2849,3 +2849,578 @@ a.card:hover {
   .adminFeedbackRow { grid-template-columns: 1fr; gap: 14px; padding: 18px; }
   .adminFeedbackAction { grid-column: 1; }
 }
+
+/* ============================================================================
+   SIGNED-IN USER APPLICATION
+   Shares the administration console's visual language while retaining the
+   user's navigation, finance-specific states, and responsive bottom bar.
+   ========================================================================== */
+
+.appShell {
+  --background: #f5f8fc;
+  --background-soft: #f5f8fc;
+  --background-strong: #eef2f7;
+  --surface: #ffffff;
+  --surface-soft: #f8fafd;
+  --surface-muted: #eef2f7;
+  --surface-strong: #d5dee9;
+  --surface-raised: #ffffff;
+  --primary: #1e4a7a;
+  --primary-strong: #193f69;
+  --primary-deep: #141c2b;
+  --primary-soft: #d6e4f5;
+  --primary-softer: #eaf2fb;
+  --highlight: #1e4a7a;
+  --highlight-soft: #1e5aa8;
+  --accent: #1e5aa8;
+  --action: #1e4a7a;
+  --action-hover: #193f69;
+  --action-contrast: #ffffff;
+  --focus: #1e4a7a;
+  --border: #e3e9f1;
+  --border-strong: #d5dee9;
+  --text: #334155;
+  --text-strong: #141c2b;
+  --text-muted: #64748b;
+  --on-surface: #141c2b;
+  --on-surface-soft: #64748b;
+  --outline: var(--border);
+  --outline-strong: var(--border-strong);
+  --income: #2f9e57;
+  --income-soft: #e6f4ea;
+  --expense: #c94a57;
+  --expense-soft: #fbe9eb;
+  --savings: #1e4a7a;
+  --savings-soft: #eaf2fb;
+  --investment: #1e4a7a;
+  --investment-soft: #eaf2fb;
+  --positive: #2f9e57;
+  --positive-soft: #e6f4ea;
+  --negative: #a8323f;
+  --negative-soft: #fbe9eb;
+  --warning: #8a5a00;
+  --warning-soft: #fdf3e1;
+  --overlay: rgba(20, 28, 43, 0.45);
+  --card-border: #e3e9f1;
+  --shadow-card: 0 1px 2px rgba(20, 40, 70, 0.04);
+  --shadow-soft: 0 1px 2px rgba(20, 40, 70, 0.04);
+  --shadow-raised: 0 24px 60px rgba(20, 40, 70, 0.25);
+  --focus-ring: 0 0 0 3px rgba(30, 74, 122, 0.15);
+  display: grid;
+  min-height: 100dvh;
+  grid-template-columns: 272px minmax(0, 1fr);
+  background: var(--background);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+}
+
+.appContent {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+
+.appSidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100dvh;
+  flex-direction: column;
+  padding: 28px 20px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.appSidebarBrand {
+  padding: 0 8px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.appSidebar .wordmark { width: 148px !important; height: 52px !important; background: var(--primary); }
+.appSidebarBrand > div > span:last-child { color: var(--primary); font-size: 11px; letter-spacing: 0.22em; }
+
+.appSidebarAction {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.appShell .appAddEntryButton {
+  width: 100%;
+  min-height: 46px;
+  justify-content: center;
+}
+
+.appAddEntryIcon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+}
+
+.appSidebarNav {
+  display: grid;
+  gap: 3px;
+  margin-top: 18px;
+}
+
+.appSidebarLink {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  border-radius: 9px;
+  color: #475569;
+  font-size: 15px;
+  font-weight: 500;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.appSidebarLink:hover { color: var(--primary); background: #f0f5fb; }
+.appSidebarLink.is-active { color: var(--primary); background: var(--primary-softer); font-weight: 700; }
+
+.appSidebarIcon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: #f1f5f9;
+}
+
+.appSidebarIcon svg { width: 16px; height: 16px; }
+.appSidebarLink.is-active .appSidebarIcon { background: #d6e4f5; }
+
+.appUserBlock {
+  display: grid;
+  gap: 12px;
+  margin-top: auto;
+  padding: 20px 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.appUserIdentity { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.appUserAvatar,
+.appTopBarAvatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--action-contrast);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.appUserAvatar { width: 36px; height: 36px; flex-basis: 36px; }
+.appUserCopy { display: grid; min-width: 0; }
+.appUserCopy strong { overflow: hidden; color: var(--text-strong); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.appUserCopy span { overflow: hidden; color: var(--text-muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.appShell .appSignOutButton { min-height: 36px; justify-self: start; }
+
+.appTopBar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+}
+
+.appTopBarInner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 40px;
+}
+
+.appTopBarButton {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+  transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+.appTopBarButton:hover { border-color: #a9c0da; color: var(--primary); background: var(--surface-soft); }
+
+.appFooter {
+  margin-top: auto;
+  padding: 0 24px 28px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+}
+
+.appFooter a { color: var(--primary); font-weight: 600; }
+.appFooter a:hover { text-decoration: underline; }
+
+.appShell .page-shell {
+  max-width: 1400px;
+  padding: 36px 48px 64px;
+  gap: 20px;
+}
+
+.appShell .pageHeader {
+  gap: 24px;
+  padding-bottom: 28px;
+  border-color: var(--border);
+}
+
+.appShell .pageEyebrow {
+  margin: 0 0 7px;
+  color: #1e5aa8;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+}
+
+.appShell .pageTitle {
+  color: var(--text-strong);
+  font-family: inherit;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.appShell .pageLede {
+  max-width: 62ch;
+  margin-top: 10px;
+  color: #475569;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.appShell nav[aria-label="Breadcrumb"] { margin-bottom: 4px; }
+.appShell nav[aria-label="Breadcrumb"] a { color: var(--primary); font-weight: 500; }
+
+.appShell .card,
+.appShell .settingsFormPanel,
+.appShell .settingsListPanel,
+.appShell .settingsOverviewCard {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.appShell .card { padding: 22px 24px; }
+.appShell .card-flush { padding: 0; }
+
+.appShell .card-interactive:hover,
+.appShell a.card:hover {
+  border-color: #a9c0da;
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgba(20, 40, 70, 0.08);
+}
+
+.appShell h2,
+.appShell .sectionHeading,
+.appShell .formSectionTitle {
+  color: var(--text-strong);
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.appShell .btn {
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+
+.appShell .btn-sm { min-height: 34px; padding: 0 12px; border-radius: 7px; font-size: 13px; }
+.appShell .btn-primary { border: 1px solid var(--primary); background: var(--primary); color: var(--action-contrast); }
+.appShell .btn-primary:hover { border-color: var(--primary-strong); background: var(--primary-strong); }
+.appShell .btn-primary:disabled { border-color: #8b9bb4; background: #8b9bb4; cursor: not-allowed; }
+
+.appShell .btn-ghost,
+.appShell .btn-secondary {
+  border: 1px solid #cfdbe8;
+  background: var(--surface);
+  color: var(--primary);
+}
+
+.appShell .btn-ghost:hover,
+.appShell .btn-secondary:hover { border-color: #a9c0da; background: var(--primary-softer); }
+
+.appShell .btn-danger { border: 1px solid #e6c3c9; background: var(--surface); color: #a8323f; }
+.appShell .btn-danger:hover { background: #fdf2f3; }
+
+.appShell :where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.appShell .field { gap: 8px; }
+.appShell .field label,
+.appShell .field-label {
+  color: #475569;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.appShell .control,
+.appShell .field input,
+.appShell .field select,
+.appShell .field textarea {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #d5dee9;
+  border-radius: 9px;
+  background: #f8fafd;
+  color: var(--text-strong);
+  font-size: 15px;
+}
+
+.appShell .field textarea { min-height: 104px; padding-block: 11px; }
+.appShell .control::placeholder,
+.appShell .field input::placeholder,
+.appShell .field textarea::placeholder { color: #94a3b8; }
+
+.appShell .control:focus,
+.appShell .field input:focus,
+.appShell .field select:focus,
+.appShell .field textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: var(--focus-ring);
+}
+
+.appShell .field-hint { color: var(--text-muted); font-size: 13px; }
+.appShell .settingsGrid { gap: 18px; }
+
+.dashboardMetricCard { min-height: 132px; }
+.dashboardMetricLabel {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dashboardMetricDot { width: 8px; height: 8px; border-radius: 50%; }
+.dashboardMetricValue {
+  margin-top: 12px;
+  color: var(--text-strong);
+  font-family: var(--font-numeric);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.dashboardMetricDetail { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; color: var(--text-muted); font-size: 13px; }
+
+.appShell .emptyState {
+  min-height: 170px;
+  align-content: center;
+  padding: 40px 24px;
+  border: 1px dashed #d5dee9;
+  border-radius: 12px;
+  background: #f8fafd;
+}
+
+.appShell .emptyState h3 { color: var(--text-strong); font-size: 17px; font-weight: 700; }
+.appShell .emptyState p { max-width: 52ch; color: var(--text-muted); font-size: 15px; line-height: 1.55; }
+
+.transactionFilterGrid { grid-template-columns: minmax(200px, 2fr) repeat(3, minmax(150px, 1fr)); gap: 16px; }
+
+.transactionRow {
+  min-height: 68px;
+  padding: 13px 24px;
+  border-color: #eef2f7;
+  transition: background-color 160ms ease;
+}
+
+.transactionRow:hover { background: #f8fafd; }
+.transactionGlyph { width: 34px; height: 34px; border-radius: 9px; }
+.transactionCopy > p { color: var(--text-strong); font-size: 15px; font-weight: 600; }
+.transactionMeta { color: var(--text-muted); font-size: 13px; }
+.transactionAmount > p:first-child { color: var(--text-strong); font-size: 15px; font-weight: 700; }
+.transactionAmount > p:last-child { color: #94a3b8; font-size: 12px; }
+
+.appShell .balanceCard {
+  min-height: 0;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.appShell .savingsGoalCard { padding: 20px 22px; }
+.savingsGoalName { font-size: 16px; font-weight: 700; }
+.savingsGoalSummary { color: var(--text-muted); font-size: 13px; }
+.savingsGoalPercent { color: var(--primary); font-size: 14px; font-weight: 700; }
+.savingsGoalProgress { height: 8px; border-radius: 4px; background: var(--primary-softer); }
+.savingsGoalProgress > div { border-radius: 4px; background: var(--primary); }
+
+.appShell .settingsPillTabs { padding: 4px; border-radius: 10px; }
+.appShell .settingsPillTabs nav { gap: 2px; padding: 0; }
+.appShell .settingsPillTabs nav a { min-height: 38px; border-radius: 8px; color: var(--text); }
+.appShell .settingsPillTabs nav a:hover { background: #f0f5fb; }
+.appShell .settingsPillTabs nav a[aria-current="page"] { background: var(--primary-softer); color: var(--primary); }
+
+.appShell .rangeChip {
+  min-height: 38px;
+  border: 1px solid #d5dee9;
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--primary);
+}
+
+.appShell .rangeChip.active { border-color: var(--primary); background: var(--primary); color: var(--action-contrast); }
+
+.appShell .entryTypeGrid {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #f1f5f9;
+}
+
+.appShell .entryTypeButton {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #475569;
+}
+
+.appShell .entryTypeButton.active {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: 0 1px 2px rgba(20, 40, 70, 0.08);
+}
+
+.insetSegmented {
+  width: fit-content;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #f1f5f9;
+}
+
+.insetSegment {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.insetSegment:hover { color: var(--primary); }
+.insetSegment.is-active { background: var(--surface); color: var(--primary); box-shadow: 0 1px 2px rgba(20, 40, 70, 0.08); }
+
+.appShell .choiceChip { min-height: 38px; border-radius: 9px; }
+.appShell .choiceChip.active { border-color: var(--primary); background: var(--primary); color: var(--action-contrast); }
+
+.appShell .formSectionCard { gap: 18px; padding-top: 18px; border-color: #eef2f7; }
+.appShell .settingsToggleRow {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.appShell .settingsToggleRow input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
+
+.appShell .addEntryDialog {
+  width: min(94vw, 720px);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(20, 40, 70, 0.25);
+}
+
+.appShell .addEntryDialog::backdrop { background: rgba(20, 28, 43, 0.45); }
+.appShell .entryTypePicker { border-color: #d5dee9; border-radius: 12px; background: #f8fafd; }
+.appShell .entryTypeTile { min-height: 76px; border-radius: 10px; box-shadow: none; transform: none; }
+.appShell .entryTypeTile:hover { border-color: var(--primary); background: #f8fafd; box-shadow: none; transform: none; }
+
+.appShell .settingsListPanel:hover,
+.appShell .settingsFormPanel:hover { border-color: var(--border); background: var(--surface); }
+
+.infoCallout {
+  padding: 14px 18px;
+  border: 1px solid #d6e4f5;
+  border-radius: 12px;
+  background: var(--primary-softer);
+}
+
+.infoCallout p { color: #3b5573; font-size: 13px; line-height: 1.5; }
+.infoCallout .btn { min-height: 36px; }
+
+.reportMatrix { min-width: 1100px; }
+.reportMatrix th,
+.reportMatrix td { padding: 11px 24px; }
+.reportMatrix thead th { color: var(--text-muted); font-size: 11px; letter-spacing: 0.12em; }
+.reportMatrix .reportGroupRow th {
+  background: #f8fafd;
+  color: #1e5aa8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.reportMatrix tbody tr:not(.reportGroupRow):hover { background: #f8fafd; }
+.reportMatrix td { color: var(--text); font-size: 14px; }
+
+.ratiosList { gap: 0; }
+.ratioRow { padding: 14px 0; border-bottom: 1px solid #eef2f7; }
+.ratioRow:first-child { padding-top: 0; }
+.ratioRow:last-child { padding-bottom: 0; border-bottom: 0; }
+.ratioRow dt { color: var(--text-strong); font-size: 14px; font-weight: 600; }
+.ratioRow dd { color: var(--text-strong); font-size: 14px; font-weight: 700; }
+.ratioRow p { color: var(--text-muted); font-size: 12px; }
+
+.categoryGroupCard { min-width: 0; }
+.categoryGroupsGrid { grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); }
+.categoryGroupHeader { padding: 16px 20px; background: var(--surface); }
+.categoryGroupGlyph { width: 36px; height: 36px; border-radius: 9px; }
+.categoryGroupHeader .btn { min-height: 34px; padding-inline: 12px; font-size: 13px; }
+.categoryGroupBody { padding: 14px 16px; }
+.categoryItemRow { border-color: #eef2f7; border-radius: 9px; box-shadow: none; }
+.categoryItemRow:hover { border-color: #d5dee9; background: #f8fafd; }
+.categoryItemRow .btn { min-height: 32px; padding-inline: 12px; font-size: 13px; }
+
+@media (max-width: 1199px) {
+  .transactionFilterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 900px) {
+  .appBottomNav { display: none; }
+}
+
+@media (max-width: 899px) {
+  .appShell { display: block; }
+  .appSidebar { display: none; }
+  .appTopBarInner { padding-inline: 24px; }
+  .appShell .page-shell { padding: 32px 24px 104px; }
+  .appFooter { padding-bottom: 100px; }
+}
+
+@media (max-width: 639px) {
+  .appTopBarInner { padding: 10px 16px; }
+  .appShell .page-shell { padding: 26px 16px 104px; }
+  .appShell .pageTitle { font-size: 31px; }
+  .appShell .pageLede { font-size: 15px; }
+  .appShell .pageActions { width: 100%; }
+  .appShell .pageActions > .btn { width: 100%; }
+  .transactionFilterGrid { grid-template-columns: 1fr; }
+  .transactionRow { grid-template-columns: 34px minmax(0, 1fr) auto !important; padding-inline: 14px; }
+  .transactionRow > .btn { grid-column: 2 / -1; justify-self: start; }
+  .appShell .entryTypeGrid { display: grid; grid-template-columns: 1fr; }
+}

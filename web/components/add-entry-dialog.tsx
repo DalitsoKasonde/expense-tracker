@@ -776,7 +776,7 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
         onClose();
       }}
       onClose={onClose}
-      className="m-auto max-h-[calc(100dvh-1rem)] w-[min(94vw,760px)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-outline bg-surface p-0 text-on-surface shadow-md backdrop:bg-overlay"
+      className="addEntryDialog m-auto max-h-[calc(100dvh-1rem)] w-[min(94vw,760px)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-outline bg-surface p-0 text-on-surface shadow-md backdrop:bg-overlay"
     >
       <div className="flex max-h-[calc(100dvh-1rem)] min-w-0 max-w-full flex-col overflow-hidden">
         <div className="mx-4 flex shrink-0 items-start justify-between gap-4 border-b border-outline py-4 sm:mx-6 sm:py-6">

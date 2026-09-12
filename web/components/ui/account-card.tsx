@@ -19,7 +19,7 @@ export function AccountCard({ name, type, accountClass = "asset", balanceMinor, 
     : "";
 
   return (
-    <article className={cardClass({ className: `grid content-between gap-3 ${emphasis}` })}>
+    <article className={cardClass({ className: `balanceCard grid content-between gap-3 ${emphasis}` })}>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-on-surface-soft">
           {liability ? "Money you owe" : type.replaceAll("_", " ")}

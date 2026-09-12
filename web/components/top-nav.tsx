@@ -114,13 +114,13 @@ export function TopNav({ initials, email }: TopNavProps) {
   }, [profileOpen]);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-outline bg-background/95 backdrop-blur print:hidden">
-      <div className="mx-auto flex max-w-app items-center justify-end gap-3 px-4 py-3 sm:px-8 lg:px-12">
+    <header className="appTopBar print:hidden">
+      <div className="appTopBarInner">
         <div className="relative" ref={notificationsRef}>
           <button
             type="button"
             ref={notificationsTriggerRef}
-            className="grid size-10 place-items-center rounded-full border border-outline bg-surface text-on-surface-soft transition-colors hover:text-on-surface"
+            className="appTopBarButton"
             aria-label="Notifications"
             aria-haspopup="menu"
             aria-controls="notifications-panel"
@@ -186,7 +186,7 @@ export function TopNav({ initials, email }: TopNavProps) {
           <button
             type="button"
             ref={profileTriggerRef}
-            className="grid size-10 place-items-center rounded-full bg-action text-sm font-semibold text-action-contrast"
+            className="appTopBarAvatar"
             aria-label={email ?? "Profile"}
             aria-haspopup="menu"
             aria-controls="profile-panel"

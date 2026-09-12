@@ -11,7 +11,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] z-40 grid grid-cols-5 rounded-lg border border-outline bg-surface/95 p-1.5 shadow-md backdrop-blur lg:hidden print:hidden"
+      className="appBottomNav fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] z-40 grid grid-cols-5 rounded-lg border border-outline bg-surface/95 p-1.5 shadow-md backdrop-blur lg:hidden print:hidden"
       aria-label="Primary navigation"
     >
       {primaryNavigation.map((item) => {

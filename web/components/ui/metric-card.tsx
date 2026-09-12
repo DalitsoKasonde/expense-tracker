@@ -13,13 +13,13 @@ export function MetricCard({ label, value, detail, delta, tone = "default", char
   label: string; value: string; detail?: string; delta?: number | null; tone?: Tone; chart?: ReactNode;
 }) {
   return (
-    <article className="card">
+    <article className="card dashboardMetricCard">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">{label}</p>
-        <span className={`size-2 rounded-full ${tones[tone]}`} aria-hidden="true" />
+        <p className="dashboardMetricLabel">{label}</p>
+        <span className={`dashboardMetricDot ${tones[tone]}`} aria-hidden="true" />
       </div>
-      <p className="mt-3 font-display text-2xl font-semibold tabular-nums text-on-surface">{value}</p>
-      {(detail || delta !== undefined) ? <div className="mt-2 flex flex-wrap gap-2 text-xs">
+      <p className="dashboardMetricValue tabular-nums">{value}</p>
+      {(detail || delta !== undefined) ? <div className="dashboardMetricDetail">
         {delta !== undefined && delta !== null ? <span className={delta >= 0 ? "font-semibold text-positive" : "font-semibold text-negative"}>{delta >= 0 ? "+" : ""}{delta.toFixed(1)}%</span> : null}
         {detail ? <span className="text-on-surface-soft">{detail}</span> : null}
       </div> : null}

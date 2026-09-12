@@ -38,22 +38,22 @@ export function TransactionRow({ transaction, onEdit }: { transaction: Transacti
   const dateLabel = date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
   return (
-    <div className={`grid min-w-0 ${onEdit ? "grid-cols-[36px_minmax(0,1fr)_auto_auto]" : "grid-cols-[36px_minmax(0,1fr)_auto]"} items-center gap-3 border-b border-outline py-3.5 last:border-0`}>
+    <div className={`transactionRow grid min-w-0 ${onEdit ? "grid-cols-[36px_minmax(0,1fr)_auto_auto]" : "grid-cols-[36px_minmax(0,1fr)_auto]"} items-center gap-3 border-b border-outline py-3.5 last:border-0`}>
       <div
-        className={`grid size-9 place-items-center rounded-full text-base font-semibold ${positive ? "bg-positive-soft text-positive" : "bg-negative-soft text-negative"}`}
+        className={`transactionGlyph grid size-9 place-items-center text-base font-semibold ${positive ? "is-positive bg-positive-soft text-positive" : "is-negative bg-negative-soft text-negative"}`}
         aria-hidden="true"
       >
         {positive ? "+" : "−"}
       </div>
-      <div className="min-w-0">
+      <div className="transactionCopy min-w-0">
         <p className="truncate text-sm font-semibold text-on-surface">{label}</p>
-        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-on-surface-soft">
+        <div className="transactionMeta mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-on-surface-soft">
           <span className="shrink-0">{dateLabel}</span>
           {note ? <><span aria-hidden="true">·</span><span className="truncate">{kindLabel}</span></> : null}
           {transaction.isPending ? <span className="shrink-0 rounded-full bg-warning-soft px-2 py-0.5 font-medium text-warning">Pending</span> : null}
         </div>
       </div>
-      <div className="min-w-0 text-right">
+      <div className="transactionAmount min-w-0 text-right">
         <p className="whitespace-nowrap text-sm font-bold">
           <Money
             amountMinor={transaction.amount}

@@ -135,7 +135,7 @@ export default function GoalsPage() {
         }
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-outline bg-primary-softer p-4">
+      <div className="infoCallout flex flex-wrap items-center justify-between gap-3 rounded-lg border border-outline bg-primary-softer p-4">
         <p className="text-sm text-on-surface-soft">To fund a goal, transfer money into the savings account created for it.</p>
         <AddEntryButton className="btn btn-ghost">Transfer money</AddEntryButton>
       </div>

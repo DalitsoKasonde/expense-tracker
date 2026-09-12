@@ -18,7 +18,7 @@ export function SettingsNav() {
   const currentPath = pathname ?? "";
 
   return (
-    <div className="min-w-0 max-w-full rounded-lg border border-outline bg-surface p-1 shadow-sm">
+    <div className="settingsPillTabs min-w-0 max-w-full rounded-lg border border-outline bg-surface p-1 shadow-sm">
       <div className="relative min-w-0 overflow-hidden">
         {/* The right padding leaves a visible next-tab edge on phones. */}
         <nav className="settingsTabScroller flex min-w-0 max-w-full gap-1.5 overflow-x-auto p-0.5 pr-12" aria-label="Settings sections">

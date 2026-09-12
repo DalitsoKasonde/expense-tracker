@@ -46,7 +46,7 @@ export function EntryTypePicker({ selected, onSelect, onClear }: EntryTypePicker
   }
 
   return (
-    <section className="rounded-xl border border-outline bg-[linear-gradient(145deg,var(--surface-soft),var(--surface))] p-4 sm:p-5">
+    <section className="entryTypePicker rounded-xl border border-outline bg-surface-soft p-4 sm:p-5">
       <div className="mb-5 grid gap-1">
         <h2 className="text-xl font-semibold text-on-surface">What happened?</h2>
         <p className="text-sm text-on-surface-soft">
@@ -66,7 +66,7 @@ export function EntryTypePicker({ selected, onSelect, onClear }: EntryTypePicker
                   key={item.value}
                   type="button"
                   aria-label={item.label}
-                  className="group flex min-h-[76px] items-center gap-3 rounded-lg border border-outline bg-surface p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md"
+                  className="entryTypeTile group flex min-h-[76px] items-center gap-3 rounded-lg border border-outline bg-surface p-3 text-left shadow-sm transition hover:border-primary hover:shadow-md"
                   onClick={() => onSelect(item)}
                 >
                   <span

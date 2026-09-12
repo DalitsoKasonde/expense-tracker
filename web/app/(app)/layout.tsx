@@ -7,6 +7,8 @@ import { SidebarNav } from "@/components/sidebar-nav";
 import { PreferenceThemeSync } from "@/components/preference-theme-sync";
 import { TopNav } from "@/components/top-nav";
 import { isApiNotFound } from "@/lib/api-error";
+import packageMetadata from "../../package.json";
+import Link from "next/link";
 
 function initialsFor(name?: string | null, email?: string | null) {
   const source = name?.trim() || email?.trim() || "U";
@@ -71,11 +73,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <PreferenceThemeSync />
-      <div className="min-h-dvh lg:grid lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="appShell min-h-dvh">
         <SidebarNav />
-        <div className="min-w-0">
+        <div className="appContent min-w-0">
           <TopNav initials={initials} email={session.user?.email} />
           {children}
+          <footer className="appFooter" aria-label="Application version">
+            Expenses v{packageMetadata.version} · <Link href="/privacy">Privacy</Link>
+          </footer>
         </div>
       </div>
       <BottomNav />

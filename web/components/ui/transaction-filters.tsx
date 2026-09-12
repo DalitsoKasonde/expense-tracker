@@ -19,7 +19,7 @@ export function TransactionFilters({ value, onChange, accounts = [], categories 
   // class string, so the height, radius and focus ring match every other form
   // in the app instead of drifting from --focus-ring.
   return (
-    <div className="grid min-w-0 w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5" aria-label="Transaction filters">
+    <div className="transactionFilterGrid grid min-w-0 w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5" aria-label="Transaction filters">
       <Field label="Search" className="xl:col-span-2">
         {(props) => (
           <Input

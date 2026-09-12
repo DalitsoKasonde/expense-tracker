@@ -158,7 +158,7 @@ export default function CategoriesSettingsPage() {
 
         {loading ? <div className="card settingsListPanel muted">Loading categories...</div> : null}
         {!loading ? (
-          <div className="grid gap-4">
+          <div className="categoryGroupsGrid grid gap-4">
             {categoryGroups.map((group) => {
               const groupCategories = visibleCategories.filter(
                 (category) => category.categoryGroup === group.value,
@@ -166,10 +166,10 @@ export default function CategoriesSettingsPage() {
               // While searching, a group with no matches is noise.
               if (searching && groupCategories.length === 0) return null;
               return (
-                <section key={group.value} className="card overflow-hidden p-0" aria-labelledby={`category-group-${group.value}`}>
-                  <div className="flex items-center justify-between gap-3 border-b border-outline bg-surface-soft p-4">
+                <section key={group.value} className="card categoryGroupCard overflow-hidden p-0" aria-labelledby={`category-group-${group.value}`}>
+                  <div className="categoryGroupHeader flex items-center justify-between gap-3 border-b border-outline bg-surface-soft p-4">
                     <div className="flex items-center gap-3">
-                      <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary-softer text-lg font-bold text-primary" aria-hidden="true">
+                      <span className="categoryGroupGlyph grid h-10 w-10 place-items-center rounded-lg bg-primary-softer text-lg font-bold text-primary" aria-hidden="true">
                         {group.symbol}
                       </span>
                       <div className="resourceBody">
@@ -196,13 +196,13 @@ export default function CategoriesSettingsPage() {
                   </div>
 
                   {groupCategories.length ? (
-                    <div className="grid gap-2 p-3 sm:p-4">
+                    <div className="categoryGroupBody grid gap-2 p-3 sm:p-4">
                       {groupCategories.map((category) => {
                         const parent = category.parentId ? categoriesById.get(category.parentId) : undefined;
                         return (
                           <div
                             key={category.id}
-                            className="grid gap-3 rounded-lg border border-outline bg-surface p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                            className="categoryItemRow grid gap-3 rounded-lg border border-outline bg-surface p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                             style={{ marginLeft: `${Math.min(category.depth, 3) * 1.25}rem` }}
                           >
                             <div className="flex min-w-0 items-start gap-3">

@@ -658,7 +658,7 @@ export default function ReportsPage() {
             </section>
           ) : null}
 
-          <section className="card card-flush overflow-hidden">
+          <section className="card card-flush reportMatrixCard overflow-hidden">
             <div className="flex flex-wrap items-end justify-between gap-4 border-b border-outline p-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Annual detail</p>
@@ -673,7 +673,7 @@ export default function ReportsPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="min-w-max border-collapse text-sm">
+              <table className="reportMatrix min-w-max border-collapse text-sm">
                 <caption className="sr-only">
                   {annual.year} monthly financial report with a year-to-date total
                 </caption>
@@ -710,7 +710,7 @@ export default function ReportsPage() {
                       group={group}
                     />
                   ))}
-                  <tr className="border-y border-outline bg-surface-soft">
+                  <tr className="reportGroupRow border-y border-outline bg-surface-soft">
                     <th
                       colSpan={annual.data.length + 2}
                       className="sticky left-0 px-5 py-2 text-left text-xs font-bold uppercase tracking-wider text-on-surface-soft"
@@ -775,7 +775,7 @@ function CategorySpendingCard({
   }
 
   return (
-    <section className="card">
+    <section className="card ratiosCard">
       <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">
         Spending detail
       </p>
@@ -1175,7 +1175,7 @@ function FinancialRatios({ annual }: { annual: AnnualOverall }) {
           .map((ratio) => `${ratio.label}: ${formatBps(ratio.value)}`)
           .join(". ")}
       </p>
-      <dl className="mt-5 grid gap-5">
+      <dl className="ratiosList mt-5 grid gap-5">
         {ratios.map((ratio) => {
           const percentage =
             ratio.value === null || ratio.value === undefined ? null : ratio.value / 100;
@@ -1185,7 +1185,7 @@ function FinancialRatios({ annual }: { annual: AnnualOverall }) {
           // exactly 100%.
           const overScale = percentage !== null && percentage > 100;
           return (
-            <div key={ratio.label}>
+            <div className="ratioRow" key={ratio.label}>
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-sm font-semibold text-on-surface">{ratio.label}</dt>
                 <dd className="font-semibold tabular-nums text-on-surface">
@@ -1437,7 +1437,7 @@ function ReportMoneyGroup({
 }) {
   return (
     <>
-      <tr className="border-y border-outline bg-surface-soft first:border-t-0">
+      <tr className="reportGroupRow border-y border-outline bg-surface-soft first:border-t-0">
         <th
           colSpan={annual.data.length + 2}
           className="sticky left-0 px-5 py-2 text-left text-xs font-bold uppercase tracking-wider text-on-surface-soft"

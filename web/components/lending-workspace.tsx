@@ -17,7 +17,7 @@ export function LendingWorkspace() {
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Lending views">
+      <div className="insetSegmented flex flex-wrap gap-2" role="tablist" aria-label="Lending views">
         {views.map((item) => (
           <button
             key={item.id}
@@ -26,7 +26,7 @@ export function LendingWorkspace() {
             id={`lending-tab-${item.id}`}
             aria-selected={view === item.id}
             aria-controls={`lending-panel-${item.id}`}
-            className={view === item.id ? "btn btn-primary" : "btn btn-ghost"}
+            className={`insetSegment${view === item.id ? " is-active" : ""}`}
             onClick={() => setView(item.id)}
           >
             {item.label}
