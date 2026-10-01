@@ -296,18 +296,8 @@ func (s *BondStore) Create(ctx context.Context, userID string, input CreateBondI
 	// A historical bond may name no account at all; validateBondInput has
 	// already refused an empty account for every other case.
 	if input.CashAccountID != "" {
-		var accountExists bool
-		if err := tx.QueryRow(ctx, `
-			select exists(
-				select 1
-				from accounts
-				where id = $1 and user_id = $2 and archived_at is null
-			)
-		`, input.CashAccountID, userID).Scan(&accountExists); err != nil {
+		if err := checkBondFundingAccount(ctx, tx, userID, input.CashAccountID, input.Currency); err != nil {
 			return BondPosition{}, err
-		}
-		if !accountExists {
-			return BondPosition{}, ErrNotFound
 		}
 	}
 
@@ -317,6 +307,16 @@ func (s *BondStore) Create(ctx context.Context, userID string, input CreateBondI
 	}
 
 	symbol := normalizeAssetSymbol(input.Name, input.Symbol)
+	if input.Symbol == nil || strings.TrimSpace(*input.Symbol) == "" {
+		// The symbol is unique per person and, left blank, comes from the name.
+		// Government bonds share names ("GRZ 5 year bond"), so a second one
+		// would collide; it gets its maturity year instead of an error.
+		taken, err := takenSymbolsLike(ctx, tx, userID, symbol)
+		if err != nil {
+			return BondPosition{}, err
+		}
+		symbol = uniqueBondSymbol(symbol, input.MaturityDate, taken)
+	}
 
 	var position BondPosition
 	err = tx.QueryRow(ctx, `
@@ -441,25 +441,15 @@ func (s *BondStore) AddPurchase(ctx context.Context, userID, assetID string, inp
 	issueDate, _ := time.Parse(dateLayout, position.IssueDate)
 	maturityDate, _ := time.Parse(dateLayout, position.MaturityDate)
 	if purchaseDate.Before(issueDate) {
-		return BondPosition{}, errors.New("purchaseDate must be on or after the bond issue date")
+		return BondPosition{}, invalid("The purchase date cannot be before the bond was issued (%s).", position.IssueDate)
 	}
 	if !purchaseDate.Before(maturityDate) {
-		return BondPosition{}, errors.New("purchaseDate must be before the bond maturity date")
+		return BondPosition{}, invalid("The purchase date must be before the bond matures (%s).", position.MaturityDate)
 	}
 
 	if !input.HistoricalBackfill {
-		var accountExists bool
-		if err := tx.QueryRow(ctx, `
-			select exists(
-				select 1 from accounts
-				where id = $1 and user_id = $2 and archived_at is null
-				  and account_class <> 'liability' and currency = $3
-			)
-		`, input.CashAccountID, userID, position.Currency).Scan(&accountExists); err != nil {
+		if err := checkBondFundingAccount(ctx, tx, userID, input.CashAccountID, position.Currency); err != nil {
 			return BondPosition{}, err
-		}
-		if !accountExists {
-			return BondPosition{}, ErrNotFound
 		}
 	}
 
@@ -1038,6 +1028,78 @@ func findOrCreateBondInvestmentType(ctx context.Context, tx pgx.Tx, userID strin
 	return investmentTypeID, normalizeWriteError(err)
 }
 
+// checkBondFundingAccount refuses an account a bond cannot be paid from, and
+// says why. A currency mismatch in particular must stop here: the purchase
+// would be stored, listed, and counted toward no balance at all.
+func checkBondFundingAccount(ctx context.Context, tx pgx.Tx, userID, accountID, currency string) error {
+	var accountClass, accountCurrency string
+	err := tx.QueryRow(ctx, `
+		select account_class, currency
+		from accounts
+		where id = $1 and user_id = $2 and archived_at is null
+	`, accountID, userID).Scan(&accountClass, &accountCurrency)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	return bondFundingAccountProblem(accountClass, accountCurrency, currency)
+}
+
+// bondFundingAccountProblem is the rule itself, apart from the lookup, so it
+// can be tested without a database.
+func bondFundingAccountProblem(accountClass, accountCurrency, bondCurrency string) error {
+	if accountClass == "liability" {
+		return invalid("A bond cannot be paid from a loan or credit account. Choose a bank or mobile money account.")
+	}
+	if !strings.EqualFold(accountCurrency, bondCurrency) {
+		return invalid("This bond is in %s but the account is in %s. Pay from a %s account.", bondCurrency, accountCurrency, bondCurrency)
+	}
+	return nil
+}
+
+func takenSymbolsLike(ctx context.Context, tx pgx.Tx, userID, base string) (map[string]bool, error) {
+	// LIKE treats "_" as a wildcard, so this can over-match; extra symbols
+	// only make the choice more cautious, never wrong.
+	rows, err := tx.Query(ctx, `select symbol from assets where user_id = $1 and symbol like $2 || '%'`, userID, base)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	taken := map[string]bool{}
+	for rows.Next() {
+		var symbol string
+		if err := rows.Scan(&symbol); err != nil {
+			return nil, err
+		}
+		taken[symbol] = true
+	}
+	return taken, rows.Err()
+}
+
+// uniqueBondSymbol keeps the plain symbol when it is free, then adds the
+// maturity year — which is how two bonds of the same name are told apart on a
+// statement — and only then a counter.
+func uniqueBondSymbol(base, maturityDate string, taken map[string]bool) string {
+	if !taken[base] {
+		return base
+	}
+	withYear := base
+	if len(maturityDate) >= 4 {
+		withYear = base + "_" + maturityDate[:4]
+		if !taken[withYear] {
+			return withYear
+		}
+	}
+	for counter := 2; ; counter++ {
+		candidate := fmt.Sprintf("%s_%d", withYear, counter)
+		if !taken[candidate] {
+			return candidate
+		}
+	}
+}
+
 func normalizeAssetSymbol(name string, symbol *string) string {
 	value := strings.TrimSpace(name)
 	if symbol != nil && strings.TrimSpace(*symbol) != "" {
@@ -1064,50 +1126,50 @@ func roundedCouponMinor(principalMinor int64, couponRateBps, frequency int) int6
 func validateBondInput(input CreateBondInput) error {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
-		return errors.New("name is required")
+		return invalid("Enter a name for the bond.")
 	}
 	if !input.HistoricalBackfill && strings.TrimSpace(input.CashAccountID) == "" {
-		return errors.New("cashAccountId is required")
+		return invalid("Choose the account the bond is paid from.")
 	}
 	if input.PrincipalMinor <= 0 {
-		return errors.New("principalMinor must be greater than zero")
+		return invalid("Enter the amount invested, above zero.")
 	}
 	if input.PurchaseFeeMinor < 0 {
-		return errors.New("purchaseFeeMinor must be zero or greater")
+		return invalid("The purchase fee cannot be negative.")
 	}
 	if input.PurchaseFeeMinor > int64(^uint64(0)>>1)-input.PrincipalMinor {
-		return errors.New("principalMinor plus purchaseFeeMinor is too large")
+		return invalid("The amount and fee together are too large.")
 	}
 	if input.CouponRateBps < 0 {
-		return errors.New("couponRateBps must be zero or greater")
+		return invalid("The coupon rate cannot be negative.")
 	}
 	if input.CouponFrequencyPerYear == 0 {
 		input.CouponFrequencyPerYear = 2
 	}
 	if input.CouponFrequencyPerYear <= 0 || 12%input.CouponFrequencyPerYear != 0 {
-		return errors.New("couponFrequencyPerYear must divide 12")
+		return invalid("Coupons must be paid monthly, quarterly, twice a year or once a year.")
 	}
 
 	issueDate, err := time.Parse(dateLayout, input.IssueDate)
 	if err != nil {
-		return errors.New("issueDate must use YYYY-MM-DD")
+		return invalid("Enter a valid issue date.")
 	}
 	maturityDate, err := time.Parse(dateLayout, input.MaturityDate)
 	if err != nil {
-		return errors.New("maturityDate must use YYYY-MM-DD")
+		return invalid("Enter a valid maturity date.")
 	}
 	cutoffDate, err := time.Parse(dateLayout, input.ReinvestmentCutoffDate)
 	if err != nil {
-		return errors.New("reinvestmentCutoffDate must use YYYY-MM-DD")
+		return invalid("Enter a valid date to stop reinvesting coupons.")
 	}
 	if !maturityDate.After(issueDate) {
-		return errors.New("maturityDate must be after issueDate")
+		return invalid("The maturity date must be after the issue date.")
 	}
 	if cutoffDate.Before(issueDate) {
-		return errors.New("reinvestmentCutoffDate must be on or after issueDate")
+		return invalid("The date to stop reinvesting cannot be before the issue date.")
 	}
 	if cutoffDate.After(maturityDate) {
-		return errors.New("reinvestmentCutoffDate must be on or before maturityDate")
+		return invalid("The date to stop reinvesting cannot be after maturity.")
 	}
 
 	return nil
@@ -1115,19 +1177,19 @@ func validateBondInput(input CreateBondInput) error {
 
 func validateAddBondPurchaseInput(input AddBondPurchaseInput) error {
 	if !input.HistoricalBackfill && strings.TrimSpace(input.CashAccountID) == "" {
-		return errors.New("cashAccountId is required")
+		return invalid("Choose the account the bond is paid from.")
 	}
 	if input.PrincipalMinor <= 0 {
-		return errors.New("principalMinor must be greater than zero")
+		return invalid("Enter the amount invested, above zero.")
 	}
 	if input.PurchaseFeeMinor < 0 {
-		return errors.New("purchaseFeeMinor must be zero or greater")
+		return invalid("The purchase fee cannot be negative.")
 	}
 	if input.PurchaseFeeMinor > int64(^uint64(0)>>1)-input.PrincipalMinor {
-		return errors.New("principalMinor plus purchaseFeeMinor is too large")
+		return invalid("The amount and fee together are too large.")
 	}
 	if _, err := time.Parse(dateLayout, input.PurchaseDate); err != nil {
-		return errors.New("purchaseDate must use YYYY-MM-DD")
+		return invalid("Enter a valid purchase date.")
 	}
 	return nil
 }

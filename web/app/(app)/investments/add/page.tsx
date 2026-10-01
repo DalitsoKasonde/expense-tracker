@@ -243,6 +243,17 @@ export default function AddInvestmentPage() {
     });
   }
 
+  // The term fills the maturity in, but a certificate's actual date wins: bonds
+  // settle on auction dates, so maturity is often not exactly N years on, and a
+  // wrong maturity moves every coupon and the redemption with it.
+  function updateBondMaturity(maturityDate: string) {
+    setForm((current) => ({
+      ...current,
+      maturityDate,
+      reinvestmentCutoffDate: current.reinvestmentCutoffDate === current.maturityDate ? maturityDate : current.reinvestmentCutoffDate,
+    }));
+  }
+
   function updateBondTerm(termYears: string) {
     setForm((current) => {
       const maturityDate = addYearsToDate(current.issueDate, Number.parseInt(termYears, 10));
@@ -847,8 +858,8 @@ export default function AddInvestmentPage() {
               <div className="splitFields">
                 <div className="field">
                   <label htmlFor="maturityDate">Maturity date</label>
-                  <input id="maturityDate" type="date" value={form.maturityDate} min={form.issueDate} readOnly required />
-                  <span className="muted">Calculated from the issue date and term.</span>
+                  <input id="maturityDate" type="date" value={form.maturityDate} min={form.issueDate} onChange={(event) => updateBondMaturity(event.target.value)} required />
+                  <span className="muted">Filled in from the issue date and term. Change it if your bond certificate gives a different date.</span>
                 </div>
                 <div className="field">
                   <label htmlFor="bondFee">Purchase charge / fee ({form.currency})</label>

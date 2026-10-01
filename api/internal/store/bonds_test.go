@@ -1,6 +1,10 @@
 package store
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 func TestValidateBondInputRejectsNegativePurchaseFee(t *testing.T) {
 	input := CreateBondInput{
@@ -300,5 +304,54 @@ func TestSummarizeBondsIgnoresCashflowsForUnknownAssets(t *testing.T) {
 func TestSummarizeBondsWithNoPositionsReturnsNoCurrencies(t *testing.T) {
 	if got := summarizeBonds(nil, nil); len(got) != 0 {
 		t.Fatalf("expected no summaries, got %d", len(got))
+	}
+}
+
+func TestASecondBondWithTheSameNameGetsItsMaturityYearNotAConflict(t *testing.T) {
+	taken := map[string]bool{}
+	if got := uniqueBondSymbol("GRZ_5_YEAR_BOND", "2031-03-15", taken); got != "GRZ_5_YEAR_BOND" {
+		t.Fatalf("first bond symbol = %q, want the plain name", got)
+	}
+
+	taken["GRZ_5_YEAR_BOND"] = true
+	if got := uniqueBondSymbol("GRZ_5_YEAR_BOND", "2031-03-15", taken); got != "GRZ_5_YEAR_BOND_2031" {
+		t.Fatalf("second bond symbol = %q, want the maturity year added", got)
+	}
+
+	taken["GRZ_5_YEAR_BOND_2031"] = true
+	if got := uniqueBondSymbol("GRZ_5_YEAR_BOND", "2031-09-15", taken); got != "GRZ_5_YEAR_BOND_2031_2" {
+		t.Fatalf("third bond symbol = %q, want a counter after the year", got)
+	}
+}
+
+func TestABondCannotBePaidFromAnAccountInAnotherCurrency(t *testing.T) {
+	// Stored anyway, it would be listed and counted toward no balance at all.
+	err := bondFundingAccountProblem("asset", "ZMW", "USD")
+	var validation ValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("currency mismatch error = %v, want a ValidationError", err)
+	}
+	if !strings.Contains(err.Error(), "USD") || !strings.Contains(err.Error(), "ZMW") {
+		t.Fatalf("message %q does not name both currencies", err)
+	}
+	if bondFundingAccountProblem("asset", "zmw", "ZMW") != nil {
+		t.Fatal("matching currencies in different case were refused")
+	}
+}
+
+func TestABondCannotBePaidFromALiability(t *testing.T) {
+	if bondFundingAccountProblem("liability", "ZMW", "ZMW") == nil {
+		t.Fatal("a liability account was accepted as a bond's funding account")
+	}
+}
+
+func TestBondInputProblemsAreValidationErrorsTheScreenCanShow(t *testing.T) {
+	err := validateBondInput(CreateBondInput{Name: "GRZ", CashAccountID: "a", PrincipalMinor: 100, IssueDate: "2026-01-01", MaturityDate: "2025-01-01", ReinvestmentCutoffDate: "2026-01-01"})
+	var validation ValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("error = %v, want a ValidationError", err)
+	}
+	if !strings.Contains(err.Error(), "maturity date must be after the issue date") {
+		t.Fatalf("message = %q", err)
 	}
 }

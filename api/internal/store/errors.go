@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -15,6 +16,17 @@ var (
 	ErrAccountCurrencyLocked  = errors.New("account currency cannot change once it has transactions")
 	ErrAssetHasActivity       = errors.New("asset has activity beyond purchases")
 )
+
+// ValidationError is input the person can fix, with a message written for
+// them. Handlers show it as is; anything else is an internal failure whose
+// text must not reach the screen.
+type ValidationError struct{ message string }
+
+func (e ValidationError) Error() string { return e.message }
+
+func invalid(format string, args ...any) error {
+	return ValidationError{message: fmt.Sprintf(format, args...)}
+}
 
 func normalizeWriteError(err error) error {
 	if err == nil {

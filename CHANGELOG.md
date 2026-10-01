@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- A second government bond with the same name as one you already hold now saves, labelled with its maturity year, instead of failing with "resource conflict"
+- A bond's maturity date can be corrected to the date on your certificate; it was fixed at exactly the term in years, which moved every coupon and the redemption when the real date differed
+- A bond can no longer be paid from an account in another currency, or from a loan or credit account; both used to save and then count toward no balance
+- When a bond cannot be saved, the message says what to change — "This bond is in USD but the account is in ZMW" — rather than a raw error
 - Turn on an evening reminder email in Settings › Preferences: when your entries fall two days behind you get one email at 19:00 Lusaka time with a link to catch up, another on day four if the gap is still there, then one a week — never every night
 - When your entries fall two or more days behind, Today says so — "Your entries stop at 10 Sep — 20 days ago" — with a button straight to the catch-up sheet. Automatically posted bond coupons do not count as keeping up
 - Entries recorded just after midnight are dated today rather than yesterday; every form took its default date from UTC, which in Zambia is two hours behind

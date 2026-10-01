@@ -1493,8 +1493,26 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
                   <div className="splitFields">
                     <div className="field">
                       <label htmlFor="maturityDate">Maturity date</label>
-                      <input id="maturityDate" type="date" min={newInvestment.issueDate} value={newInvestment.maturityDate} readOnly required />
-                      <span className="muted">Calculated from the issue date and term.</span>
+                      {/* Editable for the same reason as on the add-investment
+                          page: the certificate's date wins over the term. */}
+                      <input
+                        id="maturityDate"
+                        type="date"
+                        min={newInvestment.issueDate}
+                        value={newInvestment.maturityDate}
+                        onChange={(event) =>
+                          setNewInvestment((current) => ({
+                            ...current,
+                            maturityDate: event.target.value,
+                            reinvestmentCutoffDate:
+                              current.reinvestmentCutoffDate === current.maturityDate
+                                ? event.target.value
+                                : current.reinvestmentCutoffDate,
+                          }))
+                        }
+                        required
+                      />
+                      <span className="muted">Filled in from the issue date and term. Change it if your bond certificate gives a different date.</span>
                     </div>
                     <div className="field">
                       <label htmlFor="purchaseFee">Purchase charge / fee</label>

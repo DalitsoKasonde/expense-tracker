@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -169,12 +170,7 @@ func (s *Server) createBond(w http.ResponseWriter, r *http.Request) {
 
 	position, err := s.bonds.Create(r.Context(), claims.UserID, req)
 	if err != nil {
-		switch err {
-		case store.ErrNotFound, store.ErrConflict:
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		default:
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
+		writeBondError(w, r, "bonds.create", err)
 		return
 	}
 
@@ -201,15 +197,12 @@ func (s *Server) addBondPurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	position, err := s.bonds.AddPurchase(r.Context(), claims.UserID, chi.URLParam(r, "assetId"), req)
+	if errors.Is(err, store.ErrConflict) {
+		http.Error(w, "This bond has already matured or been redeemed, so nothing more can be added to it.", http.StatusConflict)
+		return
+	}
 	if err != nil {
-		switch err {
-		case store.ErrNotFound:
-			http.Error(w, "bond or funding account not found", http.StatusNotFound)
-		case store.ErrConflict:
-			http.Error(w, "bond has already matured or been redeemed", http.StatusConflict)
-		default:
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
+		writeBondError(w, r, "bonds.add_purchase", err)
 		return
 	}
 
@@ -272,4 +265,23 @@ func (s *Server) confirmBondCoupon(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, cashflow)
+}
+
+// writeBondError turns a failed bond write into something the person can act
+// on. Every failure used to come back as a 400 carrying the raw error, so a
+// duplicate name read "resource conflict" and a database fault was shown
+// verbatim; neither said what to change.
+func writeBondError(w http.ResponseWriter, r *http.Request, operation string, err error) {
+	var validation store.ValidationError
+	switch {
+	case errors.As(err, &validation):
+		http.Error(w, validation.Error(), http.StatusBadRequest)
+	case errors.Is(err, store.ErrNotFound):
+		http.Error(w, "That account or bond no longer exists, or has been archived. Choose another and try again.", http.StatusNotFound)
+	case errors.Is(err, store.ErrConflict):
+		// Only an explicit symbol can collide now; a blank one is made unique.
+		http.Error(w, "You already have an investment with this symbol. To add to a bond you hold, choose Existing government bond; otherwise use a different symbol.", http.StatusConflict)
+	default:
+		writeInternalError(w, r, operation, "the bond could not be saved", err)
+	}
 }

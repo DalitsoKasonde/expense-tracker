@@ -210,6 +210,31 @@ describe("AddEntryDialog", () => {
     expect(screen.queryByText("Create an asset first")).not.toBeInTheDocument();
   });
 
+  it("saves the maturity date from the certificate when it is not exactly the term", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/accounts") return Promise.resolve([{ id: "account-1", name: "Bank", accountClass: "asset", currency: "ZMW" }]);
+      return Promise.resolve([]);
+    });
+    render(<AddEntryDialog open onClose={vi.fn()} initialEntryKind="investment_buy" />);
+    fireEvent.click(await screen.findByRole("button", { name: "New government bond" }));
+
+    fireEvent.change(screen.getByLabelText("Bond name"), { target: { value: "GRZ 3 year bond" } });
+    fireEvent.change(screen.getByLabelText("Principal"), { target: { value: "10000" } });
+    fireEvent.change(screen.getByLabelText("Annual coupon rate (%)"), { target: { value: "13" } });
+    fireEvent.change(screen.getByLabelText("Issue date"), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText("Term (years)"), { target: { value: "3" } });
+    // Auction settlement moves real maturities off the round date.
+    fireEvent.change(screen.getByLabelText("Maturity date"), { target: { value: "2029-01-19" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    await waitFor(() =>
+      expect(mocks.apiCall).toHaveBeenCalledWith("/v1/bonds", {
+        method: "POST",
+        body: expect.objectContaining({ maturityDate: "2029-01-19", reinvestmentCutoffDate: "2029-01-19" }),
+      }),
+    );
+  });
+
   it("shows an explicit purchase date for stock purchases", async () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "I bought an investment" }));
