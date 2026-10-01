@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Finish a catch-up by matching an account to its real balance: enter what your wallet or bank app shows, and anything missing is recorded as one line of unaccounted spending dated today. If an account holds more than expected, it tells you what to look for instead of guessing
+- Paste Airtel Money SMS into the catch-up sheet and each payment or receipt becomes a row with its amount, date and reference filled in. The messages are read on your device and never uploaded, the same SMS cannot be recorded twice, and the latest balance they report is shown so you can check the wallet agrees
+- Catch up on missed days from one sheet: type a run of past spending and income row by row, each new row keeping the date and account of the one above, then save them all at once. Unsaved rows are kept if you close the tab, and a row the server rejects stays on the sheet with the reason instead of being lost
 - Emails carry the Inscribed wordmark rather than the product name set as text, and fall back to the wordmark in text when a mail client blocks images
 - Password resets, sign-in codes and invitations are laid out as plain letters rather than as a newsletter, which is what was getting them filed under Gmail's Promotions tab; summaries and statements keep the fuller treatment, because those are the ones you actually subscribed to
 - A sign-in code is now the largest thing in its email instead of a value in a table row you had to hunt for

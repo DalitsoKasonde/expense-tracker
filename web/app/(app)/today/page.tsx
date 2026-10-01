@@ -151,7 +151,7 @@ export default function TodayPage() {
         eyebrow="Home"
         title="Your money today"
         subtitle="See what is available, what changed this month, and what needs your attention."
-        actions={<Link href="/reports" className="btn btn-ghost">View reports</Link>}
+        actions={<><Link href="/add/catch-up" className="btn btn-ghost">Catch up</Link><Link href="/reports" className="btn btn-ghost">View reports</Link></>}
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Financial summary">

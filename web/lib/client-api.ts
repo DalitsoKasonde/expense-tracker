@@ -46,6 +46,7 @@ function isPendingTransactionPayload(value: unknown): value is PendingTransactio
 type ApiCallOptions = {
   method?: string;
   body?: JsonValue | Record<string, JsonValue | undefined>;
+  headers?: Record<string, string>;
 };
 
 type PendingTransactionResult = PendingTransactionPayload & {
@@ -71,6 +72,7 @@ async function performApiCall<T>(
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...options.headers,
         },
         body: options.body ? JSON.stringify(options.body) : undefined,
         credentials: "include",
