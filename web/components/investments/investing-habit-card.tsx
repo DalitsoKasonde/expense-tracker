@@ -1,35 +1,45 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { Button, Card, Field, Input, Money } from "@/components/ui";
 import { parseAmountMinor } from "@/lib/catch-up";
 import { useApiCall } from "@/lib/client-api";
-import { describeDuration, type InvestingHabit } from "@/lib/stock-insights";
+import { describeDuration, scopeWording, type InvestingHabit, type InvestingScope } from "@/lib/investing-habit";
 import { ContributionBars } from "./contribution-bars";
 
-type Preferences = Record<string, unknown> & { monthlyInvestingTargetMinor?: number | null };
+type Targets = Partial<Record<InvestingScope, number>>;
 
 /**
  * The part of investing the investor controls: how much, how often, how long.
  *
  * It sits beside the market figures rather than under them, because a
  * portfolio that is down 4% after five months says little, and a run of
- * months with a purchase in each says a lot.
+ * months with money going in each says a lot.
  */
 export function InvestingHabitCard({
+  scope,
   habit,
   currency,
-  onTargetChanged,
+  onTargetsChanged,
+  holdingDetail = "on average, weighted by what each purchase cost",
 }: {
+  scope: InvestingScope;
   habit: InvestingHabit;
   currency: string;
-  onTargetChanged: (targetMinor: number | null) => void;
+  onTargetsChanged: (targets: Targets) => void;
+  /** Under the holding period, saying how it was measured. */
+  holdingDetail?: string;
 }) {
   const apiCall = useApiCall();
+  const headingId = useId();
+  const wording = scopeWording[scope];
   const [editing, setEditing] = useState(false);
   const [targetText, setTargetText] = useState(habit.target ? (habit.target.targetMinor / 100).toFixed(2) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Savings have no lots, so no holding period; the column is left out
+  // rather than shown empty.
+  const showHeld = habit.averageHoldingDays !== null;
 
   async function saveTarget(event: FormEvent) {
     event.preventDefault();
@@ -41,14 +51,11 @@ export function InvestingHabitCard({
     setSaving(true);
     setError("");
     try {
-      // The preferences PATCH writes every field, so it is sent the stored
-      // settings with only the target changed.
-      const current = await apiCall<Preferences>("/v1/user/preferences");
-      const saved = await apiCall<Preferences>("/v1/user/preferences", {
-        method: "PATCH",
-        body: { ...(current as Record<string, never>), monthlyInvestingTargetMinor: minor },
+      const saved = await apiCall<{ targets?: Targets }>(`/v1/investments/targets/${scope}`, {
+        method: "PUT",
+        body: { targetMinor: minor },
       });
-      onTargetChanged(saved?.monthlyInvestingTargetMinor ?? null);
+      onTargetsChanged(saved?.targets ?? {});
       setEditing(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save the target");
@@ -58,11 +65,11 @@ export function InvestingHabitCard({
   }
 
   return (
-    <Card className="grid gap-5" aria-labelledby="investing-habit-heading">
+    <Card className="grid gap-5" aria-labelledby={headingId}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="investing-habit-heading" className="text-lg font-semibold text-on-surface">Your investing habit</h2>
-          <p className="mt-1 text-sm text-on-surface-soft">New money you put into stocks. Reinvested dividends are return, so they are not counted here.</p>
+          <h2 id={headingId} className="text-lg font-semibold text-on-surface">{wording.title}</h2>
+          <p className="mt-1 text-sm text-on-surface-soft">{wording.description}</p>
         </div>
         {!editing ? (
           <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
@@ -83,7 +90,7 @@ export function InvestingHabitCard({
         </form>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className={showHeld ? "grid gap-4 sm:grid-cols-3" : "grid gap-4 sm:grid-cols-2"}>
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">This month</p>
           <p className="mt-2 font-display text-2xl font-semibold"><Money amountMinor={habit.thisMonthMinor} currency={currency} /></p>
@@ -102,20 +109,22 @@ export function InvestingHabitCard({
           <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-on-surface">{habit.monthsInARow}</p>
           <p className="mt-1 text-sm text-on-surface-soft">
             {habit.monthsInARow > 0
-              ? "with a purchase every month"
+              ? "with money added every month"
               : "Any amount this month starts a run"}
           </p>
         </div>
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Held for</p>
-          <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-on-surface">
-            {habit.averageHoldingDays === null ? "—" : describeDuration(habit.averageHoldingDays)}
-          </p>
-          <p className="mt-1 text-sm text-on-surface-soft">on average, weighted by what each purchase cost</p>
-        </div>
+        {showHeld ? (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Held for</p>
+            <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-on-surface">
+              {describeDuration(habit.averageHoldingDays as number)}
+            </p>
+            <p className="mt-1 text-sm text-on-surface-soft">{holdingDetail}</p>
+          </div>
+        ) : null}
       </div>
 
-      <ContributionBars months={habit.months} currency={currency} targetMinor={habit.target?.targetMinor} />
+      <ContributionBars months={habit.months} currency={currency} targetMinor={habit.target?.targetMinor} noun={wording.noun} />
     </Card>
   );
 }

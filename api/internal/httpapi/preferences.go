@@ -59,8 +59,6 @@ func (s *Server) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
 		EmailMutedNotificationTypes []string `json:"emailMutedNotificationTypes"`
 		// Optional: omitted by clients that predate it, which keeps the stored value.
 		EmailLoggingReminder *bool `json:"emailLoggingReminder"`
-		// Optional, like the reminder; 0 clears it.
-		MonthlyInvestingTargetMinor *int64 `json:"monthlyInvestingTargetMinor"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
@@ -97,11 +95,6 @@ func (s *Server) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.MonthlyInvestingTargetMinor != nil && *req.MonthlyInvestingTargetMinor < 0 {
-		http.Error(w, "The monthly investing target cannot be negative.", http.StatusBadRequest)
-		return
-	}
-
 	prefs, err := s.userPreferences.Update(r.Context(), claims.UserID, store.UserPreferencesInput{
 		DefaultCurrency:      currency,
 		Theme:                req.Theme,
@@ -112,7 +105,6 @@ func (s *Server) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
 		// behind should still be able to save the rest of a person's settings.
 		EmailMutedNotificationTypes: validNotificationTypes(req.EmailMutedNotificationTypes),
 		EmailLoggingReminder:        req.EmailLoggingReminder,
-		MonthlyInvestingTarget:      req.MonthlyInvestingTargetMinor,
 	})
 	if err != nil {
 		http.Error(w, "failed to update preferences", http.StatusInternalServerError)

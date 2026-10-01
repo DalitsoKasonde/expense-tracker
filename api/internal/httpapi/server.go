@@ -36,6 +36,7 @@ type Server struct {
 	assets           *store.AssetStore
 	assetValuations  *store.AssetValuationStore
 	assetLots        *store.AssetLotStore
+	investing        *store.InvestmentActivityStore
 	loans            *store.LoanStore
 	savingsGroups    *store.SavingsGroupStore
 	savingsPockets   *store.SavingsPocketStore
@@ -77,6 +78,7 @@ func NewServer(cfg config.Config, db *pgxpool.Pool) *Server {
 		assets:           store.NewAssetStore(db),
 		assetValuations:  store.NewAssetValuationStore(db),
 		assetLots:        store.NewAssetLotStore(db),
+		investing:        store.NewInvestmentActivityStore(db),
 		loans:            store.NewLoanStore(db),
 		savingsGroups:    store.NewSavingsGroupStore(db),
 		savingsPockets:   store.NewSavingsPocketStore(db),
@@ -272,7 +274,8 @@ func (s *Server) registerRoutes(router chi.Router) {
 		protected.Get("/v1/investments/holdings", s.getHoldings)
 		protected.Get("/v1/investments/summary", s.getInvestmentSummary)
 		protected.Get("/v1/investments/dividends/summary", s.summarizeDividends)
-		protected.Get("/v1/investments/stocks/activity", s.stockActivity)
+		protected.Get("/v1/investments/activity", s.investmentActivity)
+		protected.Put("/v1/investments/targets/{scope}", s.setInvestingTarget)
 		protected.Get("/v1/bonds", s.listBonds)
 		// Registered before the {assetId} routes so "summary" is never read as
 		// an asset id.

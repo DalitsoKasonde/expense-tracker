@@ -5,6 +5,7 @@ import BondsDashboardPage from "./page";
 const mocks = vi.hoisted(() => ({ apiCall: vi.fn() }));
 
 vi.mock("@/lib/client-api", () => ({ useApiCall: () => mocks.apiCall }));
+vi.mock("@/lib/use-user-currency", () => ({ useUserCurrency: () => ({ currency: "ZMW", loading: false }) }));
 vi.mock("@/lib/use-unified-dashboard", () => ({
   useUnifiedDashboard: () => ({
     loading: false,
@@ -136,5 +137,33 @@ describe("BondsDashboardPage", () => {
     render(<BondsDashboardPage />);
 
     expect(await screen.findByText(/No coupons paid yet/)).toBeInTheDocument();
+  });
+
+  it("measures how long bonds have been held from their issue date, since bonds have no purchase lots", async () => {
+    const months = Array.from({ length: 12 }, (_, index) => ({
+      month: new Date(Date.UTC(2025, 10 + index, 1)).toISOString().slice(0, 7),
+      investedMinor: index === 4 ? 200_000 : 0,
+    }));
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/bonds") return Promise.resolve([{ assetId: "bond-1", issueDate: "2026-03-08", maturityDate: "2029-03-08" }]);
+      if (path === "/v1/bonds/summary") return Promise.resolve([summary]);
+      if (path === "/v1/investments/activity") {
+        return Promise.resolve({
+          asOf: "2026-10-01",
+          scopes: {
+            bond: [{ currency: "ZMW", months, monthsInARow: 0, averageHoldingDays: null, firstPurchaseDate: "2026-03-08", totalContributedMinor: 200_000 }],
+          },
+          holdings: [],
+          targets: {},
+        });
+      }
+      return Promise.resolve([]);
+    });
+    render(<BondsDashboardPage />);
+
+    // 8 March to 1 October is 207 days, which reads as 7 months.
+    expect(await screen.findByText("Held for")).toBeInTheDocument();
+    expect(screen.getByText("7 months")).toBeInTheDocument();
+    expect(screen.getByText("Matures next").nextSibling).toHaveTextContent(/ZM1000007659 in 29 months/);
   });
 });

@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SavingsPocketsPage from "./page";
 
 const mocks = vi.hoisted(() => ({ apiCall: vi.fn() }));
 
 vi.mock("@/lib/client-api", () => ({ useApiCall: () => mocks.apiCall }));
+vi.mock("@/lib/use-user-currency", () => ({ useUserCurrency: () => ({ currency: "ZMW", loading: false }) }));
 
 const pocket = {
   id: "pocket-1",
@@ -34,9 +35,17 @@ describe("SavingsPocketsPage", () => {
   it("shows pocket value, contributions, interest and advertised rate", async () => {
     render(<SavingsPocketsPage />);
     expect(await screen.findByText("Patumba Pocket")).toBeInTheDocument();
-    expect(screen.getByText("12.50% p.a.")).toBeInTheDocument();
-    expect(screen.getByText(/105\.00/)).toBeInTheDocument();
-    expect(screen.getByText(/Interest earned/).parentElement).toHaveTextContent(/5\.00/);
+    const card = within(screen.getByRole("heading", { name: "Patumba Pocket" }).closest("article") as HTMLElement);
+    expect(card.getByText("12.50% p.a.")).toBeInTheDocument();
+    expect(card.getByText(/105\.00/)).toBeInTheDocument();
+    expect(card.getByText(/Interest earned/).parentElement).toHaveTextContent(/5\.00/);
+  });
+
+  it("leads with what the pockets hold and the interest they have earned", async () => {
+    render(<SavingsPocketsPage />);
+    const summary = await screen.findByRole("region", { name: "ZMW savings pockets summary" });
+    expect(within(summary).getByText("Saved").parentElement).toHaveTextContent(/105\.00/);
+    expect(within(summary).getByText("Interest earned").parentElement).toHaveTextContent(/\+ZMW\s?5\.00|\+K\s?5\.00|\+.*5\.00/);
   });
 
   it("records credited interest directly into the pocket", async () => {

@@ -3,21 +3,32 @@
 import { useState } from "react";
 import { formatMoney } from "@/lib/format-money";
 import { cn } from "@/lib/cn";
-import type { StockMonth } from "@/lib/stock-insights";
+import type { InvestmentMonth } from "@/lib/investing-habit";
 
 function monthName(month: string, style: "short" | "long") {
   return new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, style === "long" ? { month: "long", year: "numeric" } : { month: "narrow" });
 }
 
 /**
- * New money into stocks, month by month, for the last year.
+ * New money, month by month, for the last year.
  *
  * One series, so no legend: the card's title names it. Every month is drawn,
  * an empty one as a baseline stub, so a gap reads as a gap rather than as the
  * chart starting late. Each column is its own hover and focus target and
  * feeds a single readout line, which keeps values off the bars themselves.
  */
-export function ContributionBars({ months, currency, targetMinor }: { months: StockMonth[]; currency: string; targetMinor?: number }) {
+export function ContributionBars({
+  months,
+  currency,
+  targetMinor,
+  noun,
+}: {
+  months: InvestmentMonth[];
+  currency: string;
+  targetMinor?: number;
+  /** What the money went into, for the screen-reader caption. */
+  noun: string;
+}) {
   const [active, setActive] = useState(months.length - 1);
   const scale = Math.max(targetMinor ?? 0, ...months.map((month) => month.investedMinor), 1);
   const current = months[active];
@@ -83,7 +94,7 @@ export function ContributionBars({ months, currency, targetMinor }: { months: St
           </button>
         ))}
       </div>
-      <figcaption className="sr-only">New money put into stocks each month, last 12 months</figcaption>
+      <figcaption className="sr-only">New money put into {noun} each month, last 12 months</figcaption>
       <table className="sr-only">
         <thead>
           <tr><th scope="col">Month</th><th scope="col">Invested</th></tr>

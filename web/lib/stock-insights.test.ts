@@ -1,22 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { describeDuration, investingHabit, stockHighlights, totalReturn, type InsightStock } from "./stock-insights";
+import { stockHighlights, type InsightStock } from "./stock-insights";
 
 function stock(patch: Partial<InsightStock> & Pick<InsightStock, "assetId">): InsightStock {
   return { name: patch.assetId.toUpperCase(), currency: "ZMW", quantity: 100, investedMinor: 10000, valueMinor: 10000, ...patch };
 }
-
-describe("total return", () => {
-  it("counts dividends with the price change, as the dashboard's own figures do", () => {
-    // The screenshot's numbers: value 2,394.24, invested 2,496.40, dividends 8.03.
-    const result = totalReturn(239424, 249640, 803);
-    expect(result).toMatchObject({ priceMinor: -10216, dividendsMinor: 803, amountMinor: -9413 });
-    expect(result.percent).toBeCloseTo(-3.77, 2);
-  });
-
-  it("has no percentage before anything is invested", () => {
-    expect(totalReturn(0, 0, 0).percent).toBeNull();
-  });
-});
 
 describe("highlights", () => {
   const today = "2026-10-01";
@@ -25,11 +12,13 @@ describe("highlights", () => {
     stock({ assetId: "zccm", quantity: 1000, investedMinor: 30000, valueMinor: 24000 }),
     stock({ assetId: "zanaco", quantity: 400, investedMinor: 20000, valueMinor: 19000 }),
   ];
-  const activity = [
-    { assetId: "scbl", lastPurchaseDate: "2026-09-20", dividendsMinor: 0 },
-    { assetId: "zccm", lastPurchaseDate: "2026-03-01", dividendsMinor: 900 },
-    { assetId: "zanaco", lastPurchaseDate: "2026-08-01", dividendsMinor: 1500 },
-  ];
+  const activity = new Map(
+    [
+      { id: "scbl", lastContributionDate: "2026-09-20", incomeMinor: 0 },
+      { id: "zccm", lastContributionDate: "2026-03-01", incomeMinor: 900 },
+      { id: "zanaco", lastContributionDate: "2026-08-01", incomeMinor: 1500 },
+    ].map((item) => [item.id, { kind: "stock", ...item }]),
+  );
 
   it("ranks performance by total return, dividends included", () => {
     const highlights = stockHighlights(stocks, activity, today);
@@ -80,47 +69,5 @@ describe("highlights", () => {
   it("leaves out holdings that have been sold or have no cost", () => {
     const highlights = stockHighlights([...stocks, stock({ assetId: "sold", quantity: 0, valueMinor: 0 })], activity, today);
     expect(highlights.fewestShares?.assetId).toBe("scbl");
-  });
-});
-
-describe("the investing habit", () => {
-  const months = Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(Date.UTC(2025, 10 + index, 1));
-    return { month: date.toISOString().slice(0, 7), investedMinor: 0 };
-  });
-  months[11].investedMinor = 20000; // October 2026
-  months[10].investedMinor = 50000; // September
-
-  const activity = {
-    currency: "ZMW",
-    months,
-    monthsInARow: 2,
-    averageHoldingDays: 150,
-    firstPurchaseDate: "2026-04-10",
-    totalContributedMinor: 249640,
-  };
-
-  it("averages over every month since the first purchase, gaps included", () => {
-    const habit = investingHabit(activity, "2026-10-01", null, "ZMW");
-    expect(habit.monthsInvesting).toBe(7);
-    expect(habit.averagePerMonthMinor).toBe(Math.round(249640 / 7));
-    expect(habit.thisMonthMinor).toBe(20000);
-  });
-
-  it("measures this month against the target", () => {
-    expect(investingHabit(activity, "2026-10-01", 50000, "ZMW").target).toEqual({ targetMinor: 50000, remainingMinor: 30000, reached: false });
-    expect(investingHabit(activity, "2026-10-01", 15000, "ZMW").target?.reached).toBe(true);
-  });
-
-  it("applies the target only in its own currency", () => {
-    expect(investingHabit({ ...activity, currency: "USD" }, "2026-10-01", 50000, "ZMW").target).toBeUndefined();
-  });
-});
-
-describe("durations", () => {
-  it("uses the unit a person would say", () => {
-    expect(describeDuration(150)).toBe("5 months");
-    expect(describeDuration(21)).toBe("3 weeks");
-    expect(describeDuration(1)).toBe("1 day");
   });
 });

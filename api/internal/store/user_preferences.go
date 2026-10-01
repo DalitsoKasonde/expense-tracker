@@ -21,12 +21,9 @@ type UserPreferences struct {
 	EmailMutedNotificationTypes []string `json:"emailMutedNotificationTypes"`
 	EmailDigestLastSentAt       *string  `json:"emailDigestLastSentAt"`
 	// EmailLoggingReminder asks for an evening email when entries fall behind.
-	EmailLoggingReminder bool `json:"emailLoggingReminder"`
-	// MonthlyInvestingTargetMinor is what the person means to put into stocks
-	// each month, in their default currency; nil when no target is set.
-	MonthlyInvestingTargetMinor *int64 `json:"monthlyInvestingTargetMinor"`
-	CreatedAt                   string `json:"createdAt"`
-	UpdatedAt                   string `json:"updatedAt"`
+	EmailLoggingReminder bool   `json:"emailLoggingReminder"`
+	CreatedAt            string `json:"createdAt"`
+	UpdatedAt            string `json:"updatedAt"`
 }
 
 // UserPreferencesInput carries an update. It is a struct rather than a
@@ -43,9 +40,6 @@ type UserPreferencesInput struct {
 	// settings screen writes every field at once, and a client one deploy
 	// behind must not switch reminders off just by not knowing about them.
 	EmailLoggingReminder *bool
-	// MonthlyInvestingTarget follows the same rule: nil keeps what is stored.
-	// Zero clears the target.
-	MonthlyInvestingTarget *int64
 }
 
 // ReminderRecipient is someone who asked to be reminded when their record
@@ -73,7 +67,7 @@ type DigestRecipient struct {
 
 const userPreferenceColumns = `user_id, default_currency, theme, color_scheme, notifications_enabled,
 	email_digest_frequency, email_muted_notification_types, email_digest_last_sent_at::text,
-	email_logging_reminder, monthly_investing_target_minor, created_at::text, updated_at::text`
+	email_logging_reminder, created_at::text, updated_at::text`
 
 type UserPreferenceStore struct {
 	db *pgxpool.Pool
@@ -97,7 +91,6 @@ func scanUserPreferences(row interface {
 		&prefs.EmailMutedNotificationTypes,
 		&prefs.EmailDigestLastSentAt,
 		&prefs.EmailLoggingReminder,
-		&prefs.MonthlyInvestingTargetMinor,
 		&prefs.CreatedAt,
 		&prefs.UpdatedAt,
 	)
@@ -125,9 +118,8 @@ func (s *UserPreferenceStore) Update(ctx context.Context, userID string, input U
 
 	return scanUserPreferences(s.db.QueryRow(ctx, `
 		insert into user_preferences (user_id, default_currency, theme, color_scheme, notifications_enabled,
-			email_digest_frequency, email_muted_notification_types, email_logging_reminder,
-			monthly_investing_target_minor)
-		values ($1, $2, $3, $4, $5, $6, $7, coalesce($8, false), nullif(coalesce($9::bigint, 0), 0))
+			email_digest_frequency, email_muted_notification_types, email_logging_reminder)
+		values ($1, $2, $3, $4, $5, $6, $7, coalesce($8, false))
 		on conflict (user_id) do update
 		set default_currency = excluded.default_currency,
 		    theme = excluded.theme,
@@ -136,14 +128,10 @@ func (s *UserPreferenceStore) Update(ctx context.Context, userID string, input U
 		    email_digest_frequency = excluded.email_digest_frequency,
 		    email_muted_notification_types = excluded.email_muted_notification_types,
 		    email_logging_reminder = coalesce($8, user_preferences.email_logging_reminder),
-		    monthly_investing_target_minor = case
-		      when $9::bigint is null then user_preferences.monthly_investing_target_minor
-		      else nullif($9::bigint, 0)
-		    end,
 		    updated_at = now()
 		returning `+userPreferenceColumns,
 		userID, input.DefaultCurrency, input.Theme, input.ColorScheme, input.NotificationsEnabled,
-		input.EmailDigestFrequency, muted, input.EmailLoggingReminder, input.MonthlyInvestingTarget))
+		input.EmailDigestFrequency, muted, input.EmailLoggingReminder))
 }
 
 // ListDigestSubscribers returns everyone who has asked for an emailed digest.

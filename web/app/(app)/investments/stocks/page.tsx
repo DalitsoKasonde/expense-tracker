@@ -8,16 +8,12 @@ import { formatMoney } from "@/lib/format-money";
 import type { MarketStock, MarketStockDirectory } from "@/lib/market-data";
 import { gainPercent } from "@/lib/portfolio-holdings";
 import { localDate } from "@/lib/date-terms";
-import {
-  describeDuration,
-  investingHabit,
-  stockHighlights,
-  totalReturn,
-  type StockActivity,
-} from "@/lib/stock-insights";
+import { describeDuration, habitFor, holdingsOfKind, totalReturn } from "@/lib/investing-habit";
+import { stockHighlights } from "@/lib/stock-insights";
+import { useInvestmentActivity } from "@/lib/use-investment-activity";
 import { useUnifiedDashboard, type UnifiedDashboardAsset } from "@/lib/use-unified-dashboard";
 import { useUserCurrency } from "@/lib/use-user-currency";
-import { InvestingHabitCard } from "@/components/stocks/investing-habit-card";
+import { InvestingHabitCard } from "@/components/investments/investing-habit-card";
 import { StockHighlightsCard } from "@/components/stocks/stock-highlights";
 
 type Holding = {
@@ -68,8 +64,7 @@ export default function StocksDashboardPage() {
   // Distinguished from "no dividends yet": showing a confident zero when the
   // request failed would misreport income.
   const [dividendsFailed, setDividendsFailed] = useState(false);
-  const [activity, setActivity] = useState<StockActivity | null>(null);
-  const [targetMinor, setTargetMinor] = useState<number | null>(null);
+  const { activity, setTargets } = useInvestmentActivity();
   const { currency: userCurrency } = useUserCurrency();
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState("");
@@ -100,25 +95,6 @@ export default function StocksDashboardPage() {
         setDividends(null);
         setDividendsFailed(true);
       });
-    return () => {
-      ignore = true;
-    };
-  }, [apiCall]);
-
-  // The habit card and highlights are extras: if either request fails the
-  // market figures above still stand, so failures are left silent here.
-  useEffect(() => {
-    let ignore = false;
-    void apiCall<StockActivity>("/v1/investments/stocks/activity")
-      .then((result) => {
-        if (!ignore) setActivity(result ?? null);
-      })
-      .catch(() => undefined);
-    void apiCall<{ monthlyInvestingTargetMinor?: number | null }>("/v1/user/preferences")
-      .then((prefs) => {
-        if (!ignore) setTargetMinor(prefs?.monthlyInvestingTargetMinor ?? null);
-      })
-      .catch(() => undefined);
     return () => {
       ignore = true;
     };
@@ -255,10 +231,8 @@ export default function StocksDashboardPage() {
               }));
             const dividendSummary = dividendsByCurrency.get(total.currency);
             const result = totalReturn(total.value, total.cost, dividendSummary?.dividendsReceivedMinor ?? 0);
-            // Guarded: an older API, or a cached response from one, has no such field.
-            const currencyActivity = activity?.currencies?.find((item) => item.currency === total.currency);
-            const habit = currencyActivity && activity ? investingHabit(currencyActivity, activity.asOf, targetMinor, userCurrency) : null;
-            const highlights = stockHighlights(currencyStocks, Array.isArray(activity?.stocks) ? activity.stocks : [], activity?.asOf ?? localDate());
+            const habit = habitFor(activity, "stock", total.currency, userCurrency);
+            const highlights = stockHighlights(currencyStocks, holdingsOfKind(activity, "stock"), activity?.asOf ?? localDate());
             const companies = currencyStocks.filter((stock) => stock.quantity > 0).length;
             return (
               <div key={total.currency} className="grid gap-4">
@@ -290,7 +264,7 @@ export default function StocksDashboardPage() {
                         <>
                           {result.percent === null ? "" : `${result.percent >= 0 ? "+" : ""}${result.percent.toFixed(1)}% · `}
                           price <Money amountMinor={result.priceMinor} currency={total.currency} signed />
-                          {" · "}dividends <Money amountMinor={result.dividendsMinor} currency={total.currency} signed />
+                          {" · "}dividends <Money amountMinor={result.incomeMinor} currency={total.currency} signed />
                         </>
                       }
                     />
@@ -305,7 +279,7 @@ export default function StocksDashboardPage() {
                 </section>
 
                 {habit ? (
-                  <InvestingHabitCard habit={habit} currency={total.currency} onTargetChanged={setTargetMinor} />
+                  <InvestingHabitCard scope="stock" habit={habit} currency={total.currency} onTargetsChanged={setTargets} />
                 ) : null}
 
                 <StockHighlightsCard highlights={highlights} />

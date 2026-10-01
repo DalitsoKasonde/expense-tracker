@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/client-api", () => ({ useApiCall: () => mocks.apiCall }));
+vi.mock("@/lib/use-user-currency", () => ({ useUserCurrency: () => ({ currency: "ZMW", loading: false }) }));
 vi.mock("@/lib/use-unified-dashboard", () => ({
   useUnifiedDashboard: () => mocks.dashboard(),
 }));
@@ -79,14 +80,16 @@ describe("InvestmentsPage", () => {
     expect(screen.getByRole("link", { name: /Government bonds/ })).toHaveAttribute("href", "/investments/bonds");
     expect(screen.getByRole("link", { name: /Savings pockets/ })).toHaveAttribute("href", "/investments/savings-pockets");
     await waitFor(() => expect(screen.getByRole("link", { name: /Savings groups/ })).toHaveAttribute("href", "/investments/savings-groups"));
-    expect(screen.queryByText("Zambeef")).not.toBeInTheDocument();
-    expect(screen.queryByText("GRZ 2029")).not.toBeInTheDocument();
+    // The overview is not a holdings list; each dashboard has its own.
+    const dashboards = screen.getByRole("region", { name: "Investment dashboards" });
+    expect(within(dashboards).queryByText("Zambeef")).not.toBeInTheDocument();
+    expect(within(dashboards).queryByText("GRZ 2029")).not.toBeInTheDocument();
   });
 
   it("keeps holdings with no position out of totals and summarizes them on the type card", async () => {
     render(<InvestmentsPage />);
 
-    const summary = await screen.findByRole("region", { name: "Portfolio summary" });
+    const summary = await screen.findByRole("region", { name: "ZMW portfolio summary" });
     // 120,000 + 500,000 + 50,000 + 25,000 minor units, excluding the untraded stock.
     await waitFor(() =>
       expect(within(summary).getByText(/6,950\.00/)).toBeInTheDocument(),
@@ -110,9 +113,47 @@ describe("InvestmentsPage", () => {
 
     render(<InvestmentsPage />);
 
-    const summary = await screen.findByRole("region", { name: "Portfolio summary" });
-    expect(within(summary).getByText(/\$9,000\.00|USD\s?9,000\.00/)).toBeInTheDocument();
-    expect(within(summary).getByText(/5,000\.00/)).toBeInTheDocument();
-    expect(within(summary).getAllByText(/9,000\.00|5,000\.00/)).toHaveLength(2);
+    const usd = await screen.findByRole("region", { name: "USD portfolio summary" });
+    const zmw = screen.getByRole("region", { name: "ZMW portfolio summary" });
+    expect(within(usd).getByText("Portfolio value").parentElement).toHaveTextContent(/9,000\.00/);
+    expect(within(zmw).getByText("Portfolio value").parentElement).toHaveTextContent(/5,000\.00/);
+    expect(within(zmw).queryByText(/9,000\.00/)).not.toBeInTheDocument();
+  });
+
+  it("counts each kind's own return: dividends, coupons, interest", async () => {
+    mocks.apiCall.mockImplementation((path: string) => {
+      if (path === "/v1/investments/activity") {
+        return Promise.resolve({
+          asOf: "2026-10-01",
+          scopes: {},
+          targets: {},
+          holdings: [
+            { kind: "stock", id: "stock-1", lastContributionDate: null, incomeMinor: 3_000 },
+            { kind: "bond", id: "bond-1", lastContributionDate: null, incomeMinor: 40_000 },
+          ],
+        });
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<InvestmentsPage />);
+
+    const summary = await screen.findByRole("region", { name: "ZMW portfolio summary" });
+    // Stock price +200 and dividends +30; bond coupons +400. A bond's value
+    // less cost is zero and adds nothing.
+    await waitFor(() => expect(within(summary).getByText("Total return").parentElement).toHaveTextContent(/\+.*630\.00/));
+    const income = within(summary).getByText("Income received").parentElement;
+    expect(income).toHaveTextContent(/dividends ZMW\s?30\.00/);
+    expect(income).toHaveTextContent(/coupons ZMW\s?400\.00/);
+    expect(screen.getByRole("link", { name: /Government bonds/ })).toHaveTextContent(/400\.00.*in coupons/);
+  });
+
+  it("does not show a return it cannot work out", async () => {
+    mocks.apiCall.mockImplementation((path: string) =>
+      path === "/v1/investments/activity" ? Promise.reject(new Error("down")) : Promise.resolve([]),
+    );
+    render(<InvestmentsPage />);
+    const summary = await screen.findByRole("region", { name: "ZMW portfolio summary" });
+    await waitFor(() => expect(within(summary).getByText(/Income could not be loaded/)).toBeInTheDocument());
   });
 });

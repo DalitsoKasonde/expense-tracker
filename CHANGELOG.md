@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- The Investments overview now leads with total return across your whole portfolio, counting each kind by what it actually earns (a stock's price and dividends, a bond's coupons, a pocket's interest), plus the income received broken down by source
+- The overview, bonds, savings pockets and savings groups each get an investing habit card: new money this month, months in a row, and a year of monthly contributions, each with its own optional monthly target
+- Highlights on the overview (where your money sits, which kind is doing best, your largest holding, the next coupon), on bonds (what matures next, which bond has paid the most, the highest rate, the largest bond) and on savings pockets (best rate, most interest, largest pocket, one not added to in two months)
+- Each dashboard card on the overview shows its own kind of return ("in coupons", "in interest") instead of value less cost, which was always zero for bonds
+- Savings pockets now open with a summary of what they hold, what you put in and the interest earned
 - The stocks summary leads with total return — price change and dividends together — instead of "Portfolio fall", which left out what your stocks had paid you; the price and dividend parts are both shown underneath
 - Market value says how many companies you hold and for how long on average; Invested says over how many months, and roughly how much a month
 - A new "Your investing habit" card shows what you put in this month, how many months in a row you have bought, and a year of monthly contributions, with an optional monthly target you can set right there

@@ -2,10 +2,16 @@
 
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Breadcrumbs, EmptyState, LoadingSkeleton, PageHeader, PageShell } from "@/components/ui";
+import { Breadcrumbs, EmptyState, LoadingSkeleton, Money, PageHeader, PageShell, SummaryMetric } from "@/components/ui";
+import { InvestingHabitCard } from "@/components/investments/investing-habit-card";
+import { PocketHighlightsCard } from "@/components/investments/pocket-highlights";
 import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
 import { localDate } from "@/lib/date-terms";
+import { habitFor, percentOf } from "@/lib/investing-habit";
+import { indexActivity, pocketHighlights } from "@/lib/portfolio-insights";
+import { useInvestmentActivity } from "@/lib/use-investment-activity";
+import { useUserCurrency } from "@/lib/use-user-currency";
 
 type SavingsPocket = {
   id: string;
@@ -41,6 +47,8 @@ export default function SavingsPocketsPage() {
   const [existingAccountId, setExistingAccountId] = useState("");
   const [interestPocketId, setInterestPocketId] = useState<string | null>(null);
   const [interest, setInterest] = useState({ amount: "", date: localDate(), note: "" });
+  const { activity, setTargets, reload: reloadActivity } = useInvestmentActivity();
+  const { currency: userCurrency } = useUserCurrency();
 
   const loadData = useCallback(async () => {
     const [loadedPockets, loadedAccounts] = await Promise.all([
@@ -66,6 +74,12 @@ export default function SavingsPocketsPage() {
       !tracked.has(account.id),
     );
   }, [accounts, pockets]);
+
+  const currencies = useMemo(() => {
+    const byCurrency = new Map<string, SavingsPocket[]>();
+    for (const pocket of pockets) byCurrency.set(pocket.currency, [...(byCurrency.get(pocket.currency) ?? []), pocket]);
+    return [...byCurrency.entries()];
+  }, [pockets]);
 
   async function linkExistingAccount() {
     if (!existingAccountId) return;
@@ -93,6 +107,7 @@ export default function SavingsPocketsPage() {
       setInterestPocketId(null);
       setInterest({ amount: "", date: localDate(), note: "" });
       await loadData();
+      reloadActivity();
       setStatus("Interest added to the pocket.");
     } catch (error) { setStatus(error instanceof Error ? error.message : "Failed to record interest"); }
     finally { setSaving(false); }
@@ -126,35 +141,76 @@ export default function SavingsPocketsPage() {
       {loading ? <LoadingSkeleton className="h-52" /> : pockets.length === 0 ? (
         <EmptyState title="No savings pockets" description="Create a pocket here, or first create a savings account and add it to Investments." action={<Link href="/investments/add?type=pocket" className="btn btn-primary">Add savings pocket</Link>} />
       ) : (
-        <section className="grid gap-4 md:grid-cols-2">
-          {pockets.map((pocket) => {
-            const returnPercent = pocket.netContributionsMinor > 0
-              ? (pocket.interestEarnedMinor / pocket.netContributionsMinor) * 100
-              : null;
+        <>
+          {currencies.map(([currency, currencyPockets]) => {
+            const value = currencyPockets.reduce((sum, pocket) => sum + pocket.currentBalanceMinor, 0);
+            const contributed = currencyPockets.reduce((sum, pocket) => sum + pocket.netContributionsMinor, 0);
+            const earned = currencyPockets.reduce((sum, pocket) => sum + pocket.interestEarnedMinor, 0);
+            const earnedPercent = percentOf(earned, contributed);
+            const habit = habitFor(activity, "savings_pocket", currency, userCurrency);
+            const highlights = pocketHighlights(currencyPockets, indexActivity(activity?.holdings), activity?.asOf ?? localDate());
             return (
-              <article key={pocket.id} className="card grid gap-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div><p className="sectionKicker">Interest-bearing savings</p><h2 className="mt-1 text-xl font-semibold text-on-surface">{pocket.name}</h2></div>
-                  {pocket.annualInterestRateBps != null ? <span className="metaBadge">{(pocket.annualInterestRateBps / 100).toFixed(2)}% p.a.</span> : null}
-                </div>
-                <div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Current value</p><p className="mt-1 font-display text-3xl font-semibold tabular-nums text-on-surface">{formatMoney(pocket.currentBalanceMinor, pocket.currency)}</p></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-md bg-surface-soft p-3"><p className="text-xs text-on-surface-soft">Net contributions</p><strong className="tabular-nums">{formatMoney(pocket.netContributionsMinor, pocket.currency)}</strong></div>
-                  <div className="rounded-md bg-positive-soft p-3"><p className="text-xs text-positive">Interest earned</p><strong className="tabular-nums text-positive">+{formatMoney(pocket.interestEarnedMinor, pocket.currency)}{returnPercent == null ? "" : ` · ${returnPercent.toFixed(2)}%`}</strong></div>
-                </div>
-                {interestPocketId === pocket.id ? (
-                  <form className="settingsGrid" onSubmit={(event) => void recordInterest(event)}>
-                    <div className="splitFields"><div className="field"><label htmlFor={`interest-amount-${pocket.id}`}>Interest amount ({pocket.currency})</label><input id={`interest-amount-${pocket.id}`} type="number" min="0.01" step="0.01" value={interest.amount} onChange={(event) => setInterest((current) => ({ ...current, amount: event.target.value }))} required /></div><div className="field"><label htmlFor={`interest-date-${pocket.id}`}>Credited date</label><input id={`interest-date-${pocket.id}`} type="date" value={interest.date} onChange={(event) => setInterest((current) => ({ ...current, date: event.target.value }))} required /></div></div>
-                    <div className="field"><label htmlFor={`interest-note-${pocket.id}`}>Note</label><input id={`interest-note-${pocket.id}`} value={interest.note} onChange={(event) => setInterest((current) => ({ ...current, note: event.target.value }))} placeholder="e.g. Patumba monthly interest" /></div>
-                    <div className="flex gap-2"><button className="btn btn-primary" type="submit" disabled={saving}>Save interest</button><button className="btn btn-ghost" type="button" onClick={() => setInterestPocketId(null)}>Cancel</button></div>
-                  </form>
-                ) : (
-                  <div className="flex flex-wrap gap-2"><button className="btn btn-primary" type="button" onClick={() => setInterestPocketId(pocket.id)}>Add interest</button><Link className="btn btn-ghost" href="/add">Transfer money</Link><Link className="btn btn-ghost" href="/settings/accounts">Edit account</Link></div>
-                )}
-              </article>
+              <div key={currency} className="grid gap-4">
+                {/* A pocket's return is the interest credited to it; its balance
+                    less deposits would also count fees and withdrawals. */}
+                <section className="card" aria-label={`${currency} savings pockets summary`}>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <SummaryMetric
+                      label="Saved"
+                      value={formatMoney(value, currency)}
+                      detail={`${currencyPockets.length} ${currencyPockets.length === 1 ? "pocket" : "pockets"}`}
+                    />
+                    <SummaryMetric
+                      label="Net contributions"
+                      value={formatMoney(contributed, currency)}
+                      detail={
+                        habit && habit.monthsInvesting > 0
+                          ? `over ${habit.monthsInvesting} ${habit.monthsInvesting === 1 ? "month" : "months"} · about ${formatMoney(habit.averagePerMonthMinor, currency)} a month`
+                          : undefined
+                      }
+                    />
+                    <SummaryMetric
+                      label="Interest earned"
+                      value={<Money amountMinor={earned} currency={currency} signed tone={earned > 0 ? "positive" : "neutral"} />}
+                      detail={earnedPercent === null ? undefined : `${earnedPercent.toFixed(2)}% of what you put in`}
+                    />
+                  </div>
+                </section>
+                {habit ? <InvestingHabitCard scope="savings_pocket" habit={habit} currency={currency} onTargetsChanged={setTargets} /> : null}
+                <PocketHighlightsCard highlights={highlights} currency={currency} />
+              </div>
             );
           })}
-        </section>
+          <section className="grid gap-4 md:grid-cols-2">
+            {pockets.map((pocket) => {
+              const returnPercent = pocket.netContributionsMinor > 0
+                ? (pocket.interestEarnedMinor / pocket.netContributionsMinor) * 100
+                : null;
+              return (
+                <article key={pocket.id} className="card grid gap-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div><p className="sectionKicker">Interest-bearing savings</p><h2 className="mt-1 text-xl font-semibold text-on-surface">{pocket.name}</h2></div>
+                    {pocket.annualInterestRateBps != null ? <span className="metaBadge">{(pocket.annualInterestRateBps / 100).toFixed(2)}% p.a.</span> : null}
+                  </div>
+                  <div><p className="text-xs font-bold uppercase tracking-wider text-on-surface-soft">Current value</p><p className="mt-1 font-display text-3xl font-semibold tabular-nums text-on-surface">{formatMoney(pocket.currentBalanceMinor, pocket.currency)}</p></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-md bg-surface-soft p-3"><p className="text-xs text-on-surface-soft">Net contributions</p><strong className="tabular-nums">{formatMoney(pocket.netContributionsMinor, pocket.currency)}</strong></div>
+                    <div className="rounded-md bg-positive-soft p-3"><p className="text-xs text-positive">Interest earned</p><strong className="tabular-nums text-positive">+{formatMoney(pocket.interestEarnedMinor, pocket.currency)}{returnPercent == null ? "" : ` · ${returnPercent.toFixed(2)}%`}</strong></div>
+                  </div>
+                  {interestPocketId === pocket.id ? (
+                    <form className="settingsGrid" onSubmit={(event) => void recordInterest(event)}>
+                      <div className="splitFields"><div className="field"><label htmlFor={`interest-amount-${pocket.id}`}>Interest amount ({pocket.currency})</label><input id={`interest-amount-${pocket.id}`} type="number" min="0.01" step="0.01" value={interest.amount} onChange={(event) => setInterest((current) => ({ ...current, amount: event.target.value }))} required /></div><div className="field"><label htmlFor={`interest-date-${pocket.id}`}>Credited date</label><input id={`interest-date-${pocket.id}`} type="date" value={interest.date} onChange={(event) => setInterest((current) => ({ ...current, date: event.target.value }))} required /></div></div>
+                      <div className="field"><label htmlFor={`interest-note-${pocket.id}`}>Note</label><input id={`interest-note-${pocket.id}`} value={interest.note} onChange={(event) => setInterest((current) => ({ ...current, note: event.target.value }))} placeholder="e.g. Patumba monthly interest" /></div>
+                      <div className="flex gap-2"><button className="btn btn-primary" type="submit" disabled={saving}>Save interest</button><button className="btn btn-ghost" type="button" onClick={() => setInterestPocketId(null)}>Cancel</button></div>
+                    </form>
+                  ) : (
+                    <div className="flex flex-wrap gap-2"><button className="btn btn-primary" type="button" onClick={() => setInterestPocketId(pocket.id)}>Add interest</button><Link className="btn btn-ghost" href="/add">Transfer money</Link><Link className="btn btn-ghost" href="/settings/accounts">Edit account</Link></div>
+                  )}
+                </article>
+              );
+            })}
+          </section>
+        </>
       )}
     </PageShell>
   );

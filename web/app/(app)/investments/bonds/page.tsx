@@ -3,12 +3,23 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Breadcrumbs, EmptyState, LoadingSkeleton, Money, PageHeader, PageShell } from "@/components/ui";
+import { BondHighlightsCard } from "@/components/investments/bond-highlights";
+import { InvestingHabitCard } from "@/components/investments/investing-habit-card";
 import { useApiCall } from "@/lib/client-api";
+import { localDate } from "@/lib/date-terms";
 import { formatMoney } from "@/lib/format-money";
+import { habitFor, weightedHoldingDays } from "@/lib/investing-habit";
+import { bondHighlights, indexActivity } from "@/lib/portfolio-insights";
+import { useInvestmentActivity } from "@/lib/use-investment-activity";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
+import { useUserCurrency } from "@/lib/use-user-currency";
 
 type BondPosition = {
   assetId: string;
+  name: string;
+  currency: string;
+  principalMinor: number;
+  couponRateBps: number;
   issueDate: string;
   maturityDate: string;
 };
@@ -63,6 +74,8 @@ export default function BondsDashboardPage() {
   // Distinguished from "no coupons yet": showing a confident zero when the
   // request failed would misreport income.
   const [summaryFailed, setSummaryFailed] = useState(false);
+  const { activity, setTargets } = useInvestmentActivity();
+  const { currency: userCurrency } = useUserCurrency();
 
   useEffect(() => {
     let ignore = false;
@@ -213,6 +226,49 @@ export default function BondsDashboardPage() {
               );
             })}
           </section>
+
+          {totals.map(([currency]) => {
+            const today = activity?.asOf ?? localDate();
+            const currencyBonds = bonds
+              .filter((bond) => bond.hasPosition && bond.currency === currency)
+              .map((bond) => {
+                const position = datesByAsset.get(bond.assetId);
+                return {
+                  assetId: bond.assetId,
+                  name: bond.name,
+                  currency,
+                  principalMinor: bond.investedAmountMinor,
+                  couponRateBps: position?.couponRateBps,
+                  issueDate: position?.issueDate,
+                  maturityDate: position?.maturityDate,
+                };
+              });
+            const base = habitFor(activity, "bond", currency, userCurrency);
+            // Bonds have no purchase lots to measure from, so how long they
+            // have been held is taken from each bond's issue date instead.
+            const habit = base && {
+              ...base,
+              averageHoldingDays: weightedHoldingDays(
+                currencyBonds.map((bond) => ({ since: bond.issueDate ?? "", weightMinor: bond.principalMinor })),
+                today,
+              ),
+            };
+            const highlights = bondHighlights(currencyBonds, indexActivity(activity?.holdings), today);
+            return (
+              <div key={currency} className="grid gap-4">
+                {habit ? (
+                  <InvestingHabitCard
+                    scope="bond"
+                    habit={habit}
+                    currency={currency}
+                    onTargetsChanged={setTargets}
+                    holdingDetail="on average since issue, weighted by principal"
+                  />
+                ) : null}
+                <BondHighlightsCard highlights={highlights} currency={currency} />
+              </div>
+            );
+          })}
 
           <section className="card card-flush overflow-hidden">
             <div className="border-b border-outline p-5"><h2 className="font-semibold text-on-surface">Bond holdings</h2></div>
