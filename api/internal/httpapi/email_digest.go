@@ -165,7 +165,9 @@ func (s *Server) StartDigestScheduler(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				s.runDigestPass(ctx, time.Now())
+				now := time.Now()
+				s.runDigestPass(ctx, now)
+				s.runReminderPass(ctx, now)
 			}
 		}
 	}()

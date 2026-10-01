@@ -17,6 +17,7 @@ const savedPreferences = {
   notificationsEnabled: false,
   emailDigestFrequency: "off",
   emailMutedNotificationTypes: [] as string[],
+  emailLoggingReminder: false,
 };
 
 const catalogue = {
@@ -114,6 +115,33 @@ describe("PreferencesSettingsPage", () => {
       method: "PATCH",
       body: { ...savedPreferences, emailDigestFrequency: "weekly" },
     });
+  });
+
+  it("saves the evening reminder choice", async () => {
+    await renderPage();
+
+    fireEvent.click(screen.getByLabelText(/Evening reminder email/));
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      await Promise.resolve();
+    });
+
+    expect(mocks.apiCall).toHaveBeenLastCalledWith("/v1/user/preferences", {
+      method: "PATCH",
+      body: { ...savedPreferences, emailLoggingReminder: true },
+    });
+  });
+
+  it("treats an API that predates reminders as reminders off", async () => {
+    const older: Partial<typeof savedPreferences> = { ...savedPreferences };
+    delete older.emailLoggingReminder;
+    mocks.apiCall.mockImplementation((path: string) =>
+      Promise.resolve(path === "/v1/user/preferences" ? older : catalogue),
+    );
+    await renderPage();
+
+    expect(screen.getByLabelText(/Evening reminder email/)).not.toBeChecked();
   });
 
   // The alert checkboxes only make sense once something is scheduled, so they

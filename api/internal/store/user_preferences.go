@@ -20,8 +20,10 @@ type UserPreferences struct {
 	// instead of quietly reaching nobody.
 	EmailMutedNotificationTypes []string `json:"emailMutedNotificationTypes"`
 	EmailDigestLastSentAt       *string  `json:"emailDigestLastSentAt"`
-	CreatedAt                   string   `json:"createdAt"`
-	UpdatedAt                   string   `json:"updatedAt"`
+	// EmailLoggingReminder asks for an evening email when entries fall behind.
+	EmailLoggingReminder bool   `json:"emailLoggingReminder"`
+	CreatedAt            string `json:"createdAt"`
+	UpdatedAt            string `json:"updatedAt"`
 }
 
 // UserPreferencesInput carries an update. It is a struct rather than a
@@ -34,6 +36,20 @@ type UserPreferencesInput struct {
 	NotificationsEnabled        bool
 	EmailDigestFrequency        string
 	EmailMutedNotificationTypes []string
+	// EmailLoggingReminder is a pointer because nil means "not sent": the
+	// settings screen writes every field at once, and a client one deploy
+	// behind must not switch reminders off just by not knowing about them.
+	EmailLoggingReminder *bool
+}
+
+// ReminderRecipient is someone who asked to be reminded when their record
+// falls behind, with how far it currently reaches.
+type ReminderRecipient struct {
+	UserID      string
+	Email       string
+	DisplayName string
+	// LastEntryDate is nil before the first entry.
+	LastEntryDate *string
 }
 
 // DigestRecipient is one candidate for a scheduled email. Whether a candidate
@@ -51,7 +67,7 @@ type DigestRecipient struct {
 
 const userPreferenceColumns = `user_id, default_currency, theme, color_scheme, notifications_enabled,
 	email_digest_frequency, email_muted_notification_types, email_digest_last_sent_at::text,
-	created_at::text, updated_at::text`
+	email_logging_reminder, created_at::text, updated_at::text`
 
 type UserPreferenceStore struct {
 	db *pgxpool.Pool
@@ -74,6 +90,7 @@ func scanUserPreferences(row interface {
 		&prefs.EmailDigestFrequency,
 		&prefs.EmailMutedNotificationTypes,
 		&prefs.EmailDigestLastSentAt,
+		&prefs.EmailLoggingReminder,
 		&prefs.CreatedAt,
 		&prefs.UpdatedAt,
 	)
@@ -101,8 +118,8 @@ func (s *UserPreferenceStore) Update(ctx context.Context, userID string, input U
 
 	return scanUserPreferences(s.db.QueryRow(ctx, `
 		insert into user_preferences (user_id, default_currency, theme, color_scheme, notifications_enabled,
-			email_digest_frequency, email_muted_notification_types)
-		values ($1, $2, $3, $4, $5, $6, $7)
+			email_digest_frequency, email_muted_notification_types, email_logging_reminder)
+		values ($1, $2, $3, $4, $5, $6, $7, coalesce($8, false))
 		on conflict (user_id) do update
 		set default_currency = excluded.default_currency,
 		    theme = excluded.theme,
@@ -110,10 +127,11 @@ func (s *UserPreferenceStore) Update(ctx context.Context, userID string, input U
 		    notifications_enabled = excluded.notifications_enabled,
 		    email_digest_frequency = excluded.email_digest_frequency,
 		    email_muted_notification_types = excluded.email_muted_notification_types,
+		    email_logging_reminder = coalesce($8, user_preferences.email_logging_reminder),
 		    updated_at = now()
 		returning `+userPreferenceColumns,
 		userID, input.DefaultCurrency, input.Theme, input.ColorScheme, input.NotificationsEnabled,
-		input.EmailDigestFrequency, muted))
+		input.EmailDigestFrequency, muted, input.EmailLoggingReminder))
 }
 
 // ListDigestSubscribers returns everyone who has asked for an emailed digest.
@@ -161,4 +179,41 @@ func (s *UserPreferenceStore) RecordDigestSent(ctx context.Context, userID strin
 		where user_id = $1
 	`, userID, sentAt)
 	return err
+}
+
+// ListReminderRecipients returns everyone who asked for logging reminders,
+// with the newest date their record reaches as of today. The date follows the
+// same rule as the Today banner: rows the system posts by itself
+// (adjustments) and future-dated rows say nothing about keeping up.
+func (s *UserPreferenceStore) ListReminderRecipients(ctx context.Context, today string) ([]ReminderRecipient, error) {
+	rows, err := s.db.Query(ctx, `
+		select p.user_id, u.email, u.display_name,
+		       (
+		         select max(t.transaction_date)::text
+		         from transactions t
+		         where t.user_id = p.user_id
+		           and t.deleted_at is null
+		           and t.source <> 'adjustment'
+		           and t.transaction_date <= $1
+		       ) as last_entry_date
+		from user_preferences p
+		join users u on u.id = p.user_id
+		where p.email_logging_reminder
+		  and u.is_active = true
+		order by p.user_id
+	`, today)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	recipients := make([]ReminderRecipient, 0)
+	for rows.Next() {
+		var recipient ReminderRecipient
+		if err := rows.Scan(&recipient.UserID, &recipient.Email, &recipient.DisplayName, &recipient.LastEntryDate); err != nil {
+			return nil, err
+		}
+		recipients = append(recipients, recipient)
+	}
+	return recipients, rows.Err()
 }

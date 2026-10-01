@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Turn on an evening reminder email in Settings › Preferences: when your entries fall two days behind you get one email at 19:00 Lusaka time with a link to catch up, another on day four if the gap is still there, then one a week — never every night
 - When your entries fall two or more days behind, Today says so — "Your entries stop at 10 Sep — 20 days ago" — with a button straight to the catch-up sheet. Automatically posted bond coupons do not count as keeping up
 - Entries recorded just after midnight are dated today rather than yesterday; every form took its default date from UTC, which in Zambia is two hours behind
 - The mobile add button opens straight on "I spent money", with the other kinds one tap away under Change

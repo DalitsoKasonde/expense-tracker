@@ -57,6 +57,8 @@ func (s *Server) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
 		NotificationsEnabled        bool     `json:"notificationsEnabled"`
 		EmailDigestFrequency        string   `json:"emailDigestFrequency"`
 		EmailMutedNotificationTypes []string `json:"emailMutedNotificationTypes"`
+		// Optional: omitted by clients that predate it, which keeps the stored value.
+		EmailLoggingReminder *bool `json:"emailLoggingReminder"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
@@ -102,6 +104,7 @@ func (s *Server) updateUserPreferences(w http.ResponseWriter, r *http.Request) {
 		// Unknown types are dropped rather than rejected: a client one deploy
 		// behind should still be able to save the rest of a person's settings.
 		EmailMutedNotificationTypes: validNotificationTypes(req.EmailMutedNotificationTypes),
+		EmailLoggingReminder:        req.EmailLoggingReminder,
 	})
 	if err != nil {
 		http.Error(w, "failed to update preferences", http.StatusInternalServerError)

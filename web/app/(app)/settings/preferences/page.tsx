@@ -15,6 +15,7 @@ type UserPreferences = {
   notificationsEnabled: boolean;
   emailDigestFrequency: DigestFrequency;
   emailMutedNotificationTypes: string[];
+  emailLoggingReminder: boolean;
 };
 
 const colorSchemes: Array<{ value: ColorScheme; label: string }> = [
@@ -33,6 +34,7 @@ export default function PreferencesSettingsPage() {
     notificationsEnabled: false,
     emailDigestFrequency: "off",
     emailMutedNotificationTypes: [],
+    emailLoggingReminder: false,
   });
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -43,7 +45,11 @@ export default function PreferencesSettingsPage() {
   useEffect(() => {
     void apiCallRef.current<UserPreferences>("/v1/user/preferences")
       .then((prefs) => {
-        setForm({ ...prefs, emailMutedNotificationTypes: prefs.emailMutedNotificationTypes ?? [] });
+        setForm({
+          ...prefs,
+          emailMutedNotificationTypes: prefs.emailMutedNotificationTypes ?? [],
+          emailLoggingReminder: prefs.emailLoggingReminder ?? false,
+        });
         lastSavedRef.current = JSON.stringify(prefs);
         primeUserCurrency(prefs.defaultCurrency);
         applyTheme(prefs.theme);
@@ -155,6 +161,24 @@ export default function PreferencesSettingsPage() {
             checked={form.notificationsEnabled}
             onChange={(event) =>
               setForm((current) => ({ ...current, notificationsEnabled: event.target.checked }))
+            }
+            disabled={loading}
+          />
+        </label>
+
+        <label className="resourceRow settingsToggleRow" htmlFor="emailLoggingReminder">
+          <span className="resourceBody">
+            <strong>Evening reminder email</strong>
+            <span className="muted">
+              When your entries fall two days behind, one email at 19:00 with a link to catch up. If the gap stays, another on day four, then once a week — never every night.
+            </span>
+          </span>
+          <input
+            id="emailLoggingReminder"
+            type="checkbox"
+            checked={form.emailLoggingReminder}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, emailLoggingReminder: event.target.checked }))
             }
             disabled={loading}
           />
