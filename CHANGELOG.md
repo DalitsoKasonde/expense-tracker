@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- When your entries fall two or more days behind, Today says so — "Your entries stop at 10 Sep — 20 days ago" — with a button straight to the catch-up sheet. Automatically posted bond coupons do not count as keeping up
 - Entries recorded just after midnight are dated today rather than yesterday; every form took its default date from UTC, which in Zambia is two hours behind
 - The mobile add button opens straight on "I spent money", with the other kinds one tap away under Change
 - Today, Yesterday and 2 days ago sit under the date, so a late entry no longer means a date picker

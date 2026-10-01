@@ -48,6 +48,8 @@ export interface UnifiedDashboardData {
   investmentValue: number;
   accountBalances: UnifiedDashboardAccountBalance[];
   assets: UnifiedDashboardAsset[];
+  /** Newest date the record reaches, across currencies; null before the first entry. */
+  lastEntryDate?: string | null;
 }
 
 export function useUnifiedDashboard(currency?: string) {

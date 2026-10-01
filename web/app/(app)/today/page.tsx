@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useApiCall } from "@/lib/client-api";
 import { getPendingTransactions } from "@/lib/offline-db";
 import { useUnifiedDashboard } from "@/lib/use-unified-dashboard";
+import { LoggingGapBanner } from "@/components/logging-gap-banner";
 import { useEntriesChanged } from "@/lib/entries-bus";
 import { adaptSavingsGoals, outstandingLiabilityAccounts, type SavingsGoal } from "@/lib/dashboard-adapters";
 import { formatMoney } from "@/lib/format-money";
@@ -153,6 +154,8 @@ export default function TodayPage() {
         subtitle="See what is available, what changed this month, and what needs your attention."
         actions={<><Link href="/add/catch-up" className="btn btn-ghost">Catch up</Link><Link href="/reports" className="btn btn-ghost">View reports</Link></>}
       />
+
+      <LoggingGapBanner lastEntryDate={data.lastEntryDate} />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Financial summary">
         <MetricCard label="Available balance" value={formatMoney(data.cashBalance, currency)} detail={`As of ${new Date(data.asOfDate).toLocaleDateString()}`} />

@@ -50,6 +50,11 @@ type UnifiedDashboard struct {
 	InvestmentValue  int64                     `json:"investmentValue"`
 	AccountBalances  []DashboardAccountBalance `json:"accountBalances"`
 	Assets           []DashboardAsset          `json:"assets"`
+	// LastEntryDate is the newest date the person's own record reaches, across
+	// every currency; nil when nothing has been recorded. It is how far the
+	// record is kept up, not when the form was last used: backfilling old days
+	// must not hide that the last week is still empty.
+	LastEntryDate *string `json:"lastEntryDate"`
 }
 
 type UnifiedDashboardStore struct {
@@ -82,6 +87,21 @@ func (s *UnifiedDashboardStore) Get(ctx context.Context, userID, currency string
 		Currency:        currency,
 		AccountBalances: []DashboardAccountBalance{},
 		Assets:          []DashboardAsset{},
+	}
+
+	// Rows the system posts by itself (due bond coupons, source 'adjustment')
+	// arrive without the person doing anything, so they say nothing about
+	// whether the record is being kept up. Future-dated rows are ignored for
+	// the same reason.
+	if err := s.db.QueryRow(ctx, `
+		select max(transaction_date)::text
+		from transactions
+		where user_id = $1
+		  and deleted_at is null
+		  and source <> 'adjustment'
+		  and transaction_date <= $2
+	`, userID, asOf.Format(dateLayout)).Scan(&dashboard.LastEntryDate); err != nil {
+		return UnifiedDashboard{}, err
 	}
 
 	if err := s.db.QueryRow(ctx, `
