@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- The stocks summary leads with total return — price change and dividends together — instead of "Portfolio fall", which left out what your stocks had paid you; the price and dividend parts are both shown underneath
+- Market value says how many companies you hold and for how long on average; Invested says over how many months, and roughly how much a month
+- A new "Your investing habit" card shows what you put in this month, how many months in a row you have bought, and a year of monthly contributions, with an optional monthly target you can set right there
+- A Highlights card names your best and weakest stock, your largest holding and its share of the portfolio, the most and fewest shares (with what each is worth), your best dividend payer, the price a losing stock needs to get back to cost, and any stock you have not added to in two months
 - A second government bond with the same name as one you already hold now saves, labelled with its maturity year, instead of failing with "resource conflict"
 - A bond's maturity date can be corrected to the date on your certificate; it was fixed at exactly the term in years, which moved every coupon and the redemption when the real date differed
 - A bond can no longer be paid from an account in another currency, or from a loan or credit account; both used to save and then count toward no balance

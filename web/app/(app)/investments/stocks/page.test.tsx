@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/client-api", () => ({ useApiCall: () => mocks.apiCall }));
 vi.mock("@/lib/use-unified-dashboard", () => ({ useUnifiedDashboard: () => mocks.dashboard() }));
+vi.mock("@/lib/use-user-currency", () => ({ useUserCurrency: () => ({ currency: "ZMW", loading: false }) }));
 
 describe("StocksDashboardPage", () => {
   beforeEach(() => {
@@ -70,21 +71,23 @@ describe("StocksDashboardPage", () => {
         source: "mansa_market",
       },
     });
-    expect(screen.getByText("Portfolio growth")).toBeInTheDocument();
+    expect(screen.getByText("Total return")).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText(/200\.00/).length).toBeGreaterThan(0));
     expect(mocks.reload).toHaveBeenCalled();
   });
 
-  it("shows dividends received in the same row as growth rather than folded into it", async () => {
+  it("counts dividends in the total return, and still shows the price change on its own", async () => {
     render(<StocksDashboardPage />);
 
     await screen.findByText("Dividends received");
     await screen.findByText(/2 payments from 1 stock · 15\.0% of invested/);
     expect(screen.getByText(/5\.00 reinvested · .*10\.00 paid to cash/)).toBeInTheDocument();
-    // Growth stays value less cost; the dividends must not have been added in.
-    const summary = within(screen.getByLabelText("Stock portfolio summary"));
-    expect(summary.getByText("Portfolio growth")).toBeInTheDocument();
-    expect(summary.getByText("+ZMW 0.00")).toBeInTheDocument();
+    // Leaving dividends out overstated every loss; the price part stays
+    // visible underneath so it keeps meaning something on its own.
+    const summary = within(screen.getByLabelText("ZMW stock portfolio summary"));
+    const totalReturn = summary.getByText("Total return").parentElement as HTMLElement;
+    expect(totalReturn).toHaveTextContent("+ZMW 15.00");
+    expect(totalReturn).toHaveTextContent("+15.0% · price +ZMW 0.00 · dividends +ZMW 15.00");
   });
 
   it("says when dividend income could not be loaded instead of showing a confident zero", async () => {

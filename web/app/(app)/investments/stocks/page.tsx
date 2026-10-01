@@ -7,7 +7,18 @@ import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
 import type { MarketStock, MarketStockDirectory } from "@/lib/market-data";
 import { gainPercent } from "@/lib/portfolio-holdings";
+import { localDate } from "@/lib/date-terms";
+import {
+  describeDuration,
+  investingHabit,
+  stockHighlights,
+  totalReturn,
+  type StockActivity,
+} from "@/lib/stock-insights";
 import { useUnifiedDashboard, type UnifiedDashboardAsset } from "@/lib/use-unified-dashboard";
+import { useUserCurrency } from "@/lib/use-user-currency";
+import { InvestingHabitCard } from "@/components/stocks/investing-habit-card";
+import { StockHighlightsCard } from "@/components/stocks/stock-highlights";
 
 type Holding = {
   assetId: string;
@@ -57,6 +68,9 @@ export default function StocksDashboardPage() {
   // Distinguished from "no dividends yet": showing a confident zero when the
   // request failed would misreport income.
   const [dividendsFailed, setDividendsFailed] = useState(false);
+  const [activity, setActivity] = useState<StockActivity | null>(null);
+  const [targetMinor, setTargetMinor] = useState<number | null>(null);
+  const { currency: userCurrency } = useUserCurrency();
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -86,6 +100,25 @@ export default function StocksDashboardPage() {
         setDividends(null);
         setDividendsFailed(true);
       });
+    return () => {
+      ignore = true;
+    };
+  }, [apiCall]);
+
+  // The habit card and highlights are extras: if either request fails the
+  // market figures above still stand, so failures are left silent here.
+  useEffect(() => {
+    let ignore = false;
+    void apiCall<StockActivity>("/v1/investments/stocks/activity")
+      .then((result) => {
+        if (!ignore) setActivity(result ?? null);
+      })
+      .catch(() => undefined);
+    void apiCall<{ monthlyInvestingTargetMinor?: number | null }>("/v1/user/preferences")
+      .then((prefs) => {
+        if (!ignore) setTargetMinor(prefs?.monthlyInvestingTargetMinor ?? null);
+      })
+      .catch(() => undefined);
     return () => {
       ignore = true;
     };
@@ -208,37 +241,77 @@ export default function StocksDashboardPage() {
         <EmptyState title="No stocks yet" description="Add your first stock holding to track its cost and market growth." action={<Link href="/investments/add" className="btn btn-primary">Add stock</Link>} />
       ) : (
         <>
-          <section className="grid gap-4 md:grid-cols-3" aria-label="Stock portfolio summary">
-            {totals.map((total) => {
-              const difference = total.value - total.cost;
-              const percent = gainPercent(total.value, total.cost);
-              return (
-                <article key={total.currency} className="card md:col-span-3">
+          {totals.map((total) => {
+            const currencyStocks = stocks
+              .filter((stock) => stock.hasPosition && stock.currency === total.currency)
+              .map((stock) => ({
+                assetId: stock.assetId,
+                name: stock.name,
+                symbol: stock.symbol,
+                currency: stock.currency,
+                quantity: stock.quantity,
+                investedMinor: stock.investedAmountMinor,
+                valueMinor: stock.displayValueMinor,
+              }));
+            const dividendSummary = dividendsByCurrency.get(total.currency);
+            const result = totalReturn(total.value, total.cost, dividendSummary?.dividendsReceivedMinor ?? 0);
+            // Guarded: an older API, or a cached response from one, has no such field.
+            const currencyActivity = activity?.currencies?.find((item) => item.currency === total.currency);
+            const habit = currencyActivity && activity ? investingHabit(currencyActivity, activity.asOf, targetMinor, userCurrency) : null;
+            const highlights = stockHighlights(currencyStocks, Array.isArray(activity?.stocks) ? activity.stocks : [], activity?.asOf ?? localDate());
+            const companies = currencyStocks.filter((stock) => stock.quantity > 0).length;
+            return (
+              <div key={total.currency} className="grid gap-4">
+                <section className="card" aria-label={`${total.currency} stock portfolio summary`}>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <SummaryMetric label="Market value" value={formatMoney(total.value, total.currency)} />
-                    <SummaryMetric label="Invested" value={formatMoney(total.cost, total.currency)} />
                     <SummaryMetric
-                      label={difference >= 0 ? "Portfolio growth" : "Portfolio fall"}
-                      value={`${difference >= 0 ? "+" : ""}${formatMoney(difference, total.currency)}`}
-                      detail={percent === null ? undefined : `${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%`}
-                      tone={difference >= 0 ? "positive" : "negative"}
+                      label="Market value"
+                      value={formatMoney(total.value, total.currency)}
+                      detail={`${companies} ${companies === 1 ? "company" : "companies"}${
+                        habit?.averageHoldingDays != null ? ` · held ${describeDuration(habit.averageHoldingDays)} on average` : ""
+                      }`}
                     />
-                    {/* Dividends are return the growth figure cannot see: they were
-                        paid to a cash account, so they lower nothing in "value less
-                        cost". Shown beside it rather than folded in, so each figure
-                        keeps meaning something on its own. */}
+                    <SummaryMetric
+                      label="Invested"
+                      value={formatMoney(total.cost, total.currency)}
+                      detail={
+                        habit && habit.monthsInvesting > 0
+                          ? `over ${habit.monthsInvesting} ${habit.monthsInvesting === 1 ? "month" : "months"} · about ${formatMoney(habit.averagePerMonthMinor, total.currency)} a month`
+                          : undefined
+                      }
+                    />
+                    {/* Price movement and dividends together: leaving the
+                        dividends out overstated every loss. Both parts stay
+                        visible underneath so neither loses its meaning. */}
+                    <SummaryMetric
+                      label="Total return"
+                      value={<Money amountMinor={result.amountMinor} currency={total.currency} signed tone="auto" />}
+                      detail={
+                        <>
+                          {result.percent === null ? "" : `${result.percent >= 0 ? "+" : ""}${result.percent.toFixed(1)}% · `}
+                          price <Money amountMinor={result.priceMinor} currency={total.currency} signed />
+                          {" · "}dividends <Money amountMinor={result.dividendsMinor} currency={total.currency} signed />
+                        </>
+                      }
+                    />
                     <DividendMetric
-                      summary={dividendsByCurrency.get(total.currency)}
+                      summary={dividendSummary}
                       currency={total.currency}
                       investedMinor={total.cost}
                       loading={dividends === null && !dividendsFailed}
                       failed={dividendsFailed}
                     />
                   </div>
-                </article>
-              );
-            })}
-          </section>
+                </section>
+
+                {habit ? (
+                  <InvestingHabitCard habit={habit} currency={total.currency} onTargetChanged={setTargetMinor} />
+                ) : null}
+
+                <StockHighlightsCard highlights={highlights} />
+              </div>
+            );
+          })}
 
           <section className="card card-flush overflow-hidden">
             <div className="border-b border-outline p-5"><h2 className="font-semibold text-on-surface">Holdings</h2></div>
