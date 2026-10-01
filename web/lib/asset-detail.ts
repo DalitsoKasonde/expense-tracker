@@ -6,9 +6,11 @@
  * checking — had no way to be tested. Nothing here touches the DOM or the API.
  */
 
+import { localDate } from "./date-terms";
+
 /** Today in the `YYYY-MM-DD` form the date inputs and API expect. */
 export function today() {
-  return new Date().toISOString().split("T")[0];
+  return localDate();
 }
 
 /** Parses a money input into minor units, treating junk as zero. */

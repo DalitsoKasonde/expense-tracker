@@ -196,6 +196,7 @@ describe("AddEntryDialog", () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "I bought an investment" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "I bought an investment" }));
+    await screen.findByRole("heading", { name: "Investment" });
 
     expect(screen.getByRole("button", { name: "New stock" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "New government bond" }));
@@ -220,6 +221,7 @@ describe("AddEntryDialog", () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "I bought an investment" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "I bought an investment" }));
+    await screen.findByRole("heading", { name: "Investment" });
 
     fireEvent.change(screen.getByLabelText("Shares purchased"), { target: { value: "10" } });
     fireEvent.change(screen.getByLabelText(/Price per share/), { target: { value: "250" } });
@@ -251,7 +253,7 @@ describe("AddEntryDialog", () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "I bought an investment" }));
 
-    fireEvent.change(screen.getByLabelText("LuSE-listed stock (optional)"), {
+    fireEvent.change(await screen.findByLabelText("LuSE-listed stock (optional)"), {
       target: { value: "TEST" },
     });
 
@@ -280,8 +282,9 @@ describe("AddEntryDialog", () => {
     render(<AddEntryDialog open onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "I bought an investment" }));
 
-    expect(screen.getByLabelText("Stock")).toHaveValue("stock-1");
-    expect(screen.getByLabelText("Currency")).toHaveTextContent("USD");
+    // Holdings load once an investment is chosen, not on every open.
+    expect(await screen.findByLabelText("Stock")).toHaveValue("stock-1");
+    await waitFor(() => expect(screen.getByLabelText("Currency")).toHaveTextContent("USD"));
     // Currency is derived from the account or asset rather than picked: an
     // entry whose currency differs from its account counts toward no balance.
     expect(screen.queryByRole("combobox", { name: "Currency" })).not.toBeInTheDocument();
@@ -307,7 +310,7 @@ describe("AddEntryDialog", () => {
 
     render(<AddEntryDialog open onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "I bought an investment" }));
-    fireEvent.click(screen.getByRole("button", { name: "Existing government bond" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Existing government bond" }));
 
     expect(screen.getByLabelText("Government bond")).toHaveValue("bond-1");
     fireEvent.change(screen.getByLabelText("Principal"), { target: { value: "1000" } });
@@ -410,6 +413,7 @@ describe("AddEntryDialog", () => {
       expect(screen.getByRole("button", { name: "I bought an investment" })).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByRole("button", { name: "I bought an investment" }));
+    await screen.findByRole("heading", { name: "Investment" });
     fireEvent.click(screen.getByRole("button", { name: "New government bond" }));
 
     fireEvent.change(screen.getByLabelText("Bond name"), { target: { value: "2019 GRZ bond" } });

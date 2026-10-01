@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/format-money";
 import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
 import { useUserCurrency } from "@/lib/use-user-currency";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { localDate } from "@/lib/date-terms";
 
 type Account = { id: string; name: string; accountType: string; accountClass: string; currency: string; isSavingsGroupAccount?: boolean };
 type SavingsGroup = { id: string; name: string; currency: string; contributedMinor: number; currentBalance: number };
@@ -18,14 +19,13 @@ type LoanSummary = {
   interestAndFeesPaid: number; availablePayoffPriority: string;
 };
 
-const today = () => new Date().toISOString().split("T")[0];
 const toMinor = (value: string) => Math.round((parseFloat(value || "0") || 0) * 100);
 const fromMinor = (value: number) => (value / 100).toFixed(2);
 // Interest rate is entered as a monthly percentage (e.g. "10" means 10% per month) and
 // stored server-side in basis points, where 1% = 100 bps.
 const toBps = (value: string) => Math.round((parseFloat(value || "0") || 0) * 100);
 const fromBps = (value: number) => (value / 100).toString();
-const blankMovement = () => ({ loanId: "", cashAccountId: "", amount: "", transactionFee: "", transactionDate: today(), note: "" });
+const blankMovement = () => ({ loanId: "", cashAccountId: "", amount: "", transactionFee: "", transactionDate: localDate(), note: "" });
 const blankEdit = () => ({
   loanId: "", creditorName: "", isForced: false, amount: "",
   hasInterest: false, interestRatePct: "", interestTermMonths: "",
@@ -48,7 +48,7 @@ export function LoansWorkspace() {
     lenderSource: "savings_group", groupId: "", creditorName: "", loanType: "personal",
     hasInterest: false, interestRatePct: "", interestTermMonths: "",
     isForced: false, amount: "", cashAccountId: "",
-    transactionFee: "", openedAt: today(), note: "",
+    transactionFee: "", openedAt: localDate(), note: "",
   });
   const [repayForm, setRepayForm] = useState(blankMovement);
   const [borrowForm, setBorrowForm] = useState(blankMovement);
@@ -89,7 +89,7 @@ export function LoansWorkspace() {
 
   function closeCreate() {
     setCreateOpen(false);
-    setLoanForm((current) => ({ ...current, creditorName: "", hasInterest: false, interestRatePct: "", interestTermMonths: "", amount: "", transactionFee: "", openedAt: today(), note: "" }));
+    setLoanForm((current) => ({ ...current, creditorName: "", hasInterest: false, interestRatePct: "", interestTermMonths: "", amount: "", transactionFee: "", openedAt: localDate(), note: "" }));
   }
 
   async function createLoan(event: React.FormEvent<HTMLFormElement>) {

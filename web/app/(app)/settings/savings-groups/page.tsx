@@ -6,6 +6,7 @@ import { useUserCurrency } from "@/lib/use-user-currency";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmationDialog, FormDialog } from "@/components/ui/dialogs";
 import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
+import { localDate } from "@/lib/date-terms";
 
 type Account = {
   id: string;
@@ -31,10 +32,6 @@ type SavingsGroup = {
   currentBalance: number;
 };
 
-function today() {
-  return new Date().toISOString().split("T")[0];
-}
-
 function toMinor(value: string) {
   return Math.round((parseFloat(value || "0") || 0) * 100);
 }
@@ -54,7 +51,7 @@ export default function SavingsGroupsSettingsPage() {
   const [status, setStatus] = useState("");
   const [form, setForm] = useState({
     name: "",
-    cycleStart: today(),
+    cycleStart: localDate(),
     cycleLengthMonths: "12",
     openingContribution: "",
   });
@@ -62,7 +59,7 @@ export default function SavingsGroupsSettingsPage() {
     groupId: "",
     cashAccountId: "",
     payout: "",
-    cycleEnd: today(),
+    cycleEnd: localDate(),
     note: "",
   });
 
@@ -94,7 +91,7 @@ export default function SavingsGroupsSettingsPage() {
 
   function resetCreateForm() {
     setCreateOpen(false);
-    setForm({ name: "", cycleStart: today(), cycleLengthMonths: "12", openingContribution: "" });
+    setForm({ name: "", cycleStart: localDate(), cycleLengthMonths: "12", openingContribution: "" });
   }
 
   function resetShareoutForm() {

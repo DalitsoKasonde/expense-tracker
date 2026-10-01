@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   recallAccountForEntryKind,
+  recallCategoriesForEntryKind,
   recallFeesForAccount,
   rememberAccountForEntryKind,
+  rememberCategoryForEntryKind,
   rememberFeeForAccount,
 } from "./entry-preferences";
 
@@ -118,5 +120,35 @@ describe("remembering fees per account", () => {
     store.set("expenses.recentFeesByAccount", JSON.stringify({ airtel: "nonsense" }));
 
     expect(recallFeesForAccount("airtel")).toEqual([]);
+  });
+});
+
+describe("remembering recent categories per entry kind", () => {
+  beforeEach(() => installStorage(new Map()));
+
+  it("offers the most recently used first, each once", () => {
+    rememberCategoryForEntryKind("expense_living", "food");
+    rememberCategoryForEntryKind("expense_living", "transport");
+    rememberCategoryForEntryKind("expense_living", "food");
+
+    expect(recallCategoriesForEntryKind("expense_living")).toEqual(["food", "transport"]);
+  });
+
+  it("keeps spending and income categories apart", () => {
+    rememberCategoryForEntryKind("expense_living", "food");
+    rememberCategoryForEntryKind("income_earned", "salary");
+
+    expect(recallCategoriesForEntryKind("income_earned")).toEqual(["salary"]);
+  });
+
+  it("offers at most five", () => {
+    for (const id of ["a", "b", "c", "d", "e", "f"]) rememberCategoryForEntryKind("expense_living", id);
+    expect(recallCategoriesForEntryKind("expense_living")).toEqual(["f", "e", "d", "c", "b"]);
+  });
+
+  it("remembers nothing when storage is blocked, without throwing", () => {
+    installStorage(null);
+    expect(() => rememberCategoryForEntryKind("expense_living", "food")).not.toThrow();
+    expect(recallCategoriesForEntryKind("expense_living")).toEqual([]);
   });
 });

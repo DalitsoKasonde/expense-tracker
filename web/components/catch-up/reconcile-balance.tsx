@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, Field, Input, Money, Select } from "@/components/ui";
-import { localDate, parseAmountMinor } from "@/lib/catch-up";
+import { parseAmountMinor } from "@/lib/catch-up";
+import { localDate } from "@/lib/date-terms";
 import { useApiCall } from "@/lib/client-api";
 import { notifyEntriesChanged, useEntriesChanged } from "@/lib/entries-bus";
 import { reconcile, unaccountedSpendingPayload } from "@/lib/reconcile";

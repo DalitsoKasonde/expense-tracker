@@ -34,19 +34,6 @@ export function categoryGroupForCatchUpKind(kind: CatchUpKind) {
 }
 
 /**
- * The calendar date in the device's time zone.
- *
- * `toISOString()` is UTC, which in Lusaka (UTC+2) files anything recorded
- * before 02:00 against the previous day.
- */
-export function localDate(now: Date = new Date()) {
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-/**
  * A decimal amount as integer minor units, or null if it is not one.
  *
  * Parsed as text rather than through parseFloat so no amount ever passes

@@ -21,7 +21,9 @@ export function BottomNav() {
 
         if (item.action === "add") {
           return (
-            <AddEntryButton key={item.href} className={navClassName}>
+            // The thumb-reach button is used for everyday spending far more than
+            // anything else, so it opens on it; the picker is one tap away.
+            <AddEntryButton key={item.href} className={navClassName} initialEntryKind="expense_living">
               <span className="grid size-7 place-items-center" aria-hidden="true">
                 <Icon />
               </span>

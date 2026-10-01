@@ -5,6 +5,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import { Breadcrumbs, EmptyState, LoadingSkeleton, PageHeader, PageShell } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { formatMoney } from "@/lib/format-money";
+import { localDate } from "@/lib/date-terms";
 
 type SavingsPocket = {
   id: string;
@@ -26,10 +27,6 @@ type Account = {
   isSavingsGroupAccount?: boolean;
 };
 
-function today() {
-  return new Date().toISOString().split("T")[0];
-}
-
 function toMinor(value: string) {
   return Math.round((Number.parseFloat(value || "0") || 0) * 100);
 }
@@ -43,7 +40,7 @@ export default function SavingsPocketsPage() {
   const [status, setStatus] = useState("");
   const [existingAccountId, setExistingAccountId] = useState("");
   const [interestPocketId, setInterestPocketId] = useState<string | null>(null);
-  const [interest, setInterest] = useState({ amount: "", date: today(), note: "" });
+  const [interest, setInterest] = useState({ amount: "", date: localDate(), note: "" });
 
   const loadData = useCallback(async () => {
     const [loadedPockets, loadedAccounts] = await Promise.all([
@@ -94,7 +91,7 @@ export default function SavingsPocketsPage() {
         body: { transactionDate: interest.date, amountMinor, note: interest.note.trim() || undefined },
       });
       setInterestPocketId(null);
-      setInterest({ amount: "", date: today(), note: "" });
+      setInterest({ amount: "", date: localDate(), note: "" });
       await loadData();
       setStatus("Interest added to the pocket.");
     } catch (error) { setStatus(error instanceof Error ? error.message : "Failed to record interest"); }

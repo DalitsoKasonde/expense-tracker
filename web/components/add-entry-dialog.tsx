@@ -9,18 +9,22 @@ import { useApiCall } from "@/lib/client-api";
 import { notifyEntriesChanged } from "@/lib/entries-bus";
 import {
   recallAccountForEntryKind,
+  recallCategoriesForEntryKind,
   recallFeesForAccount,
   rememberAccountForEntryKind,
+  rememberCategoryForEntryKind,
   rememberFeeForAccount,
 } from "@/lib/entry-preferences";
 import { buildCategoryRows, type Category } from "@/lib/category-tree";
-import { addYearsToDate, isPastDate } from "@/lib/date-terms";
+import { addYearsToDate, isPastDate, localDate } from "@/lib/date-terms";
 import { supportsHistoricalBackfill } from "@/lib/historical-entries";
 import { formatMoney } from "@/lib/format-money";
 import { spendableAccounts as filterSpendableAccounts } from "@/lib/spendable-accounts";
 import type { MarketStockDirectory } from "@/lib/market-data";
 import { useUserCurrency } from "@/lib/use-user-currency";
+import { DateShortcuts } from "@/components/add-entry/date-shortcuts";
 import { EntryTypePicker } from "@/components/add-entry/entry-type-picker";
+import { RecentCategoryChips } from "@/components/add-entry/recent-category-chips";
 import {
   categoryGroupForEntryKind,
   entryTypeFor,
@@ -78,14 +82,28 @@ function toMinor(value: string) {
   return Math.round((parseFloat(value || "0") || 0) * 100);
 }
 
-function today() {
-  return new Date().toISOString().split("T")[0];
-}
+/** What was just recorded, for a caller that confirms the save. */
+export type SavedEntry = {
+  entryKind: EntryKind;
+  amountMinor: number;
+  currency: string;
+  transactionDate: string;
+  categoryId?: string;
+  categoryName?: string;
+};
+
+/**
+ * Kinds simple enough to record several of in a row.
+ *
+ * The rest carry state — a new holding, a loan, a counterparty — that a quick
+ * second entry would either repeat by mistake or have to rebuild.
+ */
+const REPEATABLE_KINDS: EntryKind[] = ["expense_living", "income_earned"];
 
 type AddEntryDialogProps = {
   open: boolean;
   onClose: () => void;
-  onSaved?: () => void;
+  onSaved?: (entry: SavedEntry) => void;
   // Opening straight onto a kind (and, for lending, the person it concerns) is
   // what lets a row action mean one click instead of re-picking what the row
   // already says. Omitted, the dialog still opens on the kind picker.
@@ -111,6 +129,11 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
   const [bonds, setBonds] = useState<BondPosition[]>([]);
   const [stockDirectory, setStockDirectory] = useState<MarketStockDirectory | null>(null);
   const [loans, setLoans] = useState<LoanSummary[]>([]);
+  const [investmentDataLoaded, setInvestmentDataLoaded] = useState(false);
+  // Set by "Save & add another" just before the form submits; read once.
+  const addAnotherRef = useRef(false);
+  const [lastSaved, setLastSaved] = useState<SavedEntry | null>(null);
+  const [loansLoaded, setLoansLoaded] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
@@ -119,16 +142,16 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
     name: "",
     symbol: "",
     couponRate: "",
-    issueDate: today(),
+    issueDate: localDate(),
     termYears: "1",
-    maturityDate: addYearsToDate(today(), 1),
+    maturityDate: addYearsToDate(localDate(), 1),
     purchaseFee: "0",
     couponFrequency: "2",
-    reinvestmentCutoffDate: addYearsToDate(today(), 1),
+    reinvestmentCutoffDate: addYearsToDate(localDate(), 1),
   });
 
   const [formData, setFormData] = useState({
-    transactionDate: today(),
+    transactionDate: localDate(),
     entryKind: "" as EntryKind,
     amount: "",
     currency: userCurrency,
@@ -166,27 +189,17 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
     let ignore = false;
     setInitializing(true);
     setError("");
+    setLastSaved(null);
 
     const loadSettingsData = async () => {
       try {
-        const [
-          loadedAccounts,
-          loadedCategories,
-          loadedBusinesses,
-          loadedAssets,
-          loadedInvestmentTypes,
-          loadedLoans,
-          loadedStockDirectory,
-          loadedBonds,
-        ] = await Promise.all([
+        // Only what every entry needs. Holdings, bonds, the LuSE directory and
+        // loans used to load here too, so recording a K20 lunch waited on
+        // market data; they now load when a kind that uses them is picked.
+        const [loadedAccounts, loadedCategories, loadedBusinesses] = await Promise.all([
           apiCall<Account[]>("/v1/accounts"),
           apiCall<Category[]>("/v1/categories"),
           apiCall<Business[]>("/v1/businesses").catch(() => []),
-          apiCall<Asset[]>("/v1/assets").catch(() => []),
-          apiCall<InvestmentType[]>("/v1/investment-types").catch(() => []),
-          apiCall<LoanSummary[]>("/v1/loans").catch(() => []),
-          apiCall<MarketStockDirectory>("/v1/market-data/luse").catch(() => null),
-          apiCall<BondPosition[]>("/v1/bonds").catch(() => []),
         ]);
 
         if (ignore) {
@@ -204,16 +217,8 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
         setAccounts(loadedAccounts ?? []);
         setCategories(loadedCategories ?? []);
         setBusinesses(loadedBusinesses ?? []);
-        setAssets(loadedAssets ?? []);
-        setInvestmentTypes(loadedInvestmentTypes ?? []);
-        setLoans(loadedLoans ?? []);
-        setStockDirectory(
-          loadedStockDirectory && Array.isArray(loadedStockDirectory.stocks)
-            ? loadedStockDirectory
-            : null,
-        );
-        setBonds(loadedBonds ?? []);
-        const firstStock = (loadedAssets ?? []).find((asset) => asset.assetClass !== "bond");
+        setInvestmentDataLoaded(false);
+        setLoansLoaded(false);
         // Opened straight onto a kind, the picker never runs, so the remembered
         // account is applied here instead of defaulting to whichever account
         // happens to be first.
@@ -225,7 +230,7 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
           : undefined;
         const openingAccount = rememberedForInitialKind ?? defaultSourceAccount;
         setFormData({
-          transactionDate: today(),
+          transactionDate: localDate(),
           entryKind: initialEntryKind ?? "",
           amount: "",
           currency: openingAccount?.currency ?? userCurrency,
@@ -238,8 +243,8 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
           counterpartyName: initialCounterpartyName ?? "",
           categoryId: "",
           businessId: "",
-          loanId: loadedLoans?.[0]?.id ?? "",
-          assetId: firstStock?.id ?? "",
+          loanId: "",
+          assetId: "",
           quantity: "",
           unitPrice: "",
           fees: "0",
@@ -247,19 +252,19 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
           note: "",
           historicalBackfill: false,
         });
-        setInvestmentMode(firstStock ? "existing" : "stock");
+        setInvestmentMode("existing");
         setCreatingCategory(false);
         setNewCategoryName("");
         setNewInvestment({
           name: "",
           symbol: "",
           couponRate: "",
-          issueDate: today(),
+          issueDate: localDate(),
           termYears: "1",
-          maturityDate: addYearsToDate(today(), 1),
+          maturityDate: addYearsToDate(localDate(), 1),
           purchaseFee: "0",
           couponFrequency: "2",
-          reinvestmentCutoffDate: addYearsToDate(today(), 1),
+          reinvestmentCutoffDate: addYearsToDate(localDate(), 1),
         });
       } catch (loadError) {
         if (!ignore) {
@@ -284,6 +289,49 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
       current.currency === userCurrency ? current : { ...current, currency: userCurrency },
     );
   }, [userCurrency]);
+
+  useEffect(() => {
+    if (!open || initializing || investmentDataLoaded || formData.entryKind !== "investment_buy") return;
+    let ignore = false;
+    void Promise.all([
+      apiCall<Asset[]>("/v1/assets").catch(() => []),
+      apiCall<InvestmentType[]>("/v1/investment-types").catch(() => []),
+      apiCall<MarketStockDirectory>("/v1/market-data/luse").catch(() => null),
+      apiCall<BondPosition[]>("/v1/bonds").catch(() => []),
+    ]).then(([loadedAssets, loadedInvestmentTypes, loadedStockDirectory, loadedBonds]) => {
+      if (ignore) return;
+      setAssets(loadedAssets ?? []);
+      setInvestmentTypes(loadedInvestmentTypes ?? []);
+      setStockDirectory(
+        loadedStockDirectory && Array.isArray(loadedStockDirectory.stocks) ? loadedStockDirectory : null,
+      );
+      setBonds(loadedBonds ?? []);
+      const firstStock = (loadedAssets ?? []).find((asset) => asset.assetClass !== "bond");
+      setFormData((current) => (current.assetId ? current : { ...current, assetId: firstStock?.id ?? "" }));
+      setInvestmentMode((current) => (current === "existing" && !firstStock ? "stock" : current));
+      setInvestmentDataLoaded(true);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [apiCall, formData.entryKind, initializing, investmentDataLoaded, open]);
+
+  useEffect(() => {
+    const needsLoans = formData.entryKind === "income_borrowed" || formData.entryKind === "debt_principal_payment";
+    if (!open || initializing || loansLoaded || !needsLoans) return;
+    let ignore = false;
+    void apiCall<LoanSummary[]>("/v1/loans")
+      .catch(() => [])
+      .then((loadedLoans) => {
+        if (ignore) return;
+        setLoans(loadedLoans ?? []);
+        setFormData((current) => (current.loanId ? current : { ...current, loanId: loadedLoans?.[0]?.id ?? "" }));
+        setLoansLoaded(true);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [apiCall, formData.entryKind, initializing, loansLoaded, open]);
 
   const cashAccounts = useMemo(
     () => accounts.filter((account) => account.accountClass !== "liability"),
@@ -377,7 +425,7 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
       : formData.transactionDate;
   const historicalEligible =
     supportsHistoricalBackfill(formData.entryKind) &&
-    isPastDate(historicalDate, today());
+    isPastDate(historicalDate, localDate());
   const historicalBackfill = historicalEligible && formData.historicalBackfill;
   const sourceAccountRequired = !historicalBackfill;
   const availableSourceAccounts =
@@ -403,6 +451,10 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
   // Re-read per account rather than cached across the session: the dialog
   // re-reads on its next open, which is when a newly remembered fee matters.
   const feeSuggestions = useMemo(() => recallFeesForAccount(feeAccountId), [feeAccountId]);
+  // Read on every render rather than memoised: it is one small localStorage
+  // read, and "add another" must offer the category it has just remembered.
+  const recentCategoryIds = recallCategoriesForEntryKind(formData.entryKind);
+  const canAddAnother = REPEATABLE_KINDS.includes(formData.entryKind as EntryKind);
 
   /**
    * The account this kind of entry usually moves through.
@@ -510,6 +562,8 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    const addAnother = addAnotherRef.current && canAddAnother;
+    addAnotherRef.current = false;
     if (!session?.accessToken) {
       setError("Not authenticated");
       return;
@@ -754,8 +808,25 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
       // abandoned attempt never changes what is offered next time.
       rememberAccountForEntryKind(formData.entryKind, formData.accountId);
       rememberFeeForAccount(feeAccountId, transactionFeeMinor);
+      if (showCategories) rememberCategoryForEntryKind(formData.entryKind, formData.categoryId);
       notifyEntriesChanged();
-      onSaved?.();
+      const saved: SavedEntry = {
+        entryKind: formData.entryKind as EntryKind,
+        amountMinor,
+        currency: formData.currency,
+        transactionDate: formData.transactionDate,
+        categoryId: showCategories ? formData.categoryId || undefined : undefined,
+        categoryName: showCategories ? filteredCategories.find((category) => category.id === formData.categoryId)?.name : undefined,
+      };
+      onSaved?.(saved);
+      if (addAnother) {
+        // Kind, date, account and category stay: a run of entries is usually
+        // the same day off the same wallet. What differs each time is cleared.
+        setFormData((current) => ({ ...current, amount: "", transactionFee: "0", note: "" }));
+        setLastSaved(saved);
+        document.getElementById("amount")?.focus();
+        return;
+      }
       onClose();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Error creating entry");
@@ -820,7 +891,15 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
         ) : null}
 
         {session && !initializing && hasAccounts ? (
-          <form className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col" onSubmit={handleSubmit}>
+          <form
+            className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col"
+            onSubmit={handleSubmit}
+            // A blocked submit (an empty required field) must not leave "add
+            // another" armed for the next Enter press.
+            onInvalidCapture={() => {
+              addAnotherRef.current = false;
+            }}
+          >
             <div
               className="grid min-h-0 min-w-0 max-w-full flex-1 gap-5 overflow-x-hidden overflow-y-auto p-4 sm:p-6"
               data-testid="add-entry-scroll-region"
@@ -944,6 +1023,10 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
                       type="date"
                       value={formData.transactionDate}
                       onChange={handleChange}
+                    />
+                    <DateShortcuts
+                      value={formData.transactionDate}
+                      onPick={(date) => setFormData((current) => ({ ...current, transactionDate: date }))}
                     />
                   </div>
                 )}
@@ -1177,7 +1260,13 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
               </div>
             ) : null}
 
-            {formData.entryKind === "investment_buy" ? (
+            {formData.entryKind === "investment_buy" && !investmentDataLoaded ? (
+              <div className="formSectionCard">
+                <p className="muted" role="status">Loading your holdings…</p>
+              </div>
+            ) : null}
+
+            {formData.entryKind === "investment_buy" && investmentDataLoaded ? (
               <div className="formSectionCard">
                 <div className="formSectionHeader">
                   <h2 className="formSectionTitle">Investment</h2>
@@ -1427,6 +1516,13 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
                   <span className="muted">Use a category when it helps history and reports.</span>
                 </div>
 
+                <RecentCategoryChips
+                  recentIds={recentCategoryIds}
+                  categories={filteredCategories}
+                  value={formData.categoryId}
+                  onPick={(categoryId) => setFormData((current) => ({ ...current, categoryId }))}
+                />
+
                 <div className="field">
                   <label htmlFor="categoryId">Choose category</label>
                   <select
@@ -1551,10 +1647,28 @@ export function AddEntryDialog({ open, onClose, onSaved, initialEntryKind, initi
             {error ? <p className="statusText">{error}</p> : null}
             </div>
 
-            {formData.entryKind ? <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-outline bg-surface px-4 py-3 sm:px-6">
+            {formData.entryKind ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-outline bg-surface px-4 py-3 sm:px-6">
+              {lastSaved ? (
+                <p className="mr-auto text-sm text-on-surface-soft" role="status">
+                  Saved {formatMoney(lastSaved.amountMinor, lastSaved.currency)}
+                  {lastSaved.categoryName ? ` on ${lastSaved.categoryName}` : ""}. Next one?
+                </p>
+              ) : null}
               <button type="button" className="btn btn-ghost" onClick={onClose}>
-                Cancel
+                {lastSaved ? "Done" : "Cancel"}
               </button>
+              {canAddAnother ? (
+                <button
+                  type="submit"
+                  className="btn btn-ghost"
+                  disabled={loading || (sourceAccountRequired && availableSourceAccounts.length === 0)}
+                  onClick={() => {
+                    addAnotherRef.current = true;
+                  }}
+                >
+                  Save &amp; add another
+                </button>
+              ) : null}
               <button
                 type="submit"
                 className="btn btn-primary"

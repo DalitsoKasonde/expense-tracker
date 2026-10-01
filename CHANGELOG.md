@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- Entries recorded just after midnight are dated today rather than yesterday; every form took its default date from UTC, which in Zambia is two hours behind
+- The mobile add button opens straight on "I spent money", with the other kinds one tap away under Change
+- Today, Yesterday and 2 days ago sit under the date, so a late entry no longer means a date picker
+- The categories you used last appear as one-tap choices above the category list
+- "Save & add another" records an expense or income and keeps the form open with the same date, account and category, ready for the next one
+- After saving an expense, a short confirmation shows where that category stands for the month — "K 340.00 on Food in September"
+- The add-entry form opens faster: holdings, bonds, LuSE listings and loans now load only when you choose an entry that uses them
 - Finish a catch-up by matching an account to its real balance: enter what your wallet or bank app shows, and anything missing is recorded as one line of unaccounted spending dated today. If an account holds more than expected, it tells you what to look for instead of guessing
 - Paste Airtel Money SMS into the catch-up sheet and each payment or receipt becomes a row with its amount, date and reference filled in. The messages are read on your device and never uploaded, the same SMS cannot be recorded twice, and the latest balance they report is shown so you can check the wallet agrees
 - Catch up on missed days from one sheet: type a run of past spending and income row by row, each new row keeping the date and account of the one above, then save them all at once. Unsaved rows are kept if you close the tab, and a row the server rejects stays on the sheet with the reason instead of being lost

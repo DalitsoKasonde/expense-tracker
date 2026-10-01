@@ -3,7 +3,8 @@
 import type { KeyboardEvent } from "react";
 import { Button, Field, Input, Select, cardClass } from "@/components/ui";
 import type { CategoryRow } from "@/lib/category-tree";
-import { categoryGroupForCatchUpKind, localDate, type CatchUpKind, type CatchUpRow } from "@/lib/catch-up";
+import { categoryGroupForCatchUpKind, type CatchUpKind, type CatchUpRow } from "@/lib/catch-up";
+import { localDate } from "@/lib/date-terms";
 import { cn } from "@/lib/cn";
 
 export type CatchUpAccountOption = {

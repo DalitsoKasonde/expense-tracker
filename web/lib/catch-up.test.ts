@@ -3,7 +3,6 @@ import {
   editRow,
   isBlankRow,
   loadDraft,
-  localDate,
   nextRow,
   parseAmountMinor,
   rowPayload,
@@ -52,14 +51,6 @@ describe("parsing amounts", () => {
     expect(parseAmountMinor("-5")).toBeNull();
     expect(parseAmountMinor("1.234")).toBeNull();
     expect(parseAmountMinor("K50")).toBeNull();
-  });
-});
-
-describe("the local date", () => {
-  it("stays on the local day just after midnight", () => {
-    // 00:30 in Lusaka is 22:30 UTC the day before; toISOString would say the 9th.
-    const justAfterMidnight = new Date(2026, 8, 10, 0, 30);
-    expect(localDate(justAfterMidnight)).toBe("2026-09-10");
   });
 });
 

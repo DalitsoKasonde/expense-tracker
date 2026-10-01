@@ -10,7 +10,7 @@ import {
 } from "@/components/ui";
 import { useApiCall } from "@/lib/client-api";
 import { supportedCurrencies } from "@/lib/currencies";
-import { addYearsToDate, isPastDate } from "@/lib/date-terms";
+import { addYearsToDate, isPastDate, localDate } from "@/lib/date-terms";
 import { formatMoney } from "@/lib/format-money";
 import type { MarketStockDirectory } from "@/lib/market-data";
 import { isSpendableAccount, spendableAccounts } from "@/lib/spendable-accounts";
@@ -53,10 +53,6 @@ type BondPosition = {
   couponRateBps: number;
 };
 
-function today() {
-  return new Date().toISOString().split("T")[0];
-}
-
 function toMinor(value: string) {
   return Math.round((Number.parseFloat(value || "0") || 0) * 100);
 }
@@ -86,18 +82,18 @@ export default function AddInvestmentPage() {
     quantity: "",
     unitPrice: "",
     fees: "0",
-    purchaseDate: today(),
+    purchaseDate: localDate(),
     principal: "",
     couponRate: "",
-    issueDate: today(),
+    issueDate: localDate(),
     termYears: "1",
-    maturityDate: addYearsToDate(today(), 1),
+    maturityDate: addYearsToDate(localDate(), 1),
     bondFee: "0",
     couponFrequency: "2",
-    reinvestmentCutoffDate: addYearsToDate(today(), 1),
+    reinvestmentCutoffDate: addYearsToDate(localDate(), 1),
     note: "",
     historicalBackfill: false,
-    cycleStart: today(),
+    cycleStart: localDate(),
     cycleLengthMonths: "12",
     target: "",
     openingContribution: "0",
@@ -143,7 +139,7 @@ export default function AddInvestmentPage() {
   const isSavingsGroup = kind === "group";
   const isSavingsPocket = kind === "pocket";
   const historicalDate = kind === "stock" || bondMode === "existing" ? form.purchaseDate : form.issueDate;
-  const historicalEligible = !isSavingsGroup && !isSavingsPocket && isPastDate(historicalDate, today());
+  const historicalEligible = !isSavingsGroup && !isSavingsPocket && isPastDate(historicalDate, localDate());
   const historicalBackfill = historicalEligible && form.historicalBackfill;
   const accountRequired = !historicalBackfill && !isSavingsGroup && !isSavingsPocket;
 

@@ -13,6 +13,7 @@ import {
 import { useApiCall } from "@/lib/client-api";
 import { useEntriesChanged } from "@/lib/entries-bus";
 import { useUserCurrency } from "@/lib/use-user-currency";
+import { localDate } from "@/lib/date-terms";
 
 type SavingsGroup = {
   id: string;
@@ -28,10 +29,6 @@ type Account = {
   name: string;
   currency: string;
 };
-
-function today() {
-  return new Date().toISOString().split("T")[0];
-}
 
 function toMinor(value: string) {
   return Math.round((Number.parseFloat(value || "0") || 0) * 100);
@@ -98,7 +95,7 @@ export default function GoalsPage() {
           targetMinor,
           openingContributionMinor,
           isShareoutGroup: false,
-          cycleStart: today(),
+          cycleStart: localDate(),
           cycleLengthMonths: 12,
           currency,
         },

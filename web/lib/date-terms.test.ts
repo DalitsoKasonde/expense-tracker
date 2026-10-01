@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addYearsToDate, isPastDate } from "./date-terms";
+import { addYearsToDate, isPastDate, localDate, localDateDaysAgo } from "./date-terms";
 
 describe("addYearsToDate", () => {
   it("calculates a maturity date from an issue date and term", () => {
@@ -27,5 +27,20 @@ describe("isPastDate", () => {
   it("rejects incomplete date values", () => {
     expect(isPastDate("", "2026-07-29")).toBe(false);
     expect(isPastDate("28/07/2026", "2026-07-29")).toBe(false);
+  });
+});
+
+describe("the local date", () => {
+  it("stays on the local day just after midnight", () => {
+    // 00:30 in Lusaka is 22:30 UTC the day before; toISOString would say the 9th.
+    const justAfterMidnight = new Date(2026, 8, 10, 0, 30);
+    expect(localDate(justAfterMidnight)).toBe("2026-09-10");
+  });
+});
+
+describe("days ago", () => {
+  it("steps back across a month boundary on the local calendar", () => {
+    expect(localDateDaysAgo(1, new Date(2026, 9, 1, 0, 30))).toBe("2026-09-30");
+    expect(localDateDaysAgo(2, new Date(2026, 2, 1, 12))).toBe("2026-02-27");
   });
 });

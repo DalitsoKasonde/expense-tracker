@@ -10,7 +10,6 @@ import {
   editRow,
   isBlankRow,
   loadDraft,
-  localDate,
   nextRow,
   rowPayload,
   rowProblem,
@@ -19,6 +18,7 @@ import {
   type CatchUpRow,
 } from "@/lib/catch-up";
 import { useApiCall } from "@/lib/client-api";
+import { localDate } from "@/lib/date-terms";
 import { notifyEntriesChanged } from "@/lib/entries-bus";
 import { recallAccountForEntryKind, rememberAccountForEntryKind, rememberFeeForAccount } from "@/lib/entry-preferences";
 import { spendableAccounts } from "@/lib/spendable-accounts";

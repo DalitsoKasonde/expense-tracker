@@ -13,9 +13,13 @@
 
 const ACCOUNT_KEY = "expenses.lastAccountByEntryKind";
 const FEE_KEY = "expenses.recentFeesByAccount";
+const CATEGORY_KEY = "expenses.recentCategoriesByEntryKind";
 
 /** How many distinct recent fees to offer for one account. */
 const MAX_FEE_SUGGESTIONS = 3;
+
+/** How many recent categories to offer for one kind of entry. */
+const MAX_CATEGORY_SUGGESTIONS = 5;
 
 function readMap(key: string): Record<string, unknown> {
   try {
@@ -80,4 +84,32 @@ export function recallFeesForAccount(accountId: string): number[] {
   return value
     .filter((fee): fee is number => typeof fee === "number" && Number.isFinite(fee) && fee > 0)
     .slice(0, MAX_FEE_SUGGESTIONS);
+}
+
+/**
+ * Remembers a category used for this kind of entry, most recent first.
+ *
+ * Offered back as one-tap choices rather than preselected, for the same reason
+ * as fees: a category carried over unnoticed files the entry in the wrong
+ * report, and nothing downstream would catch it.
+ */
+export function rememberCategoryForEntryKind(entryKind: string, categoryId: string) {
+  if (!entryKind || !categoryId) return;
+  const all = readMap(CATEGORY_KEY);
+  const existing = recallCategoriesForEntryKind(entryKind);
+  const next = [categoryId, ...existing.filter((id) => id !== categoryId)].slice(0, MAX_CATEGORY_SUGGESTIONS);
+  writeMap(CATEGORY_KEY, { ...all, [entryKind]: next });
+}
+
+/**
+ * Recently used categories for this kind of entry, most recent first.
+ *
+ * Callers must drop ids that no longer name a selectable category: one may
+ * since have been deleted.
+ */
+export function recallCategoriesForEntryKind(entryKind: string): string[] {
+  if (!entryKind) return [];
+  const value = readMap(CATEGORY_KEY)[entryKind];
+  if (!Array.isArray(value)) return [];
+  return value.filter((id): id is string => typeof id === "string" && id.length > 0).slice(0, MAX_CATEGORY_SUGGESTIONS);
 }
